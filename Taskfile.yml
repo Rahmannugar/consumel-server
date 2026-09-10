@@ -1,0 +1,25 @@
+version: "3"
+
+tasks:
+  run-api:
+    desc: Run the Consumel API
+    cmds:
+      - go run ./cmd/api
+
+  format:
+    desc: Format Go source files
+    cmds:
+      - gofmt -w .
+
+  test:
+    desc: Run all tests
+    cmds:
+      - go test ./...
+
+  check:
+    desc: Validate formatting, tests, vet, and builds
+    cmds:
+      - test -z "$(gofmt -l .)"
+      - go test ./...
+      - go vet ./...
+      - go build ./...
