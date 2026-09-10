@@ -1,5 +1,8 @@
 version: "3"
 
+dotenv:
+  - .env
+
 tasks:
   run-api:
     desc: Run the Consumel API
@@ -11,14 +14,30 @@ tasks:
     cmds:
       - gofmt -w .
 
+  generate:
+    desc: Generate type-safe database code
+    cmds:
+      - go tool sqlc generate
+
+  migrate:
+    desc: Apply pending PostgreSQL migrations
+    cmds:
+      - go tool tern migrate --config internal/infra/database/tern.conf --migrations internal/infra/database/migrations
+
   test:
     desc: Run all tests
     cmds:
       - go test ./...
 
+  test-integration:
+    desc: Run tests against real infrastructure
+    cmds:
+      - go test -p 1 -tags=integration ./...
+
   check:
     desc: Validate formatting, tests, vet, and builds
     cmds:
+      - go tool sqlc generate
       - test -z "$(gofmt -l .)"
       - go test ./...
       - go vet ./...

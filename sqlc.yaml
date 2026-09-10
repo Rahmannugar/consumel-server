@@ -1,0 +1,50 @@
+version: "2"
+sql:
+  - name: users
+    engine: postgresql
+    schema: internal/infra/database/migrations
+    queries: internal/users/queries
+    gen:
+      go:
+        package: userdb
+        out: internal/users/repositories/generated
+        sql_package: pgx/v5
+        emit_pointers_for_null_types: true
+        omit_unused_structs: true
+        overrides:
+          - db_type: uuid
+            go_type:
+              import: github.com/google/uuid
+              type: UUID
+  - name: organizations
+    engine: postgresql
+    schema: internal/infra/database/migrations
+    queries: internal/organizations/queries
+    gen:
+      go:
+        package: organizationdb
+        out: internal/organizations/repositories/generated
+        sql_package: pgx/v5
+        emit_pointers_for_null_types: true
+        omit_unused_structs: true
+        overrides:
+          - db_type: uuid
+            go_type:
+              import: github.com/google/uuid
+              type: UUID
+  - name: projects
+    engine: postgresql
+    schema: internal/infra/database/migrations
+    queries: internal/projects/queries
+    gen:
+      go:
+        package: projectdb
+        out: internal/projects/repositories/generated
+        sql_package: pgx/v5
+        emit_pointers_for_null_types: true
+        omit_unused_structs: true
+        overrides:
+          - db_type: uuid
+            go_type:
+              import: github.com/google/uuid
+              type: UUID

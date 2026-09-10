@@ -6,7 +6,9 @@ and connect usage data to the payment providers they already use.
 
 This repository contains the Go backend for Consumel. The current server
 provides the HTTP API foundation, PostgreSQL connectivity, health checks,
-environment-backed configuration, structured logging, and graceful shutdown.
+environment-backed configuration, structured logging, graceful shutdown, and
+the initial user, organization, organization-membership, project, and
+environment persistence flows.
 
 ## Technology
 
@@ -14,6 +16,7 @@ environment-backed configuration, structured logging, and graceful shutdown.
 - Gin
 - Koanf
 - PostgreSQL with pgx
+- Tern and sqlc
 - Task
 
 ## Local Development
@@ -25,7 +28,11 @@ cp .env.example .env
 ```
 
 Update `CONSUMEL_DATABASE_URL` in `.env` for your local PostgreSQL instance,
-then start the API:
+apply the migrations, then start the API:
+
+```bash
+task migrate
+```
 
 ```bash
 task run-api
@@ -49,6 +56,19 @@ Run formatting, tests, vet, and build checks:
 
 ```bash
 task check
+```
+
+Run the PostgreSQL integration tests with Docker available:
+
+```bash
+task test-integration
+```
+
+After changing SQL queries or migrations, regenerate the type-safe database
+code:
+
+```bash
+task generate
 ```
 
 ## License
