@@ -29,12 +29,12 @@ func (repository *OrganizationRepository) OrganizationMembership(
 }
 
 func mapOrganizationMembership(
-	membership organizationdb.OrganizationMembership,
+	membership organizationdb.GetOrganizationMembershipRow,
 ) models.OrganizationMembership {
 	return models.OrganizationMembership{
 		OrganizationID: membership.OrganizationID,
 		UserID:         membership.UserID,
-		Role:           models.OrganizationMembershipRole(membership.Role),
+		RoleID:         membership.RoleID,
 		Status:         models.OrganizationMembershipStatus(membership.Status),
 		CreatedAt:      membership.CreatedAt.Time,
 		UpdatedAt:      membership.UpdatedAt.Time,

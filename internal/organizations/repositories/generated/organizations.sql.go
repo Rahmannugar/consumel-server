@@ -50,30 +50,40 @@ func (q *Queries) CreateOrganization(ctx context.Context, arg CreateOrganization
 }
 
 const createOrganizationMembership = `-- name: CreateOrganizationMembership :one
-INSERT INTO organization_memberships (organization_id, user_id, role, status)
+INSERT INTO organization_memberships (organization_id, user_id, role_id, status)
 VALUES ($1, $2, $3, $4)
-RETURNING organization_id, user_id, role, status, created_at, updated_at, removed_at
+RETURNING organization_id, user_id, role_id, status, created_at, updated_at, removed_at
 `
 
 type CreateOrganizationMembershipParams struct {
 	OrganizationID uuid.UUID
 	UserID         uuid.UUID
-	Role           string
+	RoleID         uuid.UUID
 	Status         string
 }
 
-func (q *Queries) CreateOrganizationMembership(ctx context.Context, arg CreateOrganizationMembershipParams) (OrganizationMembership, error) {
+type CreateOrganizationMembershipRow struct {
+	OrganizationID uuid.UUID
+	UserID         uuid.UUID
+	RoleID         uuid.UUID
+	Status         string
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+	RemovedAt      pgtype.Timestamptz
+}
+
+func (q *Queries) CreateOrganizationMembership(ctx context.Context, arg CreateOrganizationMembershipParams) (CreateOrganizationMembershipRow, error) {
 	row := q.db.QueryRow(ctx, createOrganizationMembership,
 		arg.OrganizationID,
 		arg.UserID,
-		arg.Role,
+		arg.RoleID,
 		arg.Status,
 	)
-	var i OrganizationMembership
+	var i CreateOrganizationMembershipRow
 	err := row.Scan(
 		&i.OrganizationID,
 		&i.UserID,
-		&i.Role,
+		&i.RoleID,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -82,8 +92,41 @@ func (q *Queries) CreateOrganizationMembership(ctx context.Context, arg CreateOr
 	return i, err
 }
 
+const createOrganizationRole = `-- name: CreateOrganizationRole :one
+INSERT INTO organization_roles (id, organization_id, name, system_key)
+VALUES ($1, $2, $3, $4)
+RETURNING id, organization_id, name, system_key, created_at, updated_at, deleted_at
+`
+
+type CreateOrganizationRoleParams struct {
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+	Name           string
+	SystemKey      *string
+}
+
+func (q *Queries) CreateOrganizationRole(ctx context.Context, arg CreateOrganizationRoleParams) (OrganizationRole, error) {
+	row := q.db.QueryRow(ctx, createOrganizationRole,
+		arg.ID,
+		arg.OrganizationID,
+		arg.Name,
+		arg.SystemKey,
+	)
+	var i OrganizationRole
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.Name,
+		&i.SystemKey,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
 const getOrganizationMembership = `-- name: GetOrganizationMembership :one
-SELECT organization_id, user_id, role, status, created_at, updated_at, removed_at
+SELECT organization_id, user_id, role_id, status, created_at, updated_at, removed_at
 FROM organization_memberships
 WHERE organization_id = $1 AND user_id = $2
 `
@@ -93,17 +136,62 @@ type GetOrganizationMembershipParams struct {
 	UserID         uuid.UUID
 }
 
-func (q *Queries) GetOrganizationMembership(ctx context.Context, arg GetOrganizationMembershipParams) (OrganizationMembership, error) {
+type GetOrganizationMembershipRow struct {
+	OrganizationID uuid.UUID
+	UserID         uuid.UUID
+	RoleID         uuid.UUID
+	Status         string
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+	RemovedAt      pgtype.Timestamptz
+}
+
+func (q *Queries) GetOrganizationMembership(ctx context.Context, arg GetOrganizationMembershipParams) (GetOrganizationMembershipRow, error) {
 	row := q.db.QueryRow(ctx, getOrganizationMembership, arg.OrganizationID, arg.UserID)
-	var i OrganizationMembership
+	var i GetOrganizationMembershipRow
 	err := row.Scan(
 		&i.OrganizationID,
 		&i.UserID,
-		&i.Role,
+		&i.RoleID,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.RemovedAt,
 	)
 	return i, err
+}
+
+const listOrganizationRoles = `-- name: ListOrganizationRoles :many
+SELECT id, organization_id, name, system_key, created_at, updated_at, deleted_at
+FROM organization_roles
+WHERE organization_id = $1 AND deleted_at IS NULL
+ORDER BY name
+`
+
+func (q *Queries) ListOrganizationRoles(ctx context.Context, organizationID uuid.UUID) ([]OrganizationRole, error) {
+	rows, err := q.db.Query(ctx, listOrganizationRoles, organizationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []OrganizationRole
+	for rows.Next() {
+		var i OrganizationRole
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.Name,
+			&i.SystemKey,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

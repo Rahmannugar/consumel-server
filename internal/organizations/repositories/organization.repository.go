@@ -26,6 +26,7 @@ func NewOrganizationRepository(pool *pgxpool.Pool) *OrganizationRepository {
 func (repository *OrganizationRepository) CreateOrganizationWithOwner(
 	ctx context.Context,
 	organization models.Organization,
+	roles []models.OrganizationRole,
 	membership models.OrganizationMembership,
 ) (models.Organization, models.OrganizationMembership, error) {
 	tx, err := repository.pool.Begin(ctx)
@@ -44,12 +45,24 @@ func (repository *OrganizationRepository) CreateOrganizationWithOwner(
 		return models.Organization{}, models.OrganizationMembership{}, fmt.Errorf("create organization: %w", err)
 	}
 
+	for _, role := range roles {
+		_, err := queries.CreateOrganizationRole(ctx, organizationdb.CreateOrganizationRoleParams{
+			ID:             role.ID,
+			OrganizationID: role.OrganizationID,
+			Name:           role.Name,
+			SystemKey:      nullableRoleSystemKey(role.SystemKey),
+		})
+		if err != nil {
+			return models.Organization{}, models.OrganizationMembership{}, fmt.Errorf("create organization role: %w", err)
+		}
+	}
+
 	createdMembership, err := queries.CreateOrganizationMembership(
 		ctx,
 		organizationdb.CreateOrganizationMembershipParams{
 			OrganizationID: membership.OrganizationID,
 			UserID:         membership.UserID,
-			Role:           string(membership.Role),
+			RoleID:         membership.RoleID,
 			Status:         string(membership.Status),
 		},
 	)
@@ -61,7 +74,21 @@ func (repository *OrganizationRepository) CreateOrganizationWithOwner(
 		return models.Organization{}, models.OrganizationMembership{}, fmt.Errorf("commit transaction: %w", err)
 	}
 
-	return mapOrganization(createdOrganization), mapOrganizationMembership(createdMembership), nil
+	return mapOrganization(createdOrganization), mapCreatedOrganizationMembership(createdMembership), nil
+}
+
+func mapCreatedOrganizationMembership(
+	membership organizationdb.CreateOrganizationMembershipRow,
+) models.OrganizationMembership {
+	return models.OrganizationMembership{
+		OrganizationID: membership.OrganizationID,
+		UserID:         membership.UserID,
+		RoleID:         membership.RoleID,
+		Status:         models.OrganizationMembershipStatus(membership.Status),
+		CreatedAt:      membership.CreatedAt.Time,
+		UpdatedAt:      membership.UpdatedAt.Time,
+		RemovedAt:      nullableTime(membership.RemovedAt),
+	}
 }
 
 func mapOrganization(organization organizationdb.CreateOrganizationRow) models.Organization {

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Rahmannugar/consumel-server/internal/common/ids"
 	"github.com/Rahmannugar/consumel-server/internal/projects/models"
 	"github.com/google/uuid"
 )
@@ -46,15 +47,15 @@ func (service *ProjectManagementService) CreateProject(
 		return models.Project{}, ErrProjectNameRequired
 	}
 
-	projectID, err := uuid.NewV7()
+	projectID, err := ids.New()
 	if err != nil {
 		return models.Project{}, fmt.Errorf("generate project ID: %w", err)
 	}
-	sandboxID, err := uuid.NewV7()
+	sandboxID, err := ids.New()
 	if err != nil {
 		return models.Project{}, fmt.Errorf("generate sandbox environment ID: %w", err)
 	}
-	liveID, err := uuid.NewV7()
+	liveID, err := ids.New()
 	if err != nil {
 		return models.Project{}, fmt.Errorf("generate live environment ID: %w", err)
 	}

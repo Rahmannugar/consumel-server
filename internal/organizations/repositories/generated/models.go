@@ -9,12 +9,12 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type OrganizationMembership struct {
+type OrganizationRole struct {
+	ID             uuid.UUID
 	OrganizationID uuid.UUID
-	UserID         uuid.UUID
-	Role           string
-	Status         string
+	Name           string
+	SystemKey      *string
 	CreatedAt      pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
-	RemovedAt      pgtype.Timestamptz
+	DeletedAt      pgtype.Timestamptz
 }

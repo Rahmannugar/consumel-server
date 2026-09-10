@@ -6,13 +6,6 @@ import (
 	"github.com/google/uuid"
 )
 
-type OrganizationMembershipRole string
-
-const (
-	OrganizationMembershipRoleAdmin     OrganizationMembershipRole = "admin"
-	OrganizationMembershipRoleDeveloper OrganizationMembershipRole = "developer"
-)
-
 type OrganizationMembershipStatus string
 
 const (
@@ -23,7 +16,7 @@ const (
 type OrganizationMembership struct {
 	OrganizationID uuid.UUID
 	UserID         uuid.UUID
-	Role           OrganizationMembershipRole
+	RoleID         uuid.UUID
 	Status         OrganizationMembershipStatus
 	CreatedAt      time.Time
 	UpdatedAt      time.Time

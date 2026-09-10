@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Rahmannugar/consumel-server/internal/common/ids"
 	"github.com/Rahmannugar/consumel-server/internal/organizations/models"
 	"github.com/google/uuid"
 )
@@ -19,6 +20,7 @@ type OrganizationRepository interface {
 	CreateOrganizationWithOwner(
 		context.Context,
 		models.Organization,
+		[]models.OrganizationRole,
 		models.OrganizationMembership,
 	) (models.Organization, models.OrganizationMembership, error)
 }
@@ -46,7 +48,7 @@ func (service *OrganizationManagementService) CreateOrganization(
 		return models.Organization{}, models.OrganizationMembership{}, ErrOwnerUserIDRequired
 	}
 
-	organizationID, err := uuid.NewV7()
+	organizationID, err := ids.New()
 	if err != nil {
 		return models.Organization{}, models.OrganizationMembership{}, fmt.Errorf("generate organization ID: %w", err)
 	}
@@ -56,12 +58,36 @@ func (service *OrganizationManagementService) CreateOrganization(
 		OwnerUserID: ownerUserID,
 		Name:        name,
 	}
+	adminRoleID, err := ids.New()
+	if err != nil {
+		return models.Organization{}, models.OrganizationMembership{}, fmt.Errorf("generate Admin role ID: %w", err)
+	}
+	developerRoleID, err := ids.New()
+	if err != nil {
+		return models.Organization{}, models.OrganizationMembership{}, fmt.Errorf("generate Developer role ID: %w", err)
+	}
+	adminSystemKey := models.OrganizationRoleSystemKeyAdmin
+	developerSystemKey := models.OrganizationRoleSystemKeyDeveloper
+	roles := []models.OrganizationRole{
+		{
+			ID:             adminRoleID,
+			OrganizationID: organizationID,
+			Name:           "Admin",
+			SystemKey:      &adminSystemKey,
+		},
+		{
+			ID:             developerRoleID,
+			OrganizationID: organizationID,
+			Name:           "Developer",
+			SystemKey:      &developerSystemKey,
+		},
+	}
 	membership := models.OrganizationMembership{
 		OrganizationID: organizationID,
 		UserID:         ownerUserID,
-		Role:           models.OrganizationMembershipRoleAdmin,
+		RoleID:         adminRoleID,
 		Status:         models.OrganizationMembershipStatusActive,
 	}
 
-	return service.repository.CreateOrganizationWithOwner(ctx, organization, membership)
+	return service.repository.CreateOrganizationWithOwner(ctx, organization, roles, membership)
 }

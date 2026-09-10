@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Rahmannugar/consumel-server/internal/common/ids"
 	"github.com/Rahmannugar/consumel-server/internal/users/models"
-	"github.com/google/uuid"
 )
 
 var ErrClerkUserIDRequired = errors.New("Clerk user ID is required")
@@ -31,7 +31,7 @@ func (service *UserService) CreateUser(ctx context.Context, clerkUserID string) 
 		return models.User{}, ErrClerkUserIDRequired
 	}
 
-	id, err := uuid.NewV7()
+	id, err := ids.New()
 	if err != nil {
 		return models.User{}, fmt.Errorf("generate user ID: %w", err)
 	}
