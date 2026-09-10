@@ -1,42 +1,56 @@
 # Consumel Server
 
-Consumel Server is the Go backend for Consumel. It currently provides the Gin
-HTTP process, liveness and readiness endpoints, Koanf-backed environment
-configuration, structured process logs, and graceful shutdown.
+Consumel is infrastructure for usage-based billing. It helps SaaS companies
+meter usage, manage customer balances and entitlements, apply pricing rules,
+and connect usage data to the payment providers they already use.
 
-## Requirements
+This repository contains the Go backend for Consumel. The current server
+provides the HTTP API foundation, PostgreSQL connectivity, health checks,
+environment-backed configuration, structured logging, and graceful shutdown.
 
-- Go 1.26 or newer
-- Task for repository commands
+## Technology
 
-## Run the API
+- Go 1.26
+- Gin
+- Koanf
+- PostgreSQL with pgx
+- Task
 
-```shell
+## Local Development
+
+Create your local configuration:
+
+```bash
+cp .env.example .env
+```
+
+Update `CONSUMEL_DATABASE_URL` in `.env` for your local PostgreSQL instance,
+then start the API:
+
+```bash
 task run-api
 ```
 
-The API listens on port `8080` by default and accepts connections on all network
-interfaces.
+The API is available at [http://localhost:8080](http://localhost:8080) by
+default.
 
-## Configuration
+Koanf loads `.env` first and applies process environment variables as
+overrides. `CONSUMEL_ENVIRONMENT` accepts `development` or `production` and
+defaults to `development`. Production configuration is supplied by the
+deployment environment.
 
-Configuration is loaded from process environment variables through Koanf:
+## API
 
-- `CONSUMEL_ENVIRONMENT`
-- `CONSUMEL_HTTP_PORT`
-
-`CONSUMEL_ENVIRONMENT` accepts `development`, `test`, `staging`, or
-`production`. No local environment file is required for the defaults.
-
-See `ARCHITECTURE.md` for the current runtime design and `API.md` for the
-contract map.
+The current endpoint map is documented in [API.md](API.md).
 
 ## Validation
 
-```shell
+Run formatting, tests, vet, and build checks:
+
+```bash
 task check
 ```
 
 ## License
 
-Apache License 2.0.
+Licensed under the [Apache License 2.0](LICENSE).

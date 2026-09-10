@@ -13,6 +13,7 @@ import (
 
 	"github.com/Rahmannugar/consumel-server/internal/config"
 	"github.com/Rahmannugar/consumel-server/internal/health"
+	"github.com/Rahmannugar/consumel-server/internal/infra/database"
 	"github.com/gin-gonic/gin"
 )
 
@@ -21,6 +22,7 @@ const (
 	readTimeout       = 15 * time.Second
 	idleTimeout       = 60 * time.Second
 	shutdownTimeout   = 15 * time.Second
+	databaseTimeout   = 10 * time.Second
 )
 
 func main() {
@@ -43,9 +45,17 @@ func run(logger *slog.Logger) error {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
+	databaseContext, cancelDatabase := context.WithTimeout(context.Background(), databaseTimeout)
+	databasePool, err := database.Open(databaseContext, cfg.Database.URL)
+	cancelDatabase()
+	if err != nil {
+		return fmt.Errorf("connect database: %w", err)
+	}
+	defer databasePool.Close()
+
 	router := gin.New()
 	router.Use(gin.Recovery())
-	health.RegisterRoutes(router)
+	health.RegisterRoutes(router, databasePool)
 
 	server := &http.Server{
 		Addr:              cfg.HTTP.Address(),
