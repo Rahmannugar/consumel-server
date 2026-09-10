@@ -41,7 +41,8 @@ Consumel internal administrators belong to a separate identity and
 authorization boundary. Tenant roles and organization memberships cannot grant
 internal administration access.
 
-An organization is created with its active owner membership in one transaction.
+An organization stores its fixed V1 owner through `owner_user_id`. Organization
+creation also creates the owner's active Admin membership in one transaction.
 A project is created with isolated Sandbox and Live environments in one
 transaction. Sandbox starts active; Live remains inactive until explicitly
 activated.

@@ -37,11 +37,23 @@ func TestOrganizationPersistence(t *testing.T) {
 	if organization.ID.Version() != 7 {
 		t.Fatalf("organization ID version = %d, want 7", organization.ID.Version())
 	}
-	if membership.Role != organizationmodels.OrganizationMembershipRoleOwner {
-		t.Fatalf("membership role = %q, want %q", membership.Role, organizationmodels.OrganizationMembershipRoleOwner)
+	if organization.OwnerUserID != user.ID {
+		t.Fatalf("owner user ID = %s, want %s", organization.OwnerUserID, user.ID)
+	}
+	if membership.Role != organizationmodels.OrganizationMembershipRoleAdmin {
+		t.Fatalf("membership role = %q, want %q", membership.Role, organizationmodels.OrganizationMembershipRoleAdmin)
 	}
 	if membership.Status != organizationmodels.OrganizationMembershipStatusActive {
 		t.Fatalf("membership status = %q, want %q", membership.Status, organizationmodels.OrganizationMembershipStatusActive)
+	}
+	if membership.RemovedAt != nil {
+		t.Fatal("owner membership is removed at creation")
+	}
+	if organization.DeletedAt != nil {
+		t.Fatal("organization is deleted at creation")
+	}
+	if organization.SuspendedAt != nil {
+		t.Fatal("organization is suspended at creation")
 	}
 
 	storedMembership, err := repository.OrganizationMembership(t.Context(), organization.ID, user.ID)

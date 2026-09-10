@@ -51,11 +51,15 @@ func (service *OrganizationManagementService) CreateOrganization(
 		return models.Organization{}, models.OrganizationMembership{}, fmt.Errorf("generate organization ID: %w", err)
 	}
 
-	organization := models.Organization{ID: organizationID, Name: name}
+	organization := models.Organization{
+		ID:          organizationID,
+		OwnerUserID: ownerUserID,
+		Name:        name,
+	}
 	membership := models.OrganizationMembership{
 		OrganizationID: organizationID,
 		UserID:         ownerUserID,
-		Role:           models.OrganizationMembershipRoleOwner,
+		Role:           models.OrganizationMembershipRoleAdmin,
 		Status:         models.OrganizationMembershipStatusActive,
 	}
 

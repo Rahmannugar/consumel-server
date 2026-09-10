@@ -7,8 +7,11 @@ import (
 )
 
 type Organization struct {
-	ID        uuid.UUID
-	Name      string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID          uuid.UUID
+	OwnerUserID uuid.UUID
+	Name        string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	DeletedAt   *time.Time
+	SuspendedAt *time.Time
 }

@@ -38,5 +38,6 @@ func mapOrganizationMembership(
 		Status:         models.OrganizationMembershipStatus(membership.Status),
 		CreatedAt:      membership.CreatedAt.Time,
 		UpdatedAt:      membership.UpdatedAt.Time,
+		RemovedAt:      nullableTime(membership.RemovedAt),
 	}
 }

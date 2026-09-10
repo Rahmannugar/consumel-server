@@ -9,27 +9,42 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createOrganization = `-- name: CreateOrganization :one
-INSERT INTO organizations (id, name)
-VALUES ($1, $2)
-RETURNING id, name, created_at, updated_at
+INSERT INTO organizations (id, owner_user_id, name)
+VALUES ($1, $2, $3)
+RETURNING id, owner_user_id, name, created_at, updated_at, deleted_at, suspended_at
 `
 
 type CreateOrganizationParams struct {
-	ID   uuid.UUID
-	Name string
+	ID          uuid.UUID
+	OwnerUserID uuid.UUID
+	Name        string
 }
 
-func (q *Queries) CreateOrganization(ctx context.Context, arg CreateOrganizationParams) (Organization, error) {
-	row := q.db.QueryRow(ctx, createOrganization, arg.ID, arg.Name)
-	var i Organization
+type CreateOrganizationRow struct {
+	ID          uuid.UUID
+	OwnerUserID uuid.UUID
+	Name        string
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	DeletedAt   pgtype.Timestamptz
+	SuspendedAt pgtype.Timestamptz
+}
+
+func (q *Queries) CreateOrganization(ctx context.Context, arg CreateOrganizationParams) (CreateOrganizationRow, error) {
+	row := q.db.QueryRow(ctx, createOrganization, arg.ID, arg.OwnerUserID, arg.Name)
+	var i CreateOrganizationRow
 	err := row.Scan(
 		&i.ID,
+		&i.OwnerUserID,
 		&i.Name,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.SuspendedAt,
 	)
 	return i, err
 }
@@ -37,7 +52,7 @@ func (q *Queries) CreateOrganization(ctx context.Context, arg CreateOrganization
 const createOrganizationMembership = `-- name: CreateOrganizationMembership :one
 INSERT INTO organization_memberships (organization_id, user_id, role, status)
 VALUES ($1, $2, $3, $4)
-RETURNING organization_id, user_id, role, status, created_at, updated_at
+RETURNING organization_id, user_id, role, status, created_at, updated_at, removed_at
 `
 
 type CreateOrganizationMembershipParams struct {
@@ -62,12 +77,13 @@ func (q *Queries) CreateOrganizationMembership(ctx context.Context, arg CreateOr
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RemovedAt,
 	)
 	return i, err
 }
 
 const getOrganizationMembership = `-- name: GetOrganizationMembership :one
-SELECT organization_id, user_id, role, status, created_at, updated_at
+SELECT organization_id, user_id, role, status, created_at, updated_at, removed_at
 FROM organization_memberships
 WHERE organization_id = $1 AND user_id = $2
 `
@@ -87,6 +103,7 @@ func (q *Queries) GetOrganizationMembership(ctx context.Context, arg GetOrganiza
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RemovedAt,
 	)
 	return i, err
 }

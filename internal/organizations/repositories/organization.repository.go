@@ -3,9 +3,11 @@ package repositories
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/Rahmannugar/consumel-server/internal/organizations/models"
 	organizationdb "github.com/Rahmannugar/consumel-server/internal/organizations/repositories/generated"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -34,8 +36,9 @@ func (repository *OrganizationRepository) CreateOrganizationWithOwner(
 
 	queries := repository.queries.WithTx(tx)
 	createdOrganization, err := queries.CreateOrganization(ctx, organizationdb.CreateOrganizationParams{
-		ID:   organization.ID,
-		Name: organization.Name,
+		ID:          organization.ID,
+		OwnerUserID: organization.OwnerUserID,
+		Name:        organization.Name,
 	})
 	if err != nil {
 		return models.Organization{}, models.OrganizationMembership{}, fmt.Errorf("create organization: %w", err)
@@ -61,11 +64,22 @@ func (repository *OrganizationRepository) CreateOrganizationWithOwner(
 	return mapOrganization(createdOrganization), mapOrganizationMembership(createdMembership), nil
 }
 
-func mapOrganization(organization organizationdb.Organization) models.Organization {
+func mapOrganization(organization organizationdb.CreateOrganizationRow) models.Organization {
 	return models.Organization{
-		ID:        organization.ID,
-		Name:      organization.Name,
-		CreatedAt: organization.CreatedAt.Time,
-		UpdatedAt: organization.UpdatedAt.Time,
+		ID:          organization.ID,
+		OwnerUserID: organization.OwnerUserID,
+		Name:        organization.Name,
+		CreatedAt:   organization.CreatedAt.Time,
+		UpdatedAt:   organization.UpdatedAt.Time,
+		DeletedAt:   nullableTime(organization.DeletedAt),
+		SuspendedAt: nullableTime(organization.SuspendedAt),
 	}
+}
+
+func nullableTime(value pgtype.Timestamptz) *time.Time {
+	if !value.Valid {
+		return nil
+	}
+	timestamp := value.Time
+	return &timestamp
 }

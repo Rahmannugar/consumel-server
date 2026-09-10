@@ -9,10 +9,8 @@ import (
 type OrganizationMembershipRole string
 
 const (
-	OrganizationMembershipRoleOwner           OrganizationMembershipRole = "owner"
-	OrganizationMembershipRoleDeveloper       OrganizationMembershipRole = "developer"
-	OrganizationMembershipRoleFinance         OrganizationMembershipRole = "finance"
-	OrganizationMembershipRoleCustomerSupport OrganizationMembershipRole = "customer_support"
+	OrganizationMembershipRoleAdmin     OrganizationMembershipRole = "admin"
+	OrganizationMembershipRoleDeveloper OrganizationMembershipRole = "developer"
 )
 
 type OrganizationMembershipStatus string
@@ -29,4 +27,5 @@ type OrganizationMembership struct {
 	Status         OrganizationMembershipStatus
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	RemovedAt      *time.Time
 }

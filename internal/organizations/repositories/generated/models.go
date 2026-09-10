@@ -9,13 +9,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type Organization struct {
-	ID        uuid.UUID
-	Name      string
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
-}
-
 type OrganizationMembership struct {
 	OrganizationID uuid.UUID
 	UserID         uuid.UUID
@@ -23,4 +16,5 @@ type OrganizationMembership struct {
 	Status         string
 	CreatedAt      pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
+	RemovedAt      pgtype.Timestamptz
 }
