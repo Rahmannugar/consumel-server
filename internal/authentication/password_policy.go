@@ -7,12 +7,12 @@ import (
 )
 
 const (
-	minimumPasswordLength = 12
+	minimumPasswordLength = 8
 	maximumPasswordLength = 128
 )
 
 var (
-	ErrPasswordTooShort  = errors.New("password must contain at least 12 characters")
+	ErrPasswordTooShort  = errors.New("password must contain at least 8 characters")
 	ErrPasswordTooLong   = errors.New("password must contain at most 128 characters")
 	ErrPasswordUppercase = errors.New("password must contain at least one uppercase letter")
 	ErrPasswordNumber    = errors.New("password must contain at least one number")

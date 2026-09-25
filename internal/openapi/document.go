@@ -111,7 +111,7 @@ func Document() ([]byte, error) {
 
 func schemas() map[string]any {
 	stringProperty := func() map[string]any { return map[string]any{"type": "string"} }
-	password := map[string]any{"type": "string", "minLength": 12, "maxLength": 128, "format": "password", "pattern": `^(?=.*[A-Z])(?=.*[0-9])(?=.*[^\p{L}\p{N}\s]).{12,128}$`}
+	password := map[string]any{"type": "string", "minLength": 8, "maxLength": 128, "format": "password", "pattern": `^(?=.*[A-Z])(?=.*[0-9])(?=.*[^\p{L}\p{N}\s]).{8,128}$`}
 	return map[string]any{
 		"Account":               object([]string{"session", "user", "organizations"}, map[string]any{"session": schemaReference("AccountSession"), "user": schemaReference("AccountUser"), "organizations": map[string]any{"type": "array", "items": schemaReference("OrganizationAccess")}}),
 		"AccountSession":        object([]string{"id", "createdAt", "expiresAt"}, map[string]any{"id": stringProperty(), "createdAt": map[string]any{"type": "string", "format": "date-time"}, "expiresAt": map[string]any{"type": "string", "format": "date-time"}}),

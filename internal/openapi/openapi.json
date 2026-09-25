@@ -142,8 +142,8 @@
           "newPassword": {
             "format": "password",
             "maxLength": 128,
-            "minLength": 12,
-            "pattern": "^(?=.*[A-Z])(?=.*[0-9])(?=.*[^\\p{L}\\p{N}\\s]).{12,128}$",
+            "minLength": 8,
+            "pattern": "^(?=.*[A-Z])(?=.*[0-9])(?=.*[^\\p{L}\\p{N}\\s]).{8,128}$",
             "type": "string"
           },
           "revokeOtherSessions": {
@@ -166,8 +166,8 @@
           "password": {
             "format": "password",
             "maxLength": 128,
-            "minLength": 12,
-            "pattern": "^(?=.*[A-Z])(?=.*[0-9])(?=.*[^\\p{L}\\p{N}\\s]).{12,128}$",
+            "minLength": 8,
+            "pattern": "^(?=.*[A-Z])(?=.*[0-9])(?=.*[^\\p{L}\\p{N}\\s]).{8,128}$",
             "type": "string"
           }
         },
@@ -306,8 +306,8 @@
           "newPassword": {
             "format": "password",
             "maxLength": 128,
-            "minLength": 12,
-            "pattern": "^(?=.*[A-Z])(?=.*[0-9])(?=.*[^\\p{L}\\p{N}\\s]).{12,128}$",
+            "minLength": 8,
+            "pattern": "^(?=.*[A-Z])(?=.*[0-9])(?=.*[^\\p{L}\\p{N}\\s]).{8,128}$",
             "type": "string"
           },
           "token": {
@@ -391,8 +391,8 @@
           "password": {
             "format": "password",
             "maxLength": 128,
-            "minLength": 12,
-            "pattern": "^(?=.*[A-Z])(?=.*[0-9])(?=.*[^\\p{L}\\p{N}\\s]).{12,128}$",
+            "minLength": 8,
+            "pattern": "^(?=.*[A-Z])(?=.*[0-9])(?=.*[^\\p{L}\\p{N}\\s]).{8,128}$",
             "type": "string"
           }
         },
