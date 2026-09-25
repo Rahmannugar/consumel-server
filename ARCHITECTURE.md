@@ -14,6 +14,27 @@ policy and mounts Authlier without making Authlier depend on Gin. Consumel-owned
 handlers resolve the authenticated Authlier subject into tenant application
 state.
 
+## Telemetry
+
+`internal/infra/telemetry` owns OpenTelemetry provider, exporter, propagation,
+logger, and generic HTTP instrumentation. The application sends traces,
+metrics, and logs to an OTLP/HTTP Collector. New Relic remains a Collector
+destination rather than an application dependency.
+
+Every non-health request produces one JSON completion log on stdout and the
+same record in the OpenTelemetry pipeline. The record contains a stable
+operation, a domain-specific event, a plain human-readable message, method,
+route template, response status, duration, request ID, trace ID, outcome, and
+bounded error category when applicable. The operation names the attempted
+action across outcomes; the event names the result that occurred. Middleware
+also owns request spans and bounded traffic, latency, error, and active-request
+metrics. Routine successful health probes are suppressed; readiness failures
+remain correlated and visible.
+
+PostgreSQL, Redis, and outbound HTTP instrumentation is attached at shared
+infrastructure construction boundaries. Handlers do not configure telemetry
+exporters or repeat generic tracing and timing logic.
+
 ## Lifecycle
 
 The API accepts SIGINT and SIGTERM. It stops accepting new requests, gives

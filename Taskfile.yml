@@ -23,9 +23,9 @@ tasks:
       - docker compose down
 
   logs:
-    desc: Follow local API logs
+    desc: Follow local API and telemetry Collector logs
     cmds:
-      - docker compose logs --follow api
+      - docker compose logs --follow api otel-collector
 
   run-api:
     desc: Run the Consumel API

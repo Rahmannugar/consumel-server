@@ -32,6 +32,15 @@ services:
       retries: 10
       start_period: 5s
 
+  otel-collector:
+    image: otel/opentelemetry-collector:0.161.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    volumes:
+      - ./otel-collector.yaml:/etc/otelcol/config.yaml:ro
+
   migrate:
     image: consumel-server-local
     profiles:
@@ -65,6 +74,7 @@ services:
       CONSUMEL_DATABASE_URL: postgres://consumel:consumel@postgres:5432/consumel?sslmode=disable
       CONSUMEL_REDIS_URL: redis://redis:6379/0
       CONSUMEL_AUTH_BASE_URL: http://localhost:8080
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
     ports:
       - "8080:8080"
     volumes:
@@ -76,6 +86,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      otel-collector:
+        condition: service_started
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health/ready"]
       interval: 5s

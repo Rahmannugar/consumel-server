@@ -9,6 +9,7 @@ import (
 	authenticationmodels "github.com/Rahmannugar/consumel-server/internal/authentication/models"
 	authenticationservices "github.com/Rahmannugar/consumel-server/internal/authentication/services"
 	"github.com/Rahmannugar/consumel-server/internal/common/httpresponse"
+	"github.com/Rahmannugar/consumel-server/internal/infra/telemetry"
 )
 
 type TenantResolver interface {
@@ -61,8 +62,9 @@ func (handler *Handler) Context(response http.ResponseWriter, request *http.Requ
 			)
 			return
 		}
-		handler.logger.ErrorContext(request.Context(), "resolve tenant authentication context",
-			"event", "authentication.context.resolve_failed",
+		handler.logger.ErrorContext(request.Context(), "Could not load user account",
+			"event", "user.account.load.failed",
+			"operation", "user.account.load",
 			"outcome", "error",
 			"error", err,
 		)
@@ -76,6 +78,10 @@ func (handler *Handler) Context(response http.ResponseWriter, request *http.Requ
 	}
 
 	organizations := make([]organizationAccessResponse, 0, len(tenant.OrganizationAccess))
+	telemetry.AddRequestLogAttributes(request.Context(),
+		slog.String("user_id", tenant.User.ID.String()),
+		slog.Int("organization_count", len(tenant.OrganizationAccess)),
+	)
 	for _, access := range tenant.OrganizationAccess {
 		var systemKey *string
 		if access.RoleSystemKey != nil {
@@ -101,8 +107,9 @@ func (handler *Handler) Context(response http.ResponseWriter, request *http.Requ
 		User:          userResponse{ID: tenant.User.ID.String()},
 		Organizations: organizations,
 	}); err != nil {
-		handler.logger.ErrorContext(request.Context(), "write tenant authentication context",
-			"event", "authentication.context.response_failed",
+		handler.logger.ErrorContext(request.Context(), "Could not send user account response",
+			"event", "user.account.response.failed",
+			"operation", "user.account.respond",
 			"outcome", "error",
 			"error", err,
 		)

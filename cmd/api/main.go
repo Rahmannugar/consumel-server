@@ -20,14 +20,15 @@ import (
 	"github.com/Rahmannugar/consumel-server/internal/config"
 	"github.com/Rahmannugar/consumel-server/internal/health"
 	infraauthentication "github.com/Rahmannugar/consumel-server/internal/infra/authentication"
+	"github.com/Rahmannugar/consumel-server/internal/infra/cache"
 	"github.com/Rahmannugar/consumel-server/internal/infra/clients"
 	"github.com/Rahmannugar/consumel-server/internal/infra/database"
 	"github.com/Rahmannugar/consumel-server/internal/infra/ratelimit"
+	"github.com/Rahmannugar/consumel-server/internal/infra/telemetry"
 	organizationrepositories "github.com/Rahmannugar/consumel-server/internal/organizations/repositories"
 	userrepositories "github.com/Rahmannugar/consumel-server/internal/users/repositories"
 	userservices "github.com/Rahmannugar/consumel-server/internal/users/services"
 	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
 	"github.com/resend/resend-go/v2"
 )
 
@@ -48,18 +49,33 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	if err := run(logger); err != nil {
+	if err := run(); err != nil {
 		logger.Error("api stopped", "error", err)
 		os.Exit(1)
 	}
 }
 
-func run(logger *slog.Logger) error {
+func run() (runError error) {
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("load configuration: %w", err)
 	}
-
+	telemetryRuntime, err := telemetry.New(context.Background(), string(cfg.Environment))
+	if err != nil {
+		return fmt.Errorf("initialize telemetry: %w", err)
+	}
+	logger := telemetryRuntime.Logger()
+	slog.SetDefault(logger)
+	defer func() {
+		telemetryContext, cancelTelemetry := context.WithTimeout(
+			context.Background(),
+			shutdownTimeout,
+		)
+		defer cancelTelemetry()
+		if err := telemetryRuntime.Shutdown(telemetryContext); err != nil {
+			runError = errors.Join(runError, fmt.Errorf("shutdown telemetry: %w", err))
+		}
+	}()
 	if cfg.Environment != config.EnvironmentDevelopment {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -86,11 +102,10 @@ func run(logger *slog.Logger) error {
 		return fmt.Errorf("migrate Authlier PostgreSQL storage: %w", err)
 	}
 
-	redisOptions, err := redis.ParseURL(cfg.Redis.URL)
+	redisClient, err := cache.Open(cfg.Redis.URL)
 	if err != nil {
-		return fmt.Errorf("parse Redis URL: %w", err)
+		return fmt.Errorf("connect Redis: %w", err)
 	}
-	redisClient := redis.NewClient(redisOptions)
 	defer func() {
 		if err := redisClient.Close(); err != nil {
 			logger.Error("close Redis client", "error", err)
@@ -136,7 +151,7 @@ func run(logger *slog.Logger) error {
 	passwordAttemptGuard := infraauthentication.NewPasswordAttemptGuard(distributedLimiter)
 	otpAttemptGuard := infraauthentication.NewOTPAttemptGuard(distributedLimiter)
 
-	resendClient := resend.NewCustomClient(&http.Client{Timeout: resendTimeout}, cfg.Resend.APIKey)
+	resendClient := resend.NewCustomClient(telemetry.NewHTTPClient(resendTimeout), cfg.Resend.APIKey)
 	verificationSender, err := clients.NewResendAuthenticationEmailSender(
 		resendClient.Emails,
 		cfg.Resend.NoReplyFrom,
@@ -196,13 +211,20 @@ func run(logger *slog.Logger) error {
 	authenticationMux.Handle("/", auth.Handler())
 
 	router := gin.New()
-	router.Use(gin.Recovery())
+	requestTelemetry, err := telemetryRuntime.HTTPMiddleware()
+	if err != nil {
+		return fmt.Errorf("configure HTTP telemetry: %w", err)
+	}
+	router.Use(requestTelemetry, gin.Recovery())
 	if err := router.SetTrustedProxies(cfg.Auth.TrustedProxies); err != nil {
 		return fmt.Errorf("configure trusted HTTP proxies: %w", err)
 	}
 	health.RegisterRoutes(router, databasePool)
 	authenticationRoutes := router.Group("/api/auth")
-	authenticationRoutes.Use(consumelauthentication.RateLimitRequests(distributedLimiter, logger))
+	authenticationRoutes.Use(
+		consumelauthentication.RequestTelemetry(),
+		consumelauthentication.RateLimitRequests(distributedLimiter, logger),
+	)
 	authenticationRoutes.Any("/*path", gin.WrapH(authenticationMux))
 
 	server := &http.Server{
