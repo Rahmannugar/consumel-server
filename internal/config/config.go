@@ -21,6 +21,8 @@ const (
 	environmentPrefix   = "CONSUMEL_"
 	defaultHTTPPort     = 8080
 	defaultPostgresPort = 5432
+	localSessionCookie  = "consumel_session"
+	secureSessionCookie = "__Host-consumel_session"
 )
 
 type Environment string
@@ -199,11 +201,17 @@ func (cfg Config) Validate() error {
 		baseURL.User != nil || baseURL.Path != "" || baseURL.RawQuery != "" || baseURL.Fragment != "" {
 		return fmt.Errorf("CONSUMEL_AUTH_BASE_URL must be an HTTP or HTTPS origin without a path")
 	}
+	if cfg.Environment == EnvironmentProduction && baseURL.Scheme != "https" {
+		return fmt.Errorf("CONSUMEL_AUTH_BASE_URL must use HTTPS in production")
+	}
 	clientBaseURL, err := url.Parse(strings.TrimSpace(cfg.Auth.ClientBaseURL))
 	if err != nil || clientBaseURL.Host == "" ||
 		(clientBaseURL.Scheme != "http" && clientBaseURL.Scheme != "https") ||
 		clientBaseURL.User != nil || clientBaseURL.Path != "" || clientBaseURL.RawQuery != "" || clientBaseURL.Fragment != "" {
 		return fmt.Errorf("CONSUMEL_AUTH_CLIENT_BASE_URL must be an HTTP or HTTPS origin without a path")
+	}
+	if cfg.Environment == EnvironmentProduction && clientBaseURL.Scheme != "https" {
+		return fmt.Errorf("CONSUMEL_AUTH_CLIENT_BASE_URL must use HTTPS in production")
 	}
 	if len(cfg.Auth.OTPHMACSecret) < 32 {
 		return fmt.Errorf("CONSUMEL_AUTH_OTP_HMAC_SECRET must decode to at least 32 bytes")
@@ -234,6 +242,15 @@ func (cfg Auth) GoogleSuccessURL() string {
 
 func (cfg Auth) GoogleEnabled() bool {
 	return cfg.GoogleClientID != "" && cfg.GoogleClientSecret != ""
+}
+
+// SessionCookieName uses the host-only prefix in production. Browsers require
+// __Host- cookies to be Secure, use Path=/, and omit the Domain attribute.
+func (cfg Config) SessionCookieName() string {
+	if cfg.Environment == EnvironmentProduction {
+		return secureSessionCookie
+	}
+	return localSessionCookie
 }
 
 func (cfg HTTP) Address() string {

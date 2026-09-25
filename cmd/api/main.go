@@ -187,7 +187,7 @@ func run() (runError error) {
 			Cache:    sessionCache,
 			CacheTTL: sessionCacheTTL,
 			Cookie: authlier.CookieConfig{
-				Name:     "consumel_session",
+				Name:     cfg.SessionCookieName(),
 				Path:     "/",
 				SameSite: http.SameSiteLaxMode,
 			},

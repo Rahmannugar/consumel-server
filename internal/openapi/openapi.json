@@ -1,0 +1,1429 @@
+{
+  "components": {
+    "responses": {
+      "BadRequest": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "invalid_request"
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The request is invalid."
+      },
+      "NotAuthenticated": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "not_authenticated"
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "Authentication is required."
+      },
+      "RateLimited": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "too_many_attempts"
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "Too many attempts were made."
+      },
+      "ServerError": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "authentication_failed"
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The request could not be completed."
+      }
+    },
+    "schemas": {
+      "Account": {
+        "additionalProperties": false,
+        "properties": {
+          "organizations": {
+            "items": {
+              "$ref": "#/components/schemas/OrganizationAccess"
+            },
+            "type": "array"
+          },
+          "session": {
+            "$ref": "#/components/schemas/AccountSession"
+          },
+          "user": {
+            "$ref": "#/components/schemas/AccountUser"
+          }
+        },
+        "required": [
+          "session",
+          "user",
+          "organizations"
+        ],
+        "type": "object"
+      },
+      "AccountSession": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "createdAt",
+          "expiresAt"
+        ],
+        "type": "object"
+      },
+      "AccountUser": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "AuthorizationURL": {
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "type": "object"
+      },
+      "ChangePasswordRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "currentPassword": {
+            "type": "string"
+          },
+          "newPassword": {
+            "format": "password",
+            "maxLength": 128,
+            "minLength": 12,
+            "pattern": "^(?=.*[A-Z])(?=.*[0-9])(?=.*[^\\p{L}\\p{N}\\s]).{12,128}$",
+            "type": "string"
+          },
+          "revokeOtherSessions": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "currentPassword",
+          "newPassword"
+        ],
+        "type": "object"
+      },
+      "CredentialsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "format": "email",
+            "type": "string"
+          },
+          "password": {
+            "format": "password",
+            "maxLength": 128,
+            "minLength": 12,
+            "pattern": "^(?=.*[A-Z])(?=.*[0-9])(?=.*[^\\p{L}\\p{N}\\s]).{12,128}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "type": "object"
+      },
+      "EmailRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "format": "email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "type": "object"
+      },
+      "Error": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "Health": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "example": "ok",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "ListedSession": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "current": {
+            "type": "boolean"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "subjectId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "subjectId",
+          "createdAt",
+          "expiresAt",
+          "current"
+        ],
+        "type": "object"
+      },
+      "OrganizationAccess": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "boolean"
+          },
+          "roleId": {
+            "type": "string"
+          },
+          "roleName": {
+            "type": "string"
+          },
+          "roleSystemKey": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "owner",
+          "roleId",
+          "roleName"
+        ],
+        "type": "object"
+      },
+      "RemovePasswordRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "currentPassword": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "currentPassword"
+        ],
+        "type": "object"
+      },
+      "ResetPasswordRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "newPassword": {
+            "format": "password",
+            "maxLength": 128,
+            "minLength": 12,
+            "pattern": "^(?=.*[A-Z])(?=.*[0-9])(?=.*[^\\p{L}\\p{N}\\s]).{12,128}$",
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "newPassword"
+        ],
+        "type": "object"
+      },
+      "RevokeSessionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "sessionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sessionId"
+        ],
+        "type": "object"
+      },
+      "Session": {
+        "additionalProperties": false,
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/SessionDetails"
+          }
+        },
+        "required": [
+          "session"
+        ],
+        "type": "object"
+      },
+      "SessionDetails": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "subjectId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "subjectId",
+          "createdAt",
+          "expiresAt"
+        ],
+        "type": "object"
+      },
+      "Sessions": {
+        "additionalProperties": false,
+        "properties": {
+          "sessions": {
+            "items": {
+              "$ref": "#/components/schemas/ListedSession"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "sessions"
+        ],
+        "type": "object"
+      },
+      "SetPasswordRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "password": {
+            "format": "password",
+            "maxLength": 128,
+            "minLength": 12,
+            "pattern": "^(?=.*[A-Z])(?=.*[0-9])(?=.*[^\\p{L}\\p{N}\\s]).{12,128}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "password"
+        ],
+        "type": "object"
+      },
+      "User": {
+        "additionalProperties": false,
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/UserDetails"
+          }
+        },
+        "required": [
+          "user"
+        ],
+        "type": "object"
+      },
+      "UserDetails": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "format": "email",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email"
+        ],
+        "type": "object"
+      },
+      "UserSession": {
+        "additionalProperties": false,
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/SessionDetails"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserDetails"
+          }
+        },
+        "required": [
+          "user",
+          "session"
+        ],
+        "type": "object"
+      },
+      "VerifyEmailRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "example": "482193",
+            "pattern": "^[0-9]{6}$",
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "code"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "localCookieSession": {
+        "in": "cookie",
+        "name": "consumel_session",
+        "type": "apiKey"
+      },
+      "productionCookieSession": {
+        "in": "cookie",
+        "name": "__Host-consumel_session",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "description": "Consumel usage-based billing infrastructure API.",
+    "title": "Consumel API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/account": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "organizations": [
+                    {
+                      "id": "01K5A80AZ99MGRM9Q7K0SZV8XJ",
+                      "name": "Acme",
+                      "owner": true,
+                      "roleId": "01K5A80JPQ1PVX1XBQXF8VZC52",
+                      "roleName": "Owner",
+                      "roleSystemKey": null
+                    }
+                  ],
+                  "session": {
+                    "createdAt": "2026-09-25T12:00:00Z",
+                    "expiresAt": "2026-10-02T12:00:00Z",
+                    "id": "01K5A7Q72E9WPJ8D4J13FQ0A6R"
+                  },
+                  "user": {
+                    "id": "01K5A7PZ9SA93YN3PX84B9G6KB"
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Account"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "Return the signed-in account and active organization access.",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/account/google": {
+      "delete": {
+        "responses": {
+          "204": {
+            "description": "Completed without a response body."
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "Unlink Google when another sign-in method remains.",
+        "tags": [
+          "Authentication"
+        ]
+      },
+      "post": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "url": "https://accounts.google.com/o/oauth2/v2/auth?..."
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorizationURL"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "Start linking Google to the signed-in account.",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/auth/change-password": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "currentPassword": "Previous horse 6!",
+                "newPassword": "Correct horse 7!",
+                "revokeOtherSessions": true
+              },
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "user": {
+                    "email": "developer@example.com",
+                    "id": "01K5A7PZ9SA93YN3PX84B9G6KB"
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "Change the account password.",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/auth/forgot-password": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "email": "developer@example.com"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/EmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted without revealing whether the account exists."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "summary": "Send a single-use password-reset link when the account exists.",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/auth/google": {
+      "post": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "url": "https://accounts.google.com/o/oauth2/v2/auth?..."
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorizationURL"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "summary": "Start Google sign-in.",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/auth/google/callback": {
+      "get": {
+        "responses": {
+          "302": {
+            "description": "Redirects to the client after authentication."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "summary": "Complete Google sign-in and redirect to the client.",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/auth/list-sessions": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "sessions": [
+                    {
+                      "createdAt": "2026-09-25T12:00:00Z",
+                      "current": true,
+                      "expiresAt": "2026-10-02T12:00:00Z",
+                      "id": "01K5A7Q72E9WPJ8D4J13FQ0A6R",
+                      "subjectId": "01K5A7PZ9SA93YN3PX84B9G6KB"
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Sessions"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "Return the account's active sessions.",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/auth/remove-password": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "currentPassword": "Correct horse 7!"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/RemovePasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Completed without a response body."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "Remove password sign-in when another method remains.",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/auth/resend-verification": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "email": "developer@example.com"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/EmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted without revealing whether the account exists."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "summary": "Send a new verification code when the account exists.",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/auth/reset-password": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "newPassword": "Correct horse 7!",
+                "token": "single-use-reset-token"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "user": {
+                    "email": "developer@example.com",
+                    "id": "01K5A7PZ9SA93YN3PX84B9G6KB"
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "summary": "Replace the password with a valid reset token.",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/auth/revoke-other-sessions": {
+      "post": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "session": {
+                    "createdAt": "2026-09-25T12:00:00Z",
+                    "expiresAt": "2026-10-02T12:00:00Z",
+                    "id": "01K5A7Q72E9WPJ8D4J13FQ0A6R",
+                    "subjectId": "01K5A7PZ9SA93YN3PX84B9G6KB"
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "Revoke every account session except the current session.",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/auth/revoke-session": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "sessionId": "01K5A7Q72E9WPJ8D4J13FQ0A6R"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/RevokeSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Completed without a response body."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "Revoke one session belonging to the account.",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/auth/revoke-sessions": {
+      "post": {
+        "responses": {
+          "204": {
+            "description": "Completed without a response body."
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "Revoke every session belonging to the account.",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/auth/session": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "session": {
+                    "createdAt": "2026-09-25T12:00:00Z",
+                    "expiresAt": "2026-10-02T12:00:00Z",
+                    "id": "01K5A7Q72E9WPJ8D4J13FQ0A6R",
+                    "subjectId": "01K5A7PZ9SA93YN3PX84B9G6KB"
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "Return the current Authlier session.",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/auth/set-password": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "password": "Correct horse 7!"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/SetPasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "user": {
+                    "email": "developer@example.com",
+                    "id": "01K5A7PZ9SA93YN3PX84B9G6KB"
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "Add password sign-in to the account.",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/auth/sign-in": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "email": "developer@example.com",
+                "password": "Correct horse 7!"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/CredentialsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "session": {
+                    "createdAt": "2026-09-25T12:00:00Z",
+                    "expiresAt": "2026-10-02T12:00:00Z",
+                    "id": "01K5A7Q72E9WPJ8D4J13FQ0A6R",
+                    "subjectId": "01K5A7PZ9SA93YN3PX84B9G6KB"
+                  },
+                  "user": {
+                    "email": "developer@example.com",
+                    "id": "01K5A7PZ9SA93YN3PX84B9G6KB"
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/UserSession"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "summary": "Sign in with email and password.",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/auth/sign-out": {
+      "post": {
+        "responses": {
+          "204": {
+            "description": "Completed without a response body."
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "Revoke the current session.",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/auth/sign-up": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "email": "developer@example.com",
+                "password": "Correct horse 7!"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/CredentialsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "user": {
+                    "email": "developer@example.com",
+                    "id": "01K5A7PZ9SA93YN3PX84B9G6KB"
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            },
+            "description": "Created."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "summary": "Create an account and send its verification code.",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/auth/verify-email": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "code": "482193",
+                "email": "developer@example.com"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/VerifyEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "session": {
+                    "createdAt": "2026-09-25T12:00:00Z",
+                    "expiresAt": "2026-10-02T12:00:00Z",
+                    "id": "01K5A7Q72E9WPJ8D4J13FQ0A6R",
+                    "subjectId": "01K5A7PZ9SA93YN3PX84B9G6KB"
+                  },
+                  "user": {
+                    "email": "developer@example.com",
+                    "id": "01K5A7PZ9SA93YN3PX84B9G6KB"
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/UserSession"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "summary": "Verify the email code and sign in.",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/health/live": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "ok"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        },
+        "summary": "Report whether the API process is alive.",
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "ok"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "unavailable"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            },
+            "description": "PostgreSQL is unavailable."
+          }
+        },
+        "summary": "Report whether PostgreSQL is reachable.",
+        "tags": [
+          "Health"
+        ]
+      }
+    }
+  },
+  "servers": [
+    {
+      "description": "Production",
+      "url": "https://api.consumel.com"
+    },
+    {
+      "description": "Local development",
+      "url": "http://localhost:8080"
+    }
+  ]
+}

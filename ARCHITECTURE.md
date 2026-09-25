@@ -85,12 +85,14 @@ OTP challenges contain no plaintext code and are consumed once. A failure
 after challenge consumption requires the user to request a new code rather
 than making the old code reusable.
 
-Browser sessions use opaque HttpOnly cookies and last seven days. Redis caches
-resolved sessions for no more than one hour with up to ten percent downward
-jitter so many entries do not expire together. Identical cache-miss lookups are
-coalesced, and PostgreSQL still resolves established sessions when Redis is
-unavailable. New OTP operations and sensitive authentication attempts require
-Redis because their shared challenge and abuse-control state must remain
+Browser sessions use opaque HttpOnly cookies and last seven days. Local HTTP
+uses `consumel_session`; production HTTPS uses the host-only
+`__Host-consumel_session` cookie with `Path=/` and no Domain attribute. Redis
+caches resolved sessions for no more than one hour with up to ten percent
+downward jitter so many entries do not expire together. Identical cache-miss
+lookups are coalesced, and PostgreSQL still resolves established sessions when
+Redis is unavailable. New OTP operations and sensitive authentication attempts
+require Redis because their shared challenge and abuse-control state must remain
 consistent across API instances.
 
 Each Authlier subject may have at most three active sessions. Session creation

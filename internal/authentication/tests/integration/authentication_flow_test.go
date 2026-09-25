@@ -102,7 +102,7 @@ func TestFourthSessionRevokesOldestAndSessionsSurviveRedisOutage(t *testing.T) {
 	newestCookie := oldestCookie
 	for signInNumber := 1; signInNumber <= 3; signInNumber++ {
 		signIn := performJSONRequest(t, app.router, http.MethodPost, "/auth/sign-in", map[string]string{
-			"email": "sessions@example.com", "password": "correct horse battery staple",
+			"email": "sessions@example.com", "password": "Correct horse 7!",
 		}, nil)
 		if signIn.Code != http.StatusOK {
 			t.Fatalf("sign-in %d status = %d, body = %s", signInNumber, signIn.Code, signIn.Body.String())
@@ -276,7 +276,7 @@ func (app authenticationTestApp) signUpAndVerify(
 ) (*http.Cookie, emailverification.Message) {
 	t.Helper()
 	signUp := performJSONRequest(t, app.router, http.MethodPost, "/auth/sign-up", map[string]string{
-		"email": email, "password": "correct horse battery staple",
+		"email": email, "password": "Correct horse 7!",
 	}, nil)
 	if signUp.Code != http.StatusCreated {
 		t.Fatalf("sign-up status = %d, body = %s", signUp.Code, signUp.Body.String())

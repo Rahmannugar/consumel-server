@@ -8,8 +8,10 @@ import (
 	authenticationhandlers "github.com/Rahmannugar/consumel-server/internal/authentication/handlers"
 	"github.com/Rahmannugar/consumel-server/internal/config"
 	"github.com/Rahmannugar/consumel-server/internal/health"
+	"github.com/Rahmannugar/consumel-server/internal/infra/cors"
 	"github.com/Rahmannugar/consumel-server/internal/infra/ratelimit"
 	"github.com/Rahmannugar/consumel-server/internal/infra/telemetry"
+	"github.com/Rahmannugar/consumel-server/internal/openapi"
 	"github.com/gin-gonic/gin"
 )
 
@@ -31,12 +33,16 @@ func newRouter(
 		return nil, fmt.Errorf("configure HTTP telemetry: %w", err)
 	}
 	router := gin.New()
-	router.Use(requestTelemetry, gin.Recovery())
+	allowedOrigins := append([]string{cfg.Auth.BaseURL}, cfg.Auth.TrustedOrigins...)
+	router.Use(cors.Middleware(allowedOrigins), requestTelemetry, gin.Recovery())
 	if err := router.SetTrustedProxies(cfg.Auth.TrustedProxies); err != nil {
 		return nil, fmt.Errorf("configure trusted HTTP proxies: %w", err)
 	}
 
 	health.RegisterRoutes(router, database)
+	if err := openapi.RegisterRoutes(router); err != nil {
+		return nil, fmt.Errorf("register OpenAPI routes: %w", err)
+	}
 	authenticationhandlers.RegisterRoutes(
 		router,
 		authlierHandler,
