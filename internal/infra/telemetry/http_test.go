@@ -25,7 +25,7 @@ func TestHTTPMiddlewareLogsCorrelatedCompletion(t *testing.T) {
 		t.Fatalf("create HTTP middleware: %v", err)
 	}
 	router.Use(middleware)
-	router.GET("/api/account", func(context *gin.Context) {
+	router.GET("/account", func(context *gin.Context) {
 		SetRequestOperation(context.Request.Context(), "user.account.load", CompletionDetails{
 			Success:  Completion{Event: "user.account.loaded", Message: "User account loaded"},
 			Rejected: Completion{Event: "user.sign_in.required", Message: "User needs to sign in"},
@@ -35,7 +35,7 @@ func TestHTTPMiddlewareLogsCorrelatedCompletion(t *testing.T) {
 		context.Status(http.StatusOK)
 	})
 
-	request := httptest.NewRequest(http.MethodGet, "/api/account?ignored=secret", nil)
+	request := httptest.NewRequest(http.MethodGet, "/account?ignored=secret", nil)
 	request.Header.Set(requestIDHeader, "request-123")
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
@@ -47,7 +47,7 @@ func TestHTTPMiddlewareLogsCorrelatedCompletion(t *testing.T) {
 	assertLogField(t, entry, "event", "user.account.loaded")
 	assertLogField(t, entry, "operation", "user.account.load")
 	assertLogField(t, entry, "method", http.MethodGet)
-	assertLogField(t, entry, "route", "/api/account")
+	assertLogField(t, entry, "route", "/account")
 	assertLogField(t, entry, "request_id", "request-123")
 	assertLogField(t, entry, "outcome", "success")
 	assertLogField(t, entry, "msg", "User account loaded")
@@ -70,8 +70,8 @@ func TestHTTPMiddlewareLogsCorrelatedCompletion(t *testing.T) {
 	if ended[0].Name() != "user.account.load" {
 		t.Fatalf("span name = %q, want user.account.load", ended[0].Name())
 	}
-	if attributeValue(ended[0].Attributes(), "http.route") != "/api/account" {
-		t.Fatalf("span route = %q, want /api/account", attributeValue(ended[0].Attributes(), "http.route"))
+	if attributeValue(ended[0].Attributes(), "http.route") != "/account" {
+		t.Fatalf("span route = %q, want /account", attributeValue(ended[0].Attributes(), "http.route"))
 	}
 }
 

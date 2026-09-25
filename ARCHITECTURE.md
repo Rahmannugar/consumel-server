@@ -2,7 +2,7 @@
 
 Consumel Server runs as a Go HTTP API backed by PostgreSQL and Redis. Gin routes
 requests, Koanf loads startup configuration, pgx manages the database pool, and
-Authlier v0.4.0 supplies reusable authentication through its standard
+Authlier v0.5.0 supplies reusable authentication through its standard
 `net/http` handler.
 
 ## Runtime flow
@@ -97,7 +97,7 @@ Each Authlier subject may have at most three active sessions. Session creation
 uses a PostgreSQL transaction and a subject-scoped advisory lock; a fourth
 sign-in revokes the oldest session and invalidates its cache entry.
 
-`GET /api/account` maps the Authlier subject to one Consumel user and all
+`GET /account` maps the Authlier subject to one Consumel user and all
 active tenant memberships. The query excludes removed or suspended
 memberships, deleted or suspended organizations, and deleted roles. This tenant
 context never resolves or grants internal-administrator access.

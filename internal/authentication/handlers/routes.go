@@ -19,11 +19,11 @@ func RegisterRoutes(
 ) {
 	middleware := []gin.HandlerFunc{RequestTelemetry(), RateLimitRequests(limiter, logger)}
 
-	authentication := router.Group("/api/auth", middleware...)
+	authentication := router.Group("/auth", middleware...)
 	authentication.Any("/*path", gin.WrapH(authlierHandler))
 
 	accountHandler := NewAccountHandler(resolver, logger)
-	account := router.Group("/api/account", middleware...)
+	account := router.Group("/account", middleware...)
 	account.GET("", gin.WrapF(accountHandler.Get))
 	account.Any("/*path", gin.WrapH(authlierHandler))
 }

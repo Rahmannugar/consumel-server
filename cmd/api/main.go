@@ -155,8 +155,8 @@ func run() (runError error) {
 	auth, err := authlier.New(authlier.Config{
 		AppName:         "Consumel",
 		BaseURL:         cfg.Auth.BaseURL,
-		BasePath:        "/api/auth",
-		AccountBasePath: "/api/account",
+		BasePath:        "/auth",
+		AccountBasePath: "/account",
 		Database:        authlierDatabase,
 		TrustedOrigins:  cfg.Auth.TrustedOrigins,
 		TrustedProxies:  cfg.Auth.TrustedProxies,

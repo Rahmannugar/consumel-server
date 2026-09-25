@@ -52,7 +52,7 @@ func TestSignupOTPCreatesConsumelUserAndSession(t *testing.T) {
 		t,
 		app.router,
 		http.MethodPost,
-		"/api/auth/verify-email",
+		"/auth/verify-email",
 		map[string]string{"email": "owner@example.com", "code": message.Code},
 		nil,
 	)
@@ -68,7 +68,7 @@ func TestSignupOTPCreatesConsumelUserAndSession(t *testing.T) {
 		t,
 		app.router,
 		http.MethodGet,
-		"/api/account",
+		"/account",
 		nil,
 		cookie,
 	)
@@ -94,14 +94,14 @@ func TestFourthSessionRevokesOldestAndSessionsSurviveRedisOutage(t *testing.T) {
 	oldestCookie, _ := app.signUpAndVerify(t, "sessions@example.com")
 
 	// Resolve once so the oldest session is present in Redis before revocation.
-	firstContext := performJSONRequest(t, app.router, http.MethodGet, "/api/account", nil, oldestCookie)
+	firstContext := performJSONRequest(t, app.router, http.MethodGet, "/account", nil, oldestCookie)
 	if firstContext.Code != http.StatusOK {
 		t.Fatalf("initial context status = %d, body = %s", firstContext.Code, firstContext.Body.String())
 	}
 
 	newestCookie := oldestCookie
 	for signInNumber := 1; signInNumber <= 3; signInNumber++ {
-		signIn := performJSONRequest(t, app.router, http.MethodPost, "/api/auth/sign-in", map[string]string{
+		signIn := performJSONRequest(t, app.router, http.MethodPost, "/auth/sign-in", map[string]string{
 			"email": "sessions@example.com", "password": "correct horse battery staple",
 		}, nil)
 		if signIn.Code != http.StatusOK {
@@ -110,11 +110,11 @@ func TestFourthSessionRevokesOldestAndSessionsSurviveRedisOutage(t *testing.T) {
 		newestCookie = onlySessionCookie(t, signIn)
 	}
 
-	revokedContext := performJSONRequest(t, app.router, http.MethodGet, "/api/account", nil, oldestCookie)
+	revokedContext := performJSONRequest(t, app.router, http.MethodGet, "/account", nil, oldestCookie)
 	if revokedContext.Code != http.StatusUnauthorized {
 		t.Fatalf("oldest session status = %d, want 401; body = %s", revokedContext.Code, revokedContext.Body.String())
 	}
-	activeSessions := performJSONRequest(t, app.router, http.MethodGet, "/api/auth/list-sessions", nil, newestCookie)
+	activeSessions := performJSONRequest(t, app.router, http.MethodGet, "/auth/list-sessions", nil, newestCookie)
 	if activeSessions.Code != http.StatusOK {
 		t.Fatalf("list sessions status = %d, body = %s", activeSessions.Code, activeSessions.Body.String())
 	}
@@ -123,7 +123,7 @@ func TestFourthSessionRevokesOldestAndSessionsSurviveRedisOutage(t *testing.T) {
 	if err := app.redisContainer.Stop(t.Context(), nil); err != nil {
 		t.Fatalf("stop Redis: %v", err)
 	}
-	postgresContext := performJSONRequest(t, app.router, http.MethodGet, "/api/account", nil, newestCookie)
+	postgresContext := performJSONRequest(t, app.router, http.MethodGet, "/account", nil, newestCookie)
 	if postgresContext.Code != http.StatusOK {
 		t.Fatalf("PostgreSQL fallback status = %d, body = %s", postgresContext.Code, postgresContext.Body.String())
 	}
@@ -133,7 +133,7 @@ func TestSignInRateLimitUsesNormalizedEmail(t *testing.T) {
 	app := newAuthenticationTestApp(t)
 
 	for attemptNumber := 1; attemptNumber <= 6; attemptNumber++ {
-		failedSignIn := performJSONRequest(t, app.router, http.MethodPost, "/api/auth/sign-in", map[string]string{
+		failedSignIn := performJSONRequest(t, app.router, http.MethodPost, "/auth/sign-in", map[string]string{
 			"email": "  UNKNOWN@example.com ", "password": "not the password",
 		}, nil)
 		expectedStatus := http.StatusUnauthorized
@@ -214,8 +214,8 @@ func newAuthenticationTestApp(t *testing.T) authenticationTestApp {
 	auth, err := authlier.New(authlier.Config{
 		AppName:         "Consumel",
 		BaseURL:         "https://api.consumel.test",
-		BasePath:        "/api/auth",
-		AccountBasePath: "/api/account",
+		BasePath:        "/auth",
+		AccountBasePath: "/account",
 		Database:        database,
 		TrustedOrigins:  []string{testOrigin},
 		EmailAndPassword: authlier.EmailAndPasswordConfig{
@@ -275,14 +275,14 @@ func (app authenticationTestApp) signUpAndVerify(
 	email string,
 ) (*http.Cookie, emailverification.Message) {
 	t.Helper()
-	signUp := performJSONRequest(t, app.router, http.MethodPost, "/api/auth/sign-up", map[string]string{
+	signUp := performJSONRequest(t, app.router, http.MethodPost, "/auth/sign-up", map[string]string{
 		"email": email, "password": "correct horse battery staple",
 	}, nil)
 	if signUp.Code != http.StatusCreated {
 		t.Fatalf("sign-up status = %d, body = %s", signUp.Code, signUp.Body.String())
 	}
 	message := app.sender.last(t)
-	verification := performJSONRequest(t, app.router, http.MethodPost, "/api/auth/verify-email", map[string]string{
+	verification := performJSONRequest(t, app.router, http.MethodPost, "/auth/verify-email", map[string]string{
 		"email": email, "code": message.Code,
 	}, nil)
 	if verification.Code != http.StatusOK {
