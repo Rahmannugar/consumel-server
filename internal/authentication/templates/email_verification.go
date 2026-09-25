@@ -65,7 +65,7 @@ func RenderVerificationEmail(code string, expiresAt, now time.Time) (Verificatio
 	return VerificationEmail{
 		Subject: "Verify your Consumel account",
 		Text: fmt.Sprintf(
-			"Your Consumel verification code is %s.\n\nThis code expires in %s. Never share it; Consumel staff will not ask for it.",
+			"Your Consumel verification code is %s.\n\nThis code expires in %s. If you didn't request it, you can safely ignore this email.",
 			code,
 			expiresIn,
 		),
