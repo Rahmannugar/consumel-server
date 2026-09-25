@@ -38,9 +38,10 @@ tasks:
       - gofmt -w .
 
   generate:
-    desc: Generate type-safe database code
+    desc: Generate type-safe database code and the OpenAPI document
     cmds:
       - go tool sqlc generate
+      - go run ./cmd/openapi
 
   migrate:
     desc: Apply pending PostgreSQL migrations

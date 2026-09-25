@@ -18,7 +18,7 @@ flows.
 - Koanf
 - PostgreSQL with pgx
 - Redis
-- Authlier v0.4.0
+- Authlier v0.5.0
 - Resend
 - OpenTelemetry
 - Tern and sqlc
@@ -70,7 +70,9 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 task run-api
 ```
 
 The API is available at [http://localhost:8080](http://localhost:8080) by
-default.
+default. The Scalar API reference is available at
+[http://localhost:8080/docs](http://localhost:8080/docs), and the
+generated OpenAPI document is served at `/openapi.json`.
 
 Koanf loads `.env` first and applies process environment variables as
 overrides. `CONSUMEL_ENVIRONMENT` accepts `development` or `production` and

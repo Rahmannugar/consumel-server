@@ -34,6 +34,11 @@ jobs:
           go tool sqlc generate
           git diff --exit-code -- internal/users/repositories/generated internal/organizations/repositories/generated internal/projects/repositories/generated
 
+      - name: Verify generated OpenAPI document
+        run: |
+          go run ./cmd/openapi
+          git diff --exit-code -- internal/openapi/openapi.json
+
       - name: Test
         run: go test ./...
 
