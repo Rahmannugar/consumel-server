@@ -1,4 +1,4 @@
-package authentication
+package handlers
 
 import (
 	"errors"
@@ -57,7 +57,8 @@ func RateLimitRequests(limiter *ratelimit.RedisLimiter, logger *slog.Logger) gin
 			return
 		}
 		if err != nil {
-			// Session reads must continue through PostgreSQL when Redis is down.
+			// This coarse traffic limit fails open so account and session reads can
+			// fall back to PostgreSQL. Credential-specific attempt guards fail closed.
 			logger.WarnContext(context.Request.Context(), "authentication request rate limit unavailable",
 				"event", "authentication.rate_limit.unavailable",
 				"operation", operation,

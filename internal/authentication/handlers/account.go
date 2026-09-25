@@ -1,4 +1,4 @@
-package authentication
+package handlers
 
 import (
 	"errors"
@@ -16,12 +16,12 @@ type TenantResolver interface {
 	Resolve(*http.Request) (authenticationmodels.AuthenticatedTenant, error)
 }
 
-type Handler struct {
+type AccountHandler struct {
 	resolver TenantResolver
 	logger   *slog.Logger
 }
 
-type contextResponse struct {
+type accountResponse struct {
 	Session       sessionResponse              `json:"session"`
 	User          userResponse                 `json:"user"`
 	Organizations []organizationAccessResponse `json:"organizations"`
@@ -46,11 +46,11 @@ type organizationAccessResponse struct {
 	RoleSystemKey *string `json:"roleSystemKey"`
 }
 
-func NewHandler(resolver TenantResolver, logger *slog.Logger) *Handler {
-	return &Handler{resolver: resolver, logger: logger}
+func NewAccountHandler(resolver TenantResolver, logger *slog.Logger) *AccountHandler {
+	return &AccountHandler{resolver: resolver, logger: logger}
 }
 
-func (handler *Handler) Context(response http.ResponseWriter, request *http.Request) {
+func (handler *AccountHandler) Get(response http.ResponseWriter, request *http.Request) {
 	tenant, err := handler.resolver.Resolve(request)
 	if err != nil {
 		if errors.Is(err, authenticationservices.ErrUnauthenticated) {
@@ -58,7 +58,7 @@ func (handler *Handler) Context(response http.ResponseWriter, request *http.Requ
 				response,
 				http.StatusUnauthorized,
 				"unauthenticated",
-				"Sign in to access your Consumel account context.",
+				"Sign in to access your Consumel account.",
 			)
 			return
 		}
@@ -71,8 +71,8 @@ func (handler *Handler) Context(response http.ResponseWriter, request *http.Requ
 		_ = httpresponse.WriteError(
 			response,
 			http.StatusInternalServerError,
-			"authentication_context_failed",
-			"Consumel could not load your account context. Try again shortly.",
+			"account_load_failed",
+			"Consumel could not load your account. Try again shortly.",
 		)
 		return
 	}
@@ -98,7 +98,7 @@ func (handler *Handler) Context(response http.ResponseWriter, request *http.Requ
 		})
 	}
 
-	if err := httpresponse.WriteJSON(response, http.StatusOK, contextResponse{
+	if err := httpresponse.WriteJSON(response, http.StatusOK, accountResponse{
 		Session: sessionResponse{
 			ID:        tenant.Session.ID,
 			CreatedAt: tenant.Session.CreatedAt,

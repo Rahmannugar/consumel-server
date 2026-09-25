@@ -8,6 +8,7 @@ import (
 
 	"github.com/Rahmannugar/authlier/emailpassword"
 	"github.com/Rahmannugar/authlier/emailverification"
+	"github.com/Rahmannugar/authlier/passwordreset"
 	"github.com/Rahmannugar/consumel-server/internal/infra/ratelimit"
 )
 
@@ -71,6 +72,24 @@ var (
 		RestoreImmediateRequestsOver: 10 * time.Minute,
 		MaximumRequests:              10,
 		MaximumWindow:                10 * time.Minute,
+	}
+	passwordResetRequestPerIPLimit = ratelimit.Rule{
+		ImmediateRequests:            5,
+		RestoreImmediateRequestsOver: 15 * time.Minute,
+		MaximumRequests:              10,
+		MaximumWindow:                15 * time.Minute,
+	}
+	passwordResetRequestPerEmailLimit = ratelimit.Rule{
+		ImmediateRequests:            3,
+		RestoreImmediateRequestsOver: 30 * time.Minute,
+		MaximumRequests:              5,
+		MaximumWindow:                30 * time.Minute,
+	}
+	passwordResetCompletePerIPLimit = ratelimit.Rule{
+		ImmediateRequests:            10,
+		RestoreImmediateRequestsOver: 15 * time.Minute,
+		MaximumRequests:              20,
+		MaximumWindow:                15 * time.Minute,
 	}
 )
 
@@ -189,5 +208,46 @@ func clientIP(source string) string {
 	return source
 }
 
+type PasswordResetAttemptGuard struct {
+	limiter *ratelimit.RedisLimiter
+}
+
+func NewPasswordResetAttemptGuard(limiter *ratelimit.RedisLimiter) *PasswordResetAttemptGuard {
+	return &PasswordResetAttemptGuard{limiter: limiter}
+}
+
+func (guard *PasswordResetAttemptGuard) Check(
+	ctx context.Context,
+	attempt passwordreset.Attempt,
+) error {
+	operation := string(attempt.Operation)
+	ipLimit := passwordResetCompletePerIPLimit
+	if attempt.Operation == passwordreset.OperationRequest {
+		ipLimit = passwordResetRequestPerIPLimit
+	}
+	if err := guard.check(ctx, operation, "ip", clientIP(attempt.SourceKey), ipLimit); err != nil {
+		return err
+	}
+	if email := strings.TrimSpace(attempt.Email); email != "" {
+		return guard.check(ctx, operation, "email", email, passwordResetRequestPerEmailLimit)
+	}
+	return nil
+}
+
+func (guard *PasswordResetAttemptGuard) check(
+	ctx context.Context,
+	operation string,
+	dimension string,
+	identity string,
+	rule ratelimit.Rule,
+) error {
+	_, err := guard.limiter.Allow(ctx, "authentication.password_reset."+operation, dimension, identity, rule)
+	if errors.Is(err, ratelimit.ErrLimitExceeded) {
+		return passwordreset.ErrAttemptBlocked
+	}
+	return err
+}
+
 var _ emailpassword.AttemptGuard = (*PasswordAttemptGuard)(nil)
 var _ emailverification.AttemptGuard = (*OTPAttemptGuard)(nil)
+var _ passwordreset.AttemptGuard = (*PasswordResetAttemptGuard)(nil)

@@ -3,7 +3,7 @@ module github.com/Rahmannugar/consumel-server
 go 1.26.0
 
 require (
-	github.com/Rahmannugar/authlier v0.4.0
+	github.com/Rahmannugar/authlier v0.5.0
 	github.com/exaring/otelpgx v0.12.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/google/uuid v1.6.0

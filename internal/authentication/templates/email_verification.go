@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-//go:embed email_layout.html email_verification.html
+//go:embed email_layout.html email_verification.html password_reset.html
 var emailTemplates embed.FS
 
 var parsedEmailVerification = template.Must(

@@ -7,8 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/Rahmannugar/authlier"
@@ -18,7 +16,6 @@ import (
 	consumelauthentication "github.com/Rahmannugar/consumel-server/internal/authentication"
 	authenticationservices "github.com/Rahmannugar/consumel-server/internal/authentication/services"
 	"github.com/Rahmannugar/consumel-server/internal/config"
-	"github.com/Rahmannugar/consumel-server/internal/health"
 	infraauthentication "github.com/Rahmannugar/consumel-server/internal/infra/authentication"
 	"github.com/Rahmannugar/consumel-server/internal/infra/cache"
 	"github.com/Rahmannugar/consumel-server/internal/infra/clients"
@@ -28,18 +25,14 @@ import (
 	organizationrepositories "github.com/Rahmannugar/consumel-server/internal/organizations/repositories"
 	userrepositories "github.com/Rahmannugar/consumel-server/internal/users/repositories"
 	userservices "github.com/Rahmannugar/consumel-server/internal/users/services"
-	"github.com/gin-gonic/gin"
 	"github.com/resend/resend-go/v2"
 )
 
 const (
-	readHeaderTimeout     = 5 * time.Second
-	readTimeout           = 15 * time.Second
-	idleTimeout           = 60 * time.Second
-	shutdownTimeout       = 15 * time.Second
 	databaseTimeout       = 10 * time.Second
 	authMigrationTimeout  = 30 * time.Second
 	resendTimeout         = 10 * time.Second
+	googleTimeout         = 10 * time.Second
 	sessionLifetime       = 7 * 24 * time.Hour
 	sessionCacheTTL       = time.Hour
 	maximumActiveSessions = 3
@@ -66,6 +59,8 @@ func run() (runError error) {
 	}
 	logger := telemetryRuntime.Logger()
 	slog.SetDefault(logger)
+	// Telemetry is initialized first and shut down last so dependency close and
+	// HTTP shutdown failures can still be correlated and exported.
 	defer func() {
 		telemetryContext, cancelTelemetry := context.WithTimeout(
 			context.Background(),
@@ -76,12 +71,8 @@ func run() (runError error) {
 			runError = errors.Join(runError, fmt.Errorf("shutdown telemetry: %w", err))
 		}
 	}()
-	if cfg.Environment != config.EnvironmentDevelopment {
-		gin.SetMode(gin.ReleaseMode)
-	}
-
 	databaseContext, cancelDatabase := context.WithTimeout(context.Background(), databaseTimeout)
-	databasePool, err := database.Open(databaseContext, cfg.Database.URL)
+	databasePool, err := database.Open(databaseContext, cfg.Database.ConnectionString())
 	cancelDatabase()
 	if err != nil {
 		return fmt.Errorf("connect database: %w", err)
@@ -150,9 +141,10 @@ func run() (runError error) {
 	}
 	passwordAttemptGuard := infraauthentication.NewPasswordAttemptGuard(distributedLimiter)
 	otpAttemptGuard := infraauthentication.NewOTPAttemptGuard(distributedLimiter)
+	passwordResetAttemptGuard := infraauthentication.NewPasswordResetAttemptGuard(distributedLimiter)
 
 	resendClient := resend.NewCustomClient(telemetry.NewHTTPClient(resendTimeout), cfg.Resend.APIKey)
-	verificationSender, err := clients.NewResendAuthenticationEmailSender(
+	authenticationEmailSender, err := clients.NewResendAuthenticationEmailSender(
 		resendClient.Emails,
 		cfg.Resend.NoReplyFrom,
 	)
@@ -161,11 +153,13 @@ func run() (runError error) {
 	}
 
 	auth, err := authlier.New(authlier.Config{
-		AppName:        "Consumel",
-		BaseURL:        cfg.Auth.BaseURL,
-		Database:       authlierDatabase,
-		TrustedOrigins: cfg.Auth.TrustedOrigins,
-		TrustedProxies: cfg.Auth.TrustedProxies,
+		AppName:         "Consumel",
+		BaseURL:         cfg.Auth.BaseURL,
+		BasePath:        "/api/auth",
+		AccountBasePath: "/api/account",
+		Database:        authlierDatabase,
+		TrustedOrigins:  cfg.Auth.TrustedOrigins,
+		TrustedProxies:  cfg.Auth.TrustedProxies,
 		EmailAndPassword: authlier.EmailAndPasswordConfig{
 			Enabled:                  true,
 			RequireEmailVerification: true,
@@ -176,10 +170,16 @@ func run() (runError error) {
 			Enabled:                     true,
 			Delivery:                    emailverification.DeliveryMethodOTP,
 			OTPSecret:                   cfg.Auth.OTPHMACSecret,
-			Sender:                      verificationSender,
+			Sender:                      authenticationEmailSender,
 			SendOnSignUp:                true,
 			AutoSignInAfterVerification: true,
 			AttemptGuard:                otpAttemptGuard,
+		},
+		PasswordReset: authlier.PasswordResetConfig{
+			Enabled:      true,
+			ResetURL:     cfg.Auth.PasswordResetURL(),
+			Sender:       authenticationEmailSender,
+			AttemptGuard: passwordResetAttemptGuard,
 		},
 		Session: authlier.SessionConfig{
 			Mode:     authlier.SessionModeCookie,
@@ -191,6 +191,13 @@ func run() (runError error) {
 				Path:     "/",
 				SameSite: http.SameSiteLaxMode,
 			},
+		},
+		Google: authlier.GoogleConfig{
+			Enabled:            cfg.Auth.GoogleEnabled(),
+			ClientID:           cfg.Auth.GoogleClientID,
+			ClientSecret:       cfg.Auth.GoogleClientSecret,
+			SuccessRedirectURL: cfg.Auth.GoogleSuccessURL(),
+			HTTPClient:         telemetry.NewHTTPClient(googleTimeout),
 		},
 	})
 	if err != nil {
@@ -205,69 +212,17 @@ func run() (runError error) {
 		userService,
 		organizationRepository,
 	)
-	authenticationHandler := consumelauthentication.NewHandler(tenantService, logger)
-	authenticationMux := http.NewServeMux()
-	authenticationMux.HandleFunc("GET /api/auth/context", authenticationHandler.Context)
-	authenticationMux.Handle("/", auth.Handler())
-
-	router := gin.New()
-	requestTelemetry, err := telemetryRuntime.HTTPMiddleware()
-	if err != nil {
-		return fmt.Errorf("configure HTTP telemetry: %w", err)
-	}
-	router.Use(requestTelemetry, gin.Recovery())
-	if err := router.SetTrustedProxies(cfg.Auth.TrustedProxies); err != nil {
-		return fmt.Errorf("configure trusted HTTP proxies: %w", err)
-	}
-	health.RegisterRoutes(router, databasePool)
-	authenticationRoutes := router.Group("/api/auth")
-	authenticationRoutes.Use(
-		consumelauthentication.RequestTelemetry(),
-		consumelauthentication.RateLimitRequests(distributedLimiter, logger),
+	router, err := newRouter(
+		cfg,
+		telemetryRuntime,
+		databasePool,
+		auth.Handler(),
+		tenantService,
+		distributedLimiter,
+		logger,
 	)
-	authenticationRoutes.Any("/*path", gin.WrapH(authenticationMux))
-
-	server := &http.Server{
-		Addr:              cfg.HTTP.Address(),
-		Handler:           router,
-		ReadHeaderTimeout: readHeaderTimeout,
-		ReadTimeout:       readTimeout,
-		IdleTimeout:       idleTimeout,
+	if err != nil {
+		return err
 	}
-
-	serverErrors := make(chan error, 1)
-	go func() {
-		logger.Info("api listening", "address", server.Addr, "environment", cfg.Environment)
-		err := server.ListenAndServe()
-		if errors.Is(err, http.ErrServerClosed) {
-			err = nil
-		}
-		serverErrors <- err
-	}()
-
-	shutdownSignal, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	select {
-	case err := <-serverErrors:
-		if err != nil {
-			return fmt.Errorf("serve HTTP: %w", err)
-		}
-		return nil
-	case <-shutdownSignal.Done():
-		logger.Info("api shutdown started")
-	}
-
-	shutdownContext, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-	defer cancel()
-
-	if err := server.Shutdown(shutdownContext); err != nil {
-		return fmt.Errorf("shutdown HTTP server: %w", err)
-	}
-	if err := <-serverErrors; err != nil {
-		return fmt.Errorf("stop HTTP server: %w", err)
-	}
-
-	logger.Info("api shutdown completed")
-	return nil
+	return serveHTTP(cfg.HTTP.Address(), router, logger)
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Rahmannugar/authlier/emailverification"
+	"github.com/Rahmannugar/authlier/passwordreset"
 	authenticationtemplates "github.com/Rahmannugar/consumel-server/internal/authentication/templates"
 	"github.com/resend/resend-go/v2"
 )
@@ -62,4 +63,31 @@ func (sender *ResendAuthenticationEmailSender) SendVerification(
 	return nil
 }
 
+func (sender *ResendAuthenticationEmailSender) SendPasswordReset(
+	ctx context.Context,
+	message passwordreset.Message,
+) error {
+	email, err := authenticationtemplates.RenderPasswordResetEmail(
+		message.URL,
+		message.ExpiresAt,
+		sender.now().UTC(),
+	)
+	if err != nil {
+		return err
+	}
+
+	_, err = sender.emails.SendWithContext(ctx, &resend.SendEmailRequest{
+		From:    sender.from,
+		To:      []string{message.Email},
+		Subject: email.Subject,
+		Text:    email.Text,
+		Html:    email.HTML,
+	})
+	if err != nil {
+		return fmt.Errorf("send authentication email through Resend: %w", err)
+	}
+	return nil
+}
+
 var _ emailverification.Sender = (*ResendAuthenticationEmailSender)(nil)
+var _ passwordreset.Sender = (*ResendAuthenticationEmailSender)(nil)

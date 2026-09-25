@@ -1,4 +1,4 @@
-package authentication
+package handlers
 
 import (
 	"net/http"
@@ -13,19 +13,19 @@ type requestTelemetry struct {
 }
 
 var authenticationRequestTelemetry = map[string]requestTelemetry{
-	http.MethodGet + " /api/auth/context": requestDetails(
+	http.MethodGet + " /api/account": requestDetails(
 		"user.account.load",
 		completion("user.account.loaded", "User account loaded"),
 		completion("user.sign_in.required", "User needs to sign in"),
 		completion("user.account.load.failed", "Could not load user account"),
 	),
-	http.MethodPost + " /api/auth/sign-up/email": requestDetails(
+	http.MethodPost + " /api/auth/sign-up": requestDetails(
 		"user.sign_up",
 		completion("user.signed_up", "User signed up"),
 		completion("user.sign_up.rejected", "Sign-up request rejected"),
 		completion("user.sign_up.failed", "Could not sign up user"),
 	),
-	http.MethodPost + " /api/auth/sign-in/email": requestDetails(
+	http.MethodPost + " /api/auth/sign-in": requestDetails(
 		"user.sign_in",
 		completion("user.signed_in", "User signed in"),
 		completion("user.sign_in.rejected", "Sign-in attempt rejected"),
@@ -85,7 +85,7 @@ var authenticationRequestTelemetry = map[string]requestTelemetry{
 		completion("user.password.remove.rejected", "Password removal rejected"),
 		completion("user.password.remove.failed", "Could not remove user password"),
 	),
-	http.MethodPost + " /api/auth/send-verification-email": requestDetails(
+	http.MethodPost + " /api/auth/resend-verification": requestDetails(
 		"user.email_verification.send",
 		completion("user.email_verification.sent", "Verification email request accepted"),
 		completion("user.email_verification.send.rejected", "Verification email request rejected"),
@@ -108,6 +108,30 @@ var authenticationRequestTelemetry = map[string]requestTelemetry{
 		completion("user.password_reset.completed", "User password reset"),
 		completion("user.password_reset.rejected", "Password reset rejected"),
 		completion("user.password_reset.failed", "Could not reset user password"),
+	),
+	http.MethodPost + " /api/auth/google": requestDetails(
+		"user.google_sign_in.start",
+		completion("user.google_sign_in.started", "Google sign-in started"),
+		completion("user.google_sign_in.start.rejected", "Google sign-in request rejected"),
+		completion("user.google_sign_in.start.failed", "Could not start Google sign-in"),
+	),
+	http.MethodGet + " /api/auth/google/callback": requestDetails(
+		"user.google_sign_in.complete",
+		completion("user.google_sign_in.completed", "User signed in with Google"),
+		completion("user.google_sign_in.rejected", "Google sign-in rejected"),
+		completion("user.google_sign_in.failed", "Could not sign in user with Google"),
+	),
+	http.MethodPost + " /api/account/google": requestDetails(
+		"user.google_account.link",
+		completion("user.google_account.link_started", "Google account linking started"),
+		completion("user.google_account.link.rejected", "Google account linking rejected"),
+		completion("user.google_account.link.failed", "Could not start Google account linking"),
+	),
+	http.MethodDelete + " /api/account/google": requestDetails(
+		"user.google_account.unlink",
+		completion("user.google_account.unlinked", "Google account unlinked"),
+		completion("user.google_account.unlink.rejected", "Google account unlink rejected"),
+		completion("user.google_account.unlink.failed", "Could not unlink Google account"),
 	),
 }
 

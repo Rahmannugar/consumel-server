@@ -1,93 +1,63 @@
 # Authentication API
 
-Authlier's standard `net/http` handler owns the email/password and session
-routes below. Consumel mounts that handler under `/api/auth` in Gin. JSON
-requests require `Content-Type: application/json`. Browser sessions use the
-opaque `consumel_session` HttpOnly cookie.
+Swagger/OpenAPI owns request schemas, responses, examples, and error details.
 
-## Signup and verification
+### `POST /api/auth/sign-up`
+Creates an email-and-password account and automatically sends its verification code.
 
-### `POST /api/auth/sign-up/email`
-
-Creates an unverified Authlier account and sends a six-digit verification code.
-The request body contains `email` and `password`. A successful request returns
-`201 Created`; no authenticated session is created before verification.
-
-### `POST /api/auth/send-verification-email`
-
-Replaces the current code for an unverified account. The request body contains
-`email`. A successful request returns `202 Accepted`, including when the email
-does not identify an eligible account so the response does not disclose account
-existence.
+### `POST /api/auth/resend-verification`
+Sends a new verification code without revealing whether the account exists.
 
 ### `POST /api/auth/verify-email`
+Verifies the email code and signs in the account.
 
-Consumes the current six-digit code. The request body contains `email` and
-`code`, for example:
+### `POST /api/auth/sign-in`
+Signs in a verified account with email and password.
 
-```json
-{
-  "email": "owner@example.com",
-  "code": "482731"
-}
-```
+### `POST /api/auth/sign-out`
+Revokes the current session and clears its cookie.
 
-Success returns `200 OK` with the verified Authlier user and session and sets
-the HttpOnly session cookie. An invalid, expired, replaced, or already-used code
-returns `400 Bad Request` with `{"error":"invalid_token"}`. Exceeded abuse
-limits return `429 Too Many Requests`.
+### `GET /api/auth/session`
+Returns the current Authlier session.
 
-## Password sessions
+### `GET /api/auth/list-sessions`
+Returns the account's active sessions.
 
-- `POST /api/auth/sign-in/email` accepts `email` and `password` and creates a
-  session only for a verified account.
-- `POST /api/auth/sign-out` revokes the current session and clears its cookie.
-- `GET /api/auth/session` returns the current Authlier session.
-- `GET /api/auth/list-sessions` returns the account's active sessions.
-- `POST /api/auth/revoke-session` revokes the session identified by
-  `sessionId`.
-- `POST /api/auth/revoke-other-sessions` preserves the current session and
-  revokes the account's other sessions.
-- `POST /api/auth/revoke-sessions` revokes every account session.
-- `POST /api/auth/change-password`, `POST /api/auth/set-password`, and
-  `POST /api/auth/remove-password` manage the account's password credential
-  subject to Authlier's recent-session and remaining-credential rules.
+### `POST /api/auth/revoke-session`
+Revokes one session belonging to the account.
 
-An account may retain three active sessions. Creating a fourth session revokes
-the oldest. Authentication routes have contextual distributed limits by IP,
-normalized email, and account where those identities are available.
+### `POST /api/auth/revoke-other-sessions`
+Revokes every account session except the current session.
 
-## Consumel tenant context
+### `POST /api/auth/revoke-sessions`
+Revokes every session belonging to the account.
 
-### `GET /api/auth/context`
+### `POST /api/auth/change-password`
+Changes the account password after verifying the current password.
 
-Requires the session cookie. It resolves the Authlier subject to a Consumel
-user and returns every active organization membership:
+### `POST /api/auth/set-password`
+Adds password sign-in to an account that uses another sign-in method.
 
-```json
-{
-  "session": {
-    "id": "01997fc4-b5d2-7f6b-a5bc-a548d76d742c",
-    "createdAt": "2026-09-25T10:30:00Z",
-    "expiresAt": "2026-10-02T10:30:00Z"
-  },
-  "user": {
-    "id": "01997fc4-b6a1-7a21-b9a7-9c366f1124d3"
-  },
-  "organizations": [
-    {
-      "id": "01997fc5-113b-70bc-af66-773e2335c418",
-      "name": "Northstar Labs",
-      "owner": true,
-      "roleId": "01997fc5-1142-7f29-b05e-29b81cbfc0b6",
-      "roleName": "Admin",
-      "roleSystemKey": "admin"
-    }
-  ]
-}
-```
+### `POST /api/auth/remove-password`
+Removes password sign-in when another sign-in method remains.
 
-The organization list excludes inactive memberships, organizations, and roles.
-No membership can grant internal-administrator access. Missing or invalid
-sessions return a contextual `401 Unauthorized` response; authoritative lookup
-failures return a contextual `500 Internal Server Error` response.
+### `POST /api/auth/forgot-password`
+Sends a single-use password-reset link without revealing whether the account exists.
+
+### `POST /api/auth/reset-password`
+Replaces the password with a valid reset token and revokes existing sessions.
+
+### `POST /api/auth/google`
+Starts Google sign-in and returns the provider authorization URL.
+
+### `GET /api/auth/google/callback`
+Completes Google sign-in and redirects the browser to the client application.
+
+### `GET /api/account`
+Returns the signed-in Consumel user, session, and active organization access.
+
+### `POST /api/account/google`
+Starts linking one Google identity to the signed-in account.
+
+### `DELETE /api/account/google`
+Unlinks the Google identity when another sign-in method remains.

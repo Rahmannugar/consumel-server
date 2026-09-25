@@ -4,15 +4,15 @@ services:
   postgres:
     image: postgres:17-alpine
     environment:
-      POSTGRES_DB: consumel
-      POSTGRES_USER: consumel
-      POSTGRES_PASSWORD: consumel
+      POSTGRES_DB: ${CONSUMEL_DATABASE_NAME:-consumel}
+      POSTGRES_USER: ${CONSUMEL_DATABASE_USER:-consumel}
+      POSTGRES_PASSWORD: ${CONSUMEL_DATABASE_PASSWORD:-consumel}
     ports:
-      - "5432:5432"
+      - "${CONSUMEL_DATABASE_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready --username=consumel --dbname=consumel"]
+      test: ["CMD-SHELL", "pg_isready --username=$$POSTGRES_USER --dbname=$$POSTGRES_DB"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -55,7 +55,12 @@ services:
       - --migrations
       - internal/infra/database/migrations
     environment:
-      CONSUMEL_DATABASE_URL: postgres://consumel:consumel@postgres:5432/consumel?sslmode=disable
+      CONSUMEL_DATABASE_HOST: postgres
+      CONSUMEL_DATABASE_PORT: 5432
+      CONSUMEL_DATABASE_NAME: ${CONSUMEL_DATABASE_NAME:-consumel}
+      CONSUMEL_DATABASE_USER: ${CONSUMEL_DATABASE_USER:-consumel}
+      CONSUMEL_DATABASE_PASSWORD: ${CONSUMEL_DATABASE_PASSWORD:-consumel}
+      CONSUMEL_DATABASE_SSL_MODE: ${CONSUMEL_DATABASE_SSL_MODE:-disable}
     volumes:
       - .:/workspace
       - go-modules:/go/pkg/mod
@@ -71,7 +76,8 @@ services:
     env_file:
       - .env
     environment:
-      CONSUMEL_DATABASE_URL: postgres://consumel:consumel@postgres:5432/consumel?sslmode=disable
+      CONSUMEL_DATABASE_HOST: postgres
+      CONSUMEL_DATABASE_PORT: 5432
       CONSUMEL_REDIS_URL: redis://redis:6379/0
       CONSUMEL_AUTH_BASE_URL: http://localhost:8080
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
