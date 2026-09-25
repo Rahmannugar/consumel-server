@@ -18,7 +18,7 @@ func TestOrganizationCreationPersistsBuiltInRoles(t *testing.T) {
 
 	userRepository := userrepositories.NewUserRepository(pool)
 	userService := userservices.NewUserService(userRepository)
-	user, err := userService.CreateUser(t.Context(), "user_organization_owner")
+	user, err := userService.ResolveUser(t.Context(), "user_organization_owner")
 	if err != nil {
 		t.Fatalf("create user: %v", err)
 	}

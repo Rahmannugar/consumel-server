@@ -20,7 +20,7 @@ func TestProjectCreationPersistsSandboxAndLiveEnvironments(t *testing.T) {
 
 	userRepository := userrepositories.NewUserRepository(pool)
 	userService := userservices.NewUserService(userRepository)
-	user, err := userService.CreateUser(t.Context(), "user_project_owner")
+	user, err := userService.ResolveUser(t.Context(), "user_project_owner")
 	if err != nil {
 		t.Fatalf("create owner user: %v", err)
 	}

@@ -1,9 +1,12 @@
 package config
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/mail"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -29,6 +32,9 @@ type Config struct {
 	Environment Environment
 	HTTP        HTTP
 	Database    Database
+	Redis       Redis
+	Auth        Auth
+	Resend      Resend
 }
 
 type HTTP struct {
@@ -37,6 +43,23 @@ type HTTP struct {
 
 type Database struct {
 	URL string
+}
+
+type Redis struct {
+	URL string
+}
+
+type Auth struct {
+	BaseURL        string
+	TrustedOrigins []string
+	TrustedProxies []string
+	OTPHMACSecret  []byte
+}
+
+type Resend struct {
+	APIKey      string
+	NoReplyFrom string
+	HelloFrom   string
 }
 
 func Load() (Config, error) {
@@ -83,6 +106,20 @@ func Load() (Config, error) {
 		cfg.HTTP.Port = port
 	}
 	cfg.Database.URL = k.String("database.url")
+	cfg.Redis.URL = k.String("redis.url")
+	cfg.Auth.BaseURL = k.String("auth.base_url")
+	cfg.Auth.TrustedOrigins = commaSeparated(k.String("auth.trusted_origins"))
+	cfg.Auth.TrustedProxies = commaSeparated(k.String("auth.trusted_proxies"))
+	cfg.Resend.APIKey = k.String("resend.api_key")
+	cfg.Resend.NoReplyFrom = k.String("resend.noreply_from")
+	cfg.Resend.HelloFrom = k.String("resend.hello_from")
+	if encodedSecret := strings.TrimSpace(k.String("auth.otp_hmac_secret")); encodedSecret != "" {
+		secret, err := base64.StdEncoding.DecodeString(encodedSecret)
+		if err != nil {
+			return Config{}, fmt.Errorf("CONSUMEL_AUTH_OTP_HMAC_SECRET must be base64 encoded: %w", err)
+		}
+		cfg.Auth.OTPHMACSecret = secret
+	}
 
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
@@ -103,10 +140,45 @@ func (cfg Config) Validate() error {
 	if strings.TrimSpace(cfg.Database.URL) == "" {
 		return fmt.Errorf("CONSUMEL_DATABASE_URL is required")
 	}
+	if strings.TrimSpace(cfg.Redis.URL) == "" {
+		return fmt.Errorf("CONSUMEL_REDIS_URL is required")
+	}
+	if _, err := url.ParseRequestURI(cfg.Redis.URL); err != nil {
+		return fmt.Errorf("CONSUMEL_REDIS_URL must be a valid URL: %w", err)
+	}
+	baseURL, err := url.Parse(strings.TrimSpace(cfg.Auth.BaseURL))
+	if err != nil || baseURL.Host == "" ||
+		(baseURL.Scheme != "http" && baseURL.Scheme != "https") ||
+		baseURL.User != nil || baseURL.Path != "" || baseURL.RawQuery != "" || baseURL.Fragment != "" {
+		return fmt.Errorf("CONSUMEL_AUTH_BASE_URL must be an HTTP or HTTPS origin without a path")
+	}
+	if len(cfg.Auth.OTPHMACSecret) < 32 {
+		return fmt.Errorf("CONSUMEL_AUTH_OTP_HMAC_SECRET must decode to at least 32 bytes")
+	}
+	if strings.TrimSpace(cfg.Resend.APIKey) == "" {
+		return fmt.Errorf("CONSUMEL_RESEND_API_KEY is required")
+	}
+	if _, err := mail.ParseAddress(strings.TrimSpace(cfg.Resend.NoReplyFrom)); err != nil {
+		return fmt.Errorf("CONSUMEL_RESEND_NOREPLY_FROM must be a valid email sender: %w", err)
+	}
+	if _, err := mail.ParseAddress(strings.TrimSpace(cfg.Resend.HelloFrom)); err != nil {
+		return fmt.Errorf("CONSUMEL_RESEND_HELLO_FROM must be a valid email sender: %w", err)
+	}
 
 	return nil
 }
 
 func (cfg HTTP) Address() string {
 	return ":" + strconv.Itoa(cfg.Port)
+}
+
+func commaSeparated(value string) []string {
+	parts := strings.Split(value, ",")
+	values := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			values = append(values, trimmed)
+		}
+	}
+	return values
 }

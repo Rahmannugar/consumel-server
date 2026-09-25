@@ -4,3 +4,4 @@ This file maps the API domains currently exposed by Consumel Server. Endpoint
 contracts remain with their owning domains.
 
 - [Health](internal/health/API.md)
+- [Authentication](internal/authentication/API.md)

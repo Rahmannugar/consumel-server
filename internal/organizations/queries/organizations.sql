@@ -18,6 +18,28 @@ SELECT organization_id, user_id, role_id, status, created_at, updated_at, remove
 FROM organization_memberships
 WHERE organization_id = $1 AND user_id = $2;
 
+-- name: ListActiveOrganizationAccessByUser :many
+SELECT
+    organizations.id AS organization_id,
+    organizations.name AS organization_name,
+    organizations.owner_user_id = organization_memberships.user_id AS owner,
+    organization_roles.id AS role_id,
+    organization_roles.name AS role_name,
+    organization_roles.system_key AS role_system_key
+FROM organization_memberships
+JOIN organizations
+    ON organizations.id = organization_memberships.organization_id
+JOIN organization_roles
+    ON organization_roles.organization_id = organization_memberships.organization_id
+   AND organization_roles.id = organization_memberships.role_id
+WHERE organization_memberships.user_id = $1
+  AND organization_memberships.status = 'active'
+  AND organization_memberships.removed_at IS NULL
+  AND organizations.deleted_at IS NULL
+  AND organizations.suspended_at IS NULL
+  AND organization_roles.deleted_at IS NULL
+ORDER BY organizations.created_at, organizations.id;
+
 -- name: ListOrganizationRoles :many
 SELECT id, organization_id, name, system_key, created_at, updated_at, deleted_at
 FROM organization_roles

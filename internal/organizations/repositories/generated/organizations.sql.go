@@ -161,6 +161,65 @@ func (q *Queries) GetOrganizationMembership(ctx context.Context, arg GetOrganiza
 	return i, err
 }
 
+const listActiveOrganizationAccessByUser = `-- name: ListActiveOrganizationAccessByUser :many
+SELECT
+    organizations.id AS organization_id,
+    organizations.name AS organization_name,
+    organizations.owner_user_id = organization_memberships.user_id AS owner,
+    organization_roles.id AS role_id,
+    organization_roles.name AS role_name,
+    organization_roles.system_key AS role_system_key
+FROM organization_memberships
+JOIN organizations
+    ON organizations.id = organization_memberships.organization_id
+JOIN organization_roles
+    ON organization_roles.organization_id = organization_memberships.organization_id
+   AND organization_roles.id = organization_memberships.role_id
+WHERE organization_memberships.user_id = $1
+  AND organization_memberships.status = 'active'
+  AND organization_memberships.removed_at IS NULL
+  AND organizations.deleted_at IS NULL
+  AND organizations.suspended_at IS NULL
+  AND organization_roles.deleted_at IS NULL
+ORDER BY organizations.created_at, organizations.id
+`
+
+type ListActiveOrganizationAccessByUserRow struct {
+	OrganizationID   uuid.UUID
+	OrganizationName string
+	Owner            bool
+	RoleID           uuid.UUID
+	RoleName         string
+	RoleSystemKey    *string
+}
+
+func (q *Queries) ListActiveOrganizationAccessByUser(ctx context.Context, userID uuid.UUID) ([]ListActiveOrganizationAccessByUserRow, error) {
+	rows, err := q.db.Query(ctx, listActiveOrganizationAccessByUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListActiveOrganizationAccessByUserRow
+	for rows.Next() {
+		var i ListActiveOrganizationAccessByUserRow
+		if err := rows.Scan(
+			&i.OrganizationID,
+			&i.OrganizationName,
+			&i.Owner,
+			&i.RoleID,
+			&i.RoleName,
+			&i.RoleSystemKey,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOrganizationRoles = `-- name: ListOrganizationRoles :many
 SELECT id, organization_id, name, system_key, created_at, updated_at, deleted_at
 FROM organization_roles

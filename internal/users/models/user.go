@@ -7,7 +7,7 @@ import (
 )
 
 type User struct {
-	ID          uuid.UUID
-	ClerkUserID string
-	CreatedAt   time.Time
+	ID                uuid.UUID
+	AuthlierSubjectID string
+	CreatedAt         time.Time
 }

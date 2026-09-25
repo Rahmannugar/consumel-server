@@ -10,11 +10,10 @@ import (
 	"github.com/Rahmannugar/consumel-server/internal/users/models"
 )
 
-var ErrClerkUserIDRequired = errors.New("Clerk user ID is required")
+var ErrAuthlierSubjectIDRequired = errors.New("Authlier subject ID is required")
 
 type UserRepository interface {
-	CreateUser(context.Context, models.User) (models.User, error)
-	UserByClerkID(context.Context, string) (models.User, error)
+	ResolveUserByAuthlierSubjectID(context.Context, models.User) (models.User, error)
 }
 
 type UserService struct {
@@ -25,10 +24,13 @@ func NewUserService(repository UserRepository) *UserService {
 	return &UserService{repository: repository}
 }
 
-func (service *UserService) CreateUser(ctx context.Context, clerkUserID string) (models.User, error) {
-	clerkUserID = strings.TrimSpace(clerkUserID)
-	if clerkUserID == "" {
-		return models.User{}, ErrClerkUserIDRequired
+func (service *UserService) ResolveUser(
+	ctx context.Context,
+	authlierSubjectID string,
+) (models.User, error) {
+	authlierSubjectID = strings.TrimSpace(authlierSubjectID)
+	if authlierSubjectID == "" {
+		return models.User{}, ErrAuthlierSubjectIDRequired
 	}
 
 	id, err := ids.New()
@@ -36,5 +38,8 @@ func (service *UserService) CreateUser(ctx context.Context, clerkUserID string) 
 		return models.User{}, fmt.Errorf("generate user ID: %w", err)
 	}
 
-	return service.repository.CreateUser(ctx, models.User{ID: id, ClerkUserID: clerkUserID})
+	return service.repository.ResolveUserByAuthlierSubjectID(ctx, models.User{
+		ID:                id,
+		AuthlierSubjectID: authlierSubjectID,
+	})
 }

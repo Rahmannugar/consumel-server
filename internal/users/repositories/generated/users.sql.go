@@ -9,35 +9,52 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const createUser = `-- name: CreateUser :one
-INSERT INTO users (id, clerk_user_id)
-VALUES ($1, $2)
-RETURNING id, clerk_user_id, created_at
+const getUserByAuthlierSubjectID = `-- name: GetUserByAuthlierSubjectID :one
+SELECT id, authlier_subject_id, created_at
+FROM users
+WHERE authlier_subject_id = $1
 `
 
-type CreateUserParams struct {
-	ID          uuid.UUID
-	ClerkUserID string
-}
-
-func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
-	row := q.db.QueryRow(ctx, createUser, arg.ID, arg.ClerkUserID)
+func (q *Queries) GetUserByAuthlierSubjectID(ctx context.Context, authlierSubjectID string) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByAuthlierSubjectID, authlierSubjectID)
 	var i User
-	err := row.Scan(&i.ID, &i.ClerkUserID, &i.CreatedAt)
+	err := row.Scan(&i.ID, &i.AuthlierSubjectID, &i.CreatedAt)
 	return i, err
 }
 
-const getUserByClerkID = `-- name: GetUserByClerkID :one
-SELECT id, clerk_user_id, created_at
+const resolveUserByAuthlierSubjectID = `-- name: ResolveUserByAuthlierSubjectID :one
+WITH inserted AS (
+    INSERT INTO users (id, authlier_subject_id)
+    VALUES ($1, $2)
+    ON CONFLICT (authlier_subject_id) DO NOTHING
+    RETURNING id, authlier_subject_id, created_at
+)
+SELECT id, authlier_subject_id, created_at
+FROM inserted
+UNION ALL
+SELECT id, authlier_subject_id, created_at
 FROM users
-WHERE clerk_user_id = $1
+WHERE authlier_subject_id = $2
+LIMIT 1
 `
 
-func (q *Queries) GetUserByClerkID(ctx context.Context, clerkUserID string) (User, error) {
-	row := q.db.QueryRow(ctx, getUserByClerkID, clerkUserID)
-	var i User
-	err := row.Scan(&i.ID, &i.ClerkUserID, &i.CreatedAt)
+type ResolveUserByAuthlierSubjectIDParams struct {
+	ID                uuid.UUID
+	AuthlierSubjectID string
+}
+
+type ResolveUserByAuthlierSubjectIDRow struct {
+	ID                uuid.UUID
+	AuthlierSubjectID string
+	CreatedAt         pgtype.Timestamptz
+}
+
+func (q *Queries) ResolveUserByAuthlierSubjectID(ctx context.Context, arg ResolveUserByAuthlierSubjectIDParams) (ResolveUserByAuthlierSubjectIDRow, error) {
+	row := q.db.QueryRow(ctx, resolveUserByAuthlierSubjectID, arg.ID, arg.AuthlierSubjectID)
+	var i ResolveUserByAuthlierSubjectIDRow
+	err := row.Scan(&i.ID, &i.AuthlierSubjectID, &i.CreatedAt)
 	return i, err
 }

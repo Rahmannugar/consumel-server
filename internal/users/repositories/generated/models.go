@@ -10,7 +10,7 @@ import (
 )
 
 type User struct {
-	ID          uuid.UUID
-	ClerkUserID string
-	CreatedAt   pgtype.Timestamptz
+	ID                uuid.UUID
+	AuthlierSubjectID string
+	CreatedAt         pgtype.Timestamptz
 }

@@ -1,0 +1,10 @@
+{{define "email-content"}}
+<h1 style="margin:0 0 10px;font-size:22px;line-height:28px;letter-spacing:-0.35px;color:#071018;font-weight:600;">Verify your email</h1>
+<p style="margin:0 0 24px;color:#536774;font-size:14px;line-height:22px;">Enter this code to verify your email address and finish setting up your Consumel account.</p>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#edf6ff" style="width:100%;margin:0 0 22px;border-collapse:separate;background:#edf6ff;border:1px solid #cbddea;border-radius:10px;">
+  <tr>
+    <td align="center" style="padding:22px 16px;color:#071018;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:30px;line-height:38px;letter-spacing:7px;font-weight:700;">{{.Code}}</td>
+  </tr>
+</table>
+<p style="margin:0;color:#6b7882;font-size:13px;line-height:20px;">This code expires in {{.ExpiresIn}}. Never share it; Consumel staff will not ask for it.</p>
+{{end}}

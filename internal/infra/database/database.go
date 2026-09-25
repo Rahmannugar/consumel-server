@@ -7,11 +7,18 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+const (
+	maximumConnections int32 = 20
+	minimumConnections int32 = 2
+)
+
 func Open(ctx context.Context, connectionString string) (*pgxpool.Pool, error) {
 	config, err := pgxpool.ParseConfig(connectionString)
 	if err != nil {
 		return nil, fmt.Errorf("parse connection string: %w", err)
 	}
+	config.MaxConns = maximumConnections
+	config.MinConns = minimumConnections
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {

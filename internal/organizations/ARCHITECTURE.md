@@ -1,7 +1,8 @@
 # Organizations Architecture
 
 The organizations domain owns organizations and organization memberships.
-The users domain separately owns user identities and their Clerk identity links.
+The users domain separately owns tenant-user records and their stable Authlier
+subject links.
 
 Organization memberships connect users to organizations and carry one
 organization role plus an access status. Organizations have built-in Admin and
