@@ -29,8 +29,21 @@ jobs:
       - name: Verify formatting
         run: test -z "$(gofmt -l .)"
 
+      - name: Verify generated database code
+        run: |
+          go tool sqlc generate
+          git diff --exit-code -- internal/users/repositories/generated internal/organizations/repositories/generated internal/projects/repositories/generated
+
+      - name: Verify generated OpenAPI document
+        run: |
+          go run ./cmd/openapi
+          git diff --exit-code -- internal/openapi/openapi.json
+
       - name: Test
         run: go test ./...
+
+      - name: Test database integration
+        run: go test -p 1 -tags=integration ./...
 
       - name: Vet
         run: go vet ./...

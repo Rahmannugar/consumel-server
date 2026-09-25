@@ -1,0 +1,110 @@
+name: consumel-server
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${CONSUMEL_DATABASE_NAME:-consumel}
+      POSTGRES_USER: ${CONSUMEL_DATABASE_USER:-consumel}
+      POSTGRES_PASSWORD: ${CONSUMEL_DATABASE_PASSWORD:-consumel}
+    ports:
+      - "${CONSUMEL_DATABASE_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready --username=$$POSTGRES_USER --dbname=$$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  otel-collector:
+    image: otel/opentelemetry-collector:0.161.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    volumes:
+      - ./otel-collector.yaml:/etc/otelcol/config.yaml:ro
+
+  migrate:
+    image: consumel-server-local
+    profiles:
+      - tools
+    command:
+      - go
+      - tool
+      - tern
+      - migrate
+      - --config
+      - internal/infra/database/tern.conf
+      - --migrations
+      - internal/infra/database/migrations
+    environment:
+      CONSUMEL_DATABASE_HOST: postgres
+      CONSUMEL_DATABASE_PORT: 5432
+      CONSUMEL_DATABASE_NAME: ${CONSUMEL_DATABASE_NAME:-consumel}
+      CONSUMEL_DATABASE_USER: ${CONSUMEL_DATABASE_USER:-consumel}
+      CONSUMEL_DATABASE_PASSWORD: ${CONSUMEL_DATABASE_PASSWORD:-consumel}
+      CONSUMEL_DATABASE_SSL_MODE: ${CONSUMEL_DATABASE_SSL_MODE:-disable}
+    volumes:
+      - .:/workspace
+      - go-modules:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    image: consumel-server-local
+    build:
+      context: .
+    env_file:
+      - .env
+    environment:
+      CONSUMEL_DATABASE_HOST: postgres
+      CONSUMEL_DATABASE_PORT: 5432
+      CONSUMEL_REDIS_URL: redis://redis:6379/0
+      CONSUMEL_AUTH_BASE_URL: http://localhost:8080
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/workspace
+      - go-modules:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 3m
+    init: true
+    stop_grace_period: 20s
+
+volumes:
+  postgres-data:
+  redis-data:
+  go-modules:
+  go-build-cache:

@@ -1,6 +1,32 @@
 version: "3"
 
+dotenv:
+  - .env
+
 tasks:
+  up:
+    desc: Start the local containers using existing images
+    cmds:
+      - docker compose up --detach --wait postgres redis
+      - docker compose run --rm migrate
+      - docker compose up --detach --wait api
+
+  up-build:
+    desc: Build images and start the local containers
+    cmds:
+      - docker compose build api
+      - task: up
+
+  down:
+    desc: Stop the local containers without deleting their data
+    cmds:
+      - docker compose down
+
+  logs:
+    desc: Follow local API and telemetry Collector logs
+    cmds:
+      - docker compose logs --follow api otel-collector
+
   run-api:
     desc: Run the Consumel API
     cmds:
@@ -11,14 +37,31 @@ tasks:
     cmds:
       - gofmt -w .
 
+  generate:
+    desc: Generate type-safe database code and the OpenAPI document
+    cmds:
+      - go tool sqlc generate
+      - go run ./cmd/openapi
+
+  migrate:
+    desc: Apply pending PostgreSQL migrations
+    cmds:
+      - go tool tern migrate --config internal/infra/database/tern.conf --migrations internal/infra/database/migrations
+
   test:
     desc: Run all tests
     cmds:
       - go test ./...
 
+  test-integration:
+    desc: Run tests against real infrastructure
+    cmds:
+      - go test -p 1 -tags=integration ./...
+
   check:
     desc: Validate formatting, tests, vet, and builds
     cmds:
+      - go tool sqlc generate
       - test -z "$(gofmt -l .)"
       - go test ./...
       - go vet ./...

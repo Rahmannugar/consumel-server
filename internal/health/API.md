@@ -1,8 +1,7 @@
 # Health API
 
+### `GET /health/live`
 Reports whether the API process is alive.
-`GET /health/live`
 
-Reports whether the API instance is ready to serve its currently implemented
-traffic.
-`GET /health/ready`
+### `GET /health/ready`
+Reports whether the API instance can reach PostgreSQL and is ready to serve traffic.

@@ -1,42 +1,113 @@
 # Consumel Server
 
-Consumel Server is the Go backend for Consumel. It currently provides the Gin
-HTTP process, liveness and readiness endpoints, Koanf-backed environment
-configuration, structured process logs, and graceful shutdown.
+Consumel is infrastructure for usage-based billing. It helps SaaS companies
+meter usage, manage customer balances and entitlements, apply pricing rules,
+and connect usage data to the payment providers they already use.
 
-## Requirements
+This repository contains the Go backend for Consumel. The current server
+provides the HTTP API foundation, Authlier email/password authentication,
+PostgreSQL persistence, Redis-backed authentication coordination, health
+checks, structured observability, graceful shutdown, and the initial user,
+organization, organization-membership, project, and environment persistence
+flows.
 
-- Go 1.26 or newer
-- Task for repository commands
+## Technology
 
-## Run the API
+- Go 1.26
+- Gin
+- Koanf
+- PostgreSQL with pgx
+- Redis
+- Authlier v0.5.0
+- Resend
+- OpenTelemetry
+- Tern and sqlc
+- Task
 
-```shell
-task run-api
+## Local Development
+
+Create your local configuration:
+
+```bash
+cp .env.example .env
 ```
 
-The API listens on port `8080` by default and accepts connections on all network
-interfaces.
+Update the PostgreSQL, Redis, Authlier, and Resend settings in `.env`. Generate
+`CONSUMEL_AUTH_OTP_HMAC_SECRET` as at least 32 random bytes encoded with base64;
+never commit that value.
 
-## Configuration
+`CONSUMEL_AUTH_TRUSTED_PROXIES` is a comma-separated list of proxy CIDRs or IP
+addresses whose forwarded client-IP headers may be trusted. Leave it empty for
+direct local traffic. Production should name only the actual Cloudflare or
+reverse-proxy hops; an empty value does not mean every proxy is trusted.
 
-Configuration is loaded from process environment variables through Koanf:
+`CONSUMEL_RESEND_NOREPLY_FROM` sends automated authentication mail.
+`CONSUMEL_RESEND_HELLO_FROM` is the separately configured sender for future
+conversational and marketing mail. Secrets and provider credentials remain in
+the local or deployment environment, never in `.env.example`.
 
-- `CONSUMEL_ENVIRONMENT`
-- `CONSUMEL_HTTP_PORT`
+Start the complete local environment with Docker:
 
-`CONSUMEL_ENVIRONMENT` accepts `development`, `test`, `staging`, or
-`production`. No local environment file is required for the defaults.
+```bash
+task up-build
+```
 
-See `ARCHITECTURE.md` for the current runtime design and `API.md` for the
-contract map.
+This starts PostgreSQL and Redis with persistent local volumes, applies pending
+Tern migrations in a temporary container that is removed after completion,
+then starts the local OpenTelemetry Collector and API. Follow the API and
+Collector logs with `task logs`, and stop the environment without deleting its
+data with `task down`.
+
+After the image exists, use `task up` for normal starts. Use `task up-build`
+again after changing the Dockerfile.
+
+To run the API directly on the host instead, start PostgreSQL, Redis, and an
+OTLP/HTTP Collector, then apply migrations and start the process:
+
+```bash
+task migrate
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 task run-api
+```
+
+The API is available at [http://localhost:8080](http://localhost:8080) by
+default. The Scalar API reference is available at
+[http://localhost:8080/docs](http://localhost:8080/docs), and the
+generated OpenAPI document is served at `/openapi.json`.
+
+Koanf loads `.env` first and applies process environment variables as
+overrides. `CONSUMEL_ENVIRONMENT` accepts `development` or `production` and
+defaults to `development`. Production configuration is supplied by the
+deployment environment.
+
+The root `Dockerfile` and `compose.yaml` are local-development tooling.
+Production container definitions belong under `deploy/` and are added only
+when the production deployment slice begins.
+
+## API
+
+The current endpoint map is documented in [API.md](API.md).
 
 ## Validation
 
-```shell
+Run formatting, tests, vet, and build checks:
+
+```bash
 task check
+```
+
+Run the PostgreSQL integration tests with Docker available:
+
+```bash
+task test-integration
+```
+
+After changing SQL queries or migrations, regenerate the type-safe database
+code:
+
+```bash
+task generate
 ```
 
 ## License
 
-Apache License 2.0.
+Licensed under the [Apache License 2.0](LICENSE).

@@ -1,0 +1,117 @@
+package handlers
+
+import (
+	"errors"
+	"log/slog"
+	"net/http"
+	"time"
+
+	authenticationmodels "github.com/Rahmannugar/consumel-server/internal/authentication/models"
+	authenticationservices "github.com/Rahmannugar/consumel-server/internal/authentication/services"
+	"github.com/Rahmannugar/consumel-server/internal/common/httpresponse"
+	"github.com/Rahmannugar/consumel-server/internal/infra/telemetry"
+)
+
+type TenantResolver interface {
+	Resolve(*http.Request) (authenticationmodels.AuthenticatedTenant, error)
+}
+
+type AccountHandler struct {
+	resolver TenantResolver
+	logger   *slog.Logger
+}
+
+type accountResponse struct {
+	Session       sessionResponse              `json:"session"`
+	User          userResponse                 `json:"user"`
+	Organizations []organizationAccessResponse `json:"organizations"`
+}
+
+type sessionResponse struct {
+	ID        string    `json:"id"`
+	CreatedAt time.Time `json:"createdAt"`
+	ExpiresAt time.Time `json:"expiresAt"`
+}
+
+type userResponse struct {
+	ID string `json:"id"`
+}
+
+type organizationAccessResponse struct {
+	ID            string  `json:"id"`
+	Name          string  `json:"name"`
+	Owner         bool    `json:"owner"`
+	RoleID        string  `json:"roleId"`
+	RoleName      string  `json:"roleName"`
+	RoleSystemKey *string `json:"roleSystemKey"`
+}
+
+func NewAccountHandler(resolver TenantResolver, logger *slog.Logger) *AccountHandler {
+	return &AccountHandler{resolver: resolver, logger: logger}
+}
+
+func (handler *AccountHandler) Get(response http.ResponseWriter, request *http.Request) {
+	tenant, err := handler.resolver.Resolve(request)
+	if err != nil {
+		if errors.Is(err, authenticationservices.ErrUnauthenticated) {
+			_ = httpresponse.WriteError(
+				response,
+				http.StatusUnauthorized,
+				"unauthenticated",
+				"Sign in to access your Consumel account.",
+			)
+			return
+		}
+		handler.logger.ErrorContext(request.Context(), "Could not load user account",
+			"event", "user.account.load.failed",
+			"operation", "user.account.load",
+			"outcome", "error",
+			"error", err,
+		)
+		_ = httpresponse.WriteError(
+			response,
+			http.StatusInternalServerError,
+			"account_load_failed",
+			"Consumel could not load your account. Try again shortly.",
+		)
+		return
+	}
+
+	organizations := make([]organizationAccessResponse, 0, len(tenant.OrganizationAccess))
+	telemetry.AddRequestLogAttributes(request.Context(),
+		slog.String("user_id", tenant.User.ID.String()),
+		slog.Int("organization_count", len(tenant.OrganizationAccess)),
+	)
+	for _, access := range tenant.OrganizationAccess {
+		var systemKey *string
+		if access.RoleSystemKey != nil {
+			value := string(*access.RoleSystemKey)
+			systemKey = &value
+		}
+		organizations = append(organizations, organizationAccessResponse{
+			ID:            access.OrganizationID.String(),
+			Name:          access.OrganizationName,
+			Owner:         access.Owner,
+			RoleID:        access.RoleID.String(),
+			RoleName:      access.RoleName,
+			RoleSystemKey: systemKey,
+		})
+	}
+
+	if err := httpresponse.WriteJSON(response, http.StatusOK, accountResponse{
+		Session: sessionResponse{
+			ID:        tenant.Session.ID,
+			CreatedAt: tenant.Session.CreatedAt,
+			ExpiresAt: tenant.Session.ExpiresAt,
+		},
+		User:          userResponse{ID: tenant.User.ID.String()},
+		Organizations: organizations,
+	}); err != nil {
+		handler.logger.ErrorContext(request.Context(), "Could not send user account response",
+			"event", "user.account.response.failed",
+			"operation", "user.account.respond",
+			"outcome", "error",
+			"error", err,
+		)
+	}
+}
