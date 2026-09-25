@@ -21,11 +21,13 @@ import (
 	authlierredis "github.com/Rahmannugar/authlier/storage/redis"
 	consumelauthentication "github.com/Rahmannugar/consumel-server/internal/authentication"
 	authenticationhandlers "github.com/Rahmannugar/consumel-server/internal/authentication/handlers"
+	authenticationrepositories "github.com/Rahmannugar/consumel-server/internal/authentication/repositories"
 	authenticationservices "github.com/Rahmannugar/consumel-server/internal/authentication/services"
 	"github.com/Rahmannugar/consumel-server/internal/infra/authentication"
 	"github.com/Rahmannugar/consumel-server/internal/infra/database/testdb"
 	"github.com/Rahmannugar/consumel-server/internal/infra/ratelimit"
 	organizationrepositories "github.com/Rahmannugar/consumel-server/internal/organizations/repositories"
+	organizationservices "github.com/Rahmannugar/consumel-server/internal/organizations/services"
 	userrepositories "github.com/Rahmannugar/consumel-server/internal/users/repositories"
 	userservices "github.com/Rahmannugar/consumel-server/internal/users/services"
 	"github.com/gin-gonic/gin"
@@ -77,9 +79,25 @@ func TestSignupOTPCreatesConsumelUserAndSession(t *testing.T) {
 	}
 	assertOrganizationCount(t, contextResponse, 0)
 
-	if _, err := app.users.UserByAuthlierSubjectID(t.Context(), message.UserID); err != nil {
+	user, err := app.users.UserByAuthlierSubjectID(t.Context(), message.UserID)
+	if err != nil {
 		t.Fatalf("load resolved Consumel user: %v", err)
 	}
+	organizationService := organizationservices.NewOrganizationManagementService(
+		organizationrepositories.NewOrganizationRepository(app.pool),
+	)
+	if _, _, err := organizationService.CreateOrganization(
+		t.Context(),
+		"Consumel Test Organization",
+		user.ID,
+	); err != nil {
+		t.Fatalf("create organization: %v", err)
+	}
+	contextResponse = performJSONRequest(t, app.router, http.MethodGet, "/account", nil, cookie)
+	if contextResponse.Code != http.StatusOK {
+		t.Fatalf("context with organization status = %d, body = %s", contextResponse.Code, contextResponse.Body.String())
+	}
+	assertOrganizationCount(t, contextResponse, 1)
 	var storedInPostgres int
 	if err := app.pool.QueryRow(t.Context(), "SELECT count(*) FROM authlier_email_verifications").Scan(&storedInPostgres); err != nil {
 		t.Fatalf("count PostgreSQL verification challenges: %v", err)
@@ -249,7 +267,7 @@ func newAuthenticationTestApp(t *testing.T) authenticationTestApp {
 	tenantService := authenticationservices.NewAuthenticatedTenantService(
 		authentication.NewAuthlierSessionResolver(auth),
 		userservices.NewUserService(userRepository),
-		organizationrepositories.NewOrganizationRepository(pool),
+		authenticationrepositories.NewAccountContextRepository(pool),
 	)
 	gin.SetMode(gin.TestMode)
 	router := gin.New()

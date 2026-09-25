@@ -14,6 +14,7 @@ import (
 	authlierpostgres "github.com/Rahmannugar/authlier/storage/postgres"
 	authlierredis "github.com/Rahmannugar/authlier/storage/redis"
 	consumelauthentication "github.com/Rahmannugar/consumel-server/internal/authentication"
+	authenticationrepositories "github.com/Rahmannugar/consumel-server/internal/authentication/repositories"
 	authenticationservices "github.com/Rahmannugar/consumel-server/internal/authentication/services"
 	"github.com/Rahmannugar/consumel-server/internal/config"
 	infraauthentication "github.com/Rahmannugar/consumel-server/internal/infra/authentication"
@@ -22,7 +23,6 @@ import (
 	"github.com/Rahmannugar/consumel-server/internal/infra/database"
 	"github.com/Rahmannugar/consumel-server/internal/infra/ratelimit"
 	"github.com/Rahmannugar/consumel-server/internal/infra/telemetry"
-	organizationrepositories "github.com/Rahmannugar/consumel-server/internal/organizations/repositories"
 	userrepositories "github.com/Rahmannugar/consumel-server/internal/users/repositories"
 	userservices "github.com/Rahmannugar/consumel-server/internal/users/services"
 	"github.com/resend/resend-go/v2"
@@ -206,11 +206,10 @@ func run() (runError error) {
 
 	userRepository := userrepositories.NewUserRepository(databasePool)
 	userService := userservices.NewUserService(userRepository)
-	organizationRepository := organizationrepositories.NewOrganizationRepository(databasePool)
 	tenantService := authenticationservices.NewAuthenticatedTenantService(
 		infraauthentication.NewAuthlierSessionResolver(auth),
 		userService,
-		organizationRepository,
+		authenticationrepositories.NewAccountContextRepository(databasePool),
 	)
 	router, err := newRouter(
 		cfg,

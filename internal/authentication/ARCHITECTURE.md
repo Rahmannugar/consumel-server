@@ -7,9 +7,10 @@ workflows.
 PostgreSQL is authoritative for accounts and sessions. Redis holds verification
 challenges, distributed abuse controls, and short-lived session cache entries.
 
-An authenticated request resolves the opaque session, maps the Authlier subject
-to a Consumel user, and loads active organization access. Internal administrator
-access remains separate.
+After resolving the opaque session, an established account loads its Consumel
+user and active organization access through one PostgreSQL query keyed by the
+Authlier subject ID. First access creates the local user projection and repeats
+that account-context read. Internal administrator access remains separate.
 
 Consumel retains at most three active sessions per account. Password and
 verification attempts use distributed limits, and automated authentication
