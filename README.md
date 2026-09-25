@@ -31,8 +31,7 @@ Create your local configuration:
 cp .env.example .env
 ```
 
-Update the PostgreSQL, Redis, Authlier, and Resend settings in `.env`, apply the
-migrations, then start the API. Generate
+Update the PostgreSQL, Redis, Authlier, and Resend settings in `.env`. Generate
 `CONSUMEL_AUTH_OTP_HMAC_SECRET` as at least 32 random bytes encoded with base64;
 never commit that value.
 
@@ -46,11 +45,24 @@ reverse-proxy hops; an empty value does not mean every proxy is trusted.
 conversational and marketing mail. Secrets and provider credentials remain in
 the local or deployment environment, never in `.env.example`.
 
-```bash
-task migrate
-```
+Start the complete local environment with Docker:
 
 ```bash
+task up-build
+```
+
+This starts PostgreSQL and Redis with persistent local volumes, applies pending
+Tern migrations in a temporary container that is removed after completion, and
+then starts the API. Follow the API logs with `task logs` and stop the
+environment without deleting its data with `task down`.
+After the image exists, use `task up` for normal starts. Use `task up-build`
+again after changing the Dockerfile.
+
+To run the API directly on the host instead, start PostgreSQL and Redis, then
+apply migrations and start the process:
+
+```bash
+task migrate
 task run-api
 ```
 
@@ -61,6 +73,10 @@ Koanf loads `.env` first and applies process environment variables as
 overrides. `CONSUMEL_ENVIRONMENT` accepts `development` or `production` and
 defaults to `development`. Production configuration is supplied by the
 deployment environment.
+
+The root `Dockerfile` and `compose.yaml` are local-development tooling.
+Production container definitions belong under `deploy/` and are added only
+when the production deployment slice begins.
 
 ## API
 

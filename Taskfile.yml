@@ -4,6 +4,29 @@ dotenv:
   - .env
 
 tasks:
+  up:
+    desc: Start the local containers using existing images
+    cmds:
+      - docker compose up --detach --wait postgres redis
+      - docker compose run --rm migrate
+      - docker compose up --detach --wait api
+
+  up-build:
+    desc: Build images and start the local containers
+    cmds:
+      - docker compose build api
+      - task: up
+
+  down:
+    desc: Stop the local containers without deleting their data
+    cmds:
+      - docker compose down
+
+  logs:
+    desc: Follow local API logs
+    cmds:
+      - docker compose logs --follow api
+
   run-api:
     desc: Run the Consumel API
     cmds:
