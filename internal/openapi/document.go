@@ -25,7 +25,7 @@ var operations = []operation{
 	{Method: "post", Path: "/auth/change-password", Summary: "Change the account password.", Request: "ChangePasswordRequest", SuccessCode: "200", Success: "User", Protected: true},
 	{Method: "post", Path: "/auth/forgot-password", Summary: "Queue a single-use password-reset link when the account exists.", Request: "EmailRequest", SuccessCode: "202", SuccessDescription: "The request was accepted without revealing whether the account exists. An eligible account's reset email was queued for asynchronous delivery.", Errors: map[string]string{"400": "BadRequest", "429": "RateLimited", "500": "PasswordResetFailed"}},
 	{Method: "post", Path: "/auth/google", Summary: "Start Google sign-in.", SuccessCode: "200", Success: "AuthorizationURL"},
-	{Method: "get", Path: "/auth/google/callback", Summary: "Complete Google sign-in and redirect to the client.", SuccessCode: "302"},
+	{Method: "get", Path: "/auth/google/callback", Summary: "Complete Google sign-in and redirect to the client.", SuccessCode: "303"},
 	{Method: "get", Path: "/auth/list-sessions", Summary: "Return the account's active sessions.", SuccessCode: "200", Success: "Sessions", Protected: true},
 	{Method: "post", Path: "/auth/remove-password", Summary: "Remove password sign-in when another method remains.", Request: "RemovePasswordRequest", SuccessCode: "204", Protected: true},
 	{Method: "post", Path: "/auth/resend-verification", Summary: "Queue a new verification code when the account is eligible.", Request: "EmailRequest", SuccessCode: "202", SuccessDescription: "The request was accepted without revealing account state. When eligible, a new verification code was queued for asynchronous delivery.", Errors: map[string]string{"400": "BadRequest", "429": "RateLimited", "500": "EmailVerificationFailed"}},
@@ -229,7 +229,7 @@ func successDescription(status string) string {
 	if status == "204" {
 		return "Completed without a response body."
 	}
-	if status == "302" {
+	if status == "303" {
 		return "Redirects to the client after authentication."
 	}
 	return "Completed successfully."

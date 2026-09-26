@@ -969,7 +969,7 @@
     "/auth/google/callback": {
       "get": {
         "responses": {
-          "302": {
+          "303": {
             "description": "Redirects to the client after authentication."
           },
           "400": {

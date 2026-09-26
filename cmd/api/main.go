@@ -11,6 +11,7 @@ import (
 
 	"github.com/Rahmannugar/authlier"
 	"github.com/Rahmannugar/authlier/emailverification"
+	"github.com/Rahmannugar/authlier/googleoauth"
 	authlierpostgres "github.com/Rahmannugar/authlier/storage/postgres"
 	authlierredis "github.com/Rahmannugar/authlier/storage/redis"
 	consumelauthentication "github.com/Rahmannugar/consumel-server/internal/authentication"
@@ -145,6 +146,18 @@ func run() (runError error) {
 	if err != nil {
 		return fmt.Errorf("configure email delivery queue: %w", err)
 	}
+	var googleProvider googleoauth.Provider
+	if cfg.Auth.GoogleEnabled() {
+		googleProvider, err = googleoauth.NewGoogleProvider(googleoauth.GoogleProviderConfig{
+			ClientID:     cfg.Auth.GoogleClientID,
+			ClientSecret: cfg.Auth.GoogleClientSecret,
+			HTTPClient:   telemetry.NewHTTPClient(googleTimeout),
+		})
+		if err != nil {
+			return fmt.Errorf("configure Google identity provider: %w", err)
+		}
+		googleProvider = infraauthentication.NewObservedGoogleProvider(googleProvider, logger)
+	}
 
 	auth, err := authlier.New(authlier.Config{
 		AppName:         "Consumel",
@@ -192,7 +205,7 @@ func run() (runError error) {
 			ClientID:           cfg.Auth.GoogleClientID,
 			ClientSecret:       cfg.Auth.GoogleClientSecret,
 			SuccessRedirectURL: cfg.Auth.GoogleSuccessURL(),
-			HTTPClient:         telemetry.NewHTTPClient(googleTimeout),
+			Provider:           googleProvider,
 		},
 	})
 	if err != nil {
