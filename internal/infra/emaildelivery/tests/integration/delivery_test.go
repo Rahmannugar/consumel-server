@@ -25,7 +25,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-func TestAuthenticationEmailsFlowThroughOutboxAndRedisExactlyOnce(t *testing.T) {
+func TestAuthenticationEmailsFlowThroughOutboxAndRedisReliably(t *testing.T) {
 	pool := testdb.OpenMigratedDatabase(t)
 	redisClient := openRedis(t)
 	queue, err := emaildelivery.NewQueue(pool, bytes.Repeat([]byte{0x31}, 32))
@@ -46,15 +46,35 @@ func TestAuthenticationEmailsFlowThroughOutboxAndRedisExactlyOnce(t *testing.T) 
 	}
 
 	assertEncryptedAtRest(t, pool)
-	sender := &recordingSender{}
+	sender := newRecordingSender()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	relay := events.NewRelay(pool, redisClient, logger)
-	consumer := emaildelivery.NewConsumer(pool, redisClient, queue, sender, "integration-test", logger)
+	relay, err := events.NewRelay(pool, redisClient, 4, logger)
+	if err != nil {
+		t.Fatalf("create outbox relay: %v", err)
+	}
+	consumer, err := emaildelivery.NewConsumer(pool, redisClient, queue, sender, "integration-test", 2, logger)
+	if err != nil {
+		t.Fatalf("create email delivery consumer: %v", err)
+	}
 	errorsChannel := make(chan error, 2)
 	go func() { errorsChannel <- relay.Run(ctx) }()
 	go func() { errorsChannel <- consumer.Run(ctx) }()
+
+	// Both sends must enter the provider boundary before either is released.
+	// This proves the configured worker slots execute deliveries concurrently.
+	for range 2 {
+		select {
+		case <-sender.started:
+		case <-time.After(10 * time.Second):
+			t.Fatal("email deliveries did not execute concurrently")
+		}
+	}
+	if maximum := sender.maximumActive(); maximum != 2 {
+		t.Fatalf("maximum concurrent sends = %d, want 2", maximum)
+	}
+	close(sender.release)
 
 	waitFor(t, 10*time.Second, func() bool {
 		var delivered int
@@ -86,6 +106,45 @@ func TestAuthenticationEmailsFlowThroughOutboxAndRedisExactlyOnce(t *testing.T) 
 		}
 	}
 
+	sender.fail("retry@example.com", testSendFailure{retryable: true, retryAfter: time.Minute})
+	sender.fail("permanent@example.com", testSendFailure{retryable: false})
+	if err := queue.SendVerification(t.Context(), emailverification.Message{
+		UserID: "user-retry", Email: "retry@example.com", Code: "812763", ExpiresAt: expiresAt,
+	}); err != nil {
+		t.Fatalf("queue retryable email: %v", err)
+	}
+	if err := queue.SendVerification(t.Context(), emailverification.Message{
+		UserID: "user-permanent", Email: "permanent@example.com", Code: "192834", ExpiresAt: expiresAt,
+	}); err != nil {
+		t.Fatalf("queue permanently failing email: %v", err)
+	}
+	waitFor(t, 15*time.Second, func() bool {
+		var retrying, failed int
+		if err := pool.QueryRow(t.Context(), `SELECT
+			count(*) FILTER (WHERE status = 'retrying'),
+			count(*) FILTER (WHERE status = 'failed')
+			FROM email_deliveries`).Scan(&retrying, &failed); err != nil {
+			t.Fatalf("count failed email outcomes: %v", err)
+		}
+		return retrying == 1 && failed == 1
+	})
+
+	var scheduledRetries, terminalRetries int
+	if err := pool.QueryRow(t.Context(), `SELECT
+		count(*) FILTER (WHERE delivery.status = 'retrying' AND event.available_at > now()),
+		count(*) FILTER (WHERE delivery.status = 'failed')
+		FROM outbox_events AS event
+		JOIN email_deliveries AS delivery ON delivery.id = event.aggregate_id
+		WHERE event.published_at IS NULL`).Scan(&scheduledRetries, &terminalRetries); err != nil {
+		t.Fatalf("inspect scheduled email retries: %v", err)
+	}
+	if scheduledRetries != 1 {
+		t.Fatalf("scheduled retry events = %d, want 1", scheduledRetries)
+	}
+	if terminalRetries != 0 {
+		t.Fatalf("terminal retry events = %d, want 0", terminalRetries)
+	}
+
 	cancel()
 	for range 2 {
 		select {
@@ -105,18 +164,62 @@ type sendCall struct {
 }
 
 type recordingSender struct {
-	mu    sync.Mutex
-	calls []sendCall
+	mu       sync.Mutex
+	calls    []sendCall
+	failures map[string]error
+	active   int
+	maximum  int
+	started  chan struct{}
+	release  chan struct{}
+}
+
+func newRecordingSender() *recordingSender {
+	return &recordingSender{
+		failures: make(map[string]error),
+		started:  make(chan struct{}, 8),
+		release:  make(chan struct{}),
+	}
 }
 
 func (sender *recordingSender) Send(
-	_ context.Context,
+	ctx context.Context,
 	recipient, _, _, _, idempotencyKey string,
 ) (string, error) {
 	sender.mu.Lock()
+	sender.active++
+	if sender.active > sender.maximum {
+		sender.maximum = sender.active
+	}
+	failure := sender.failures[recipient]
+	sender.mu.Unlock()
+
+	sender.started <- struct{}{}
+	select {
+	case <-sender.release:
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+
+	sender.mu.Lock()
 	defer sender.mu.Unlock()
+	sender.active--
 	sender.calls = append(sender.calls, sendCall{recipient: recipient, idempotencyKey: idempotencyKey})
+	if failure != nil {
+		return "", failure
+	}
 	return fmt.Sprintf("provider-%d", len(sender.calls)), nil
+}
+
+func (sender *recordingSender) fail(recipient string, err error) {
+	sender.mu.Lock()
+	defer sender.mu.Unlock()
+	sender.failures[recipient] = err
+}
+
+func (sender *recordingSender) maximumActive() int {
+	sender.mu.Lock()
+	defer sender.mu.Unlock()
+	return sender.maximum
 }
 
 func (sender *recordingSender) count() int {
@@ -180,7 +283,7 @@ func openRedis(t *testing.T) *redis.Client {
 	t.Helper()
 	container, err := testcontainers.Run(
 		t.Context(),
-		"redis:8-alpine",
+		"redis:8.2-alpine",
 		testcontainers.WithExposedPorts("6379/tcp"),
 		testcontainers.WithWaitStrategy(wait.ForLog("Ready to accept connections")),
 	)
@@ -222,3 +325,14 @@ func waitFor(t *testing.T, timeout time.Duration, condition func() bool) {
 }
 
 var _ emaildelivery.Sender = (*recordingSender)(nil)
+
+type testSendFailure struct {
+	retryable  bool
+	retryAfter time.Duration
+}
+
+func (failure testSendFailure) Error() string             { return "test delivery failure" }
+func (failure testSendFailure) Retryable() bool           { return failure.retryable }
+func (failure testSendFailure) RetryAfter() time.Duration { return failure.retryAfter }
+
+var _ emaildelivery.SendFailure = testSendFailure{}

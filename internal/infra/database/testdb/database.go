@@ -7,12 +7,14 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/Rahmannugar/consumel-server/internal/infra/database"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/tern/v2/migrate"
 	"github.com/testcontainers/testcontainers-go"
 	containerpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
+	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 func OpenMigratedDatabase(t *testing.T) *pgxpool.Pool {
@@ -25,7 +27,13 @@ func OpenMigratedDatabase(t *testing.T) *pgxpool.Pool {
 		containerpostgres.WithDatabase("consumel_test"),
 		containerpostgres.WithUsername("consumel"),
 		containerpostgres.WithPassword("consumel"),
-		containerpostgres.BasicWaitStrategies(),
+		// Docker Desktop can take longer than the library's one-minute default
+		// while PostgreSQL initializes and restarts for the first time.
+		testcontainers.WithWaitStrategyAndDeadline(
+			2*time.Minute,
+			wait.ForLog("database system is ready to accept connections").WithOccurrence(2),
+			wait.ForListeningPort("5432/tcp"),
+		),
 	)
 	if err != nil {
 		t.Fatalf("start PostgreSQL container: %v", err)

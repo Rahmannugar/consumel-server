@@ -104,10 +104,6 @@ func (queue *Queue) EnqueueTx(
 	if err != nil {
 		return fmt.Errorf("generate email delivery ID: %w", err)
 	}
-	eventID, err := ids.New()
-	if err != nil {
-		return fmt.Errorf("generate email event ID: %w", err)
-	}
 	encoded, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("encode email delivery payload: %w", err)
@@ -129,13 +125,27 @@ func (queue *Queue) EnqueueTx(
 	); err != nil {
 		return fmt.Errorf("insert email delivery: %w", err)
 	}
+	return queue.insertEvent(ctx, tx, deliveryID, time.Now().UTC())
+}
+
+func (queue *Queue) insertEvent(
+	ctx context.Context,
+	tx pgx.Tx,
+	deliveryID uuid.UUID,
+	availableAt time.Time,
+) error {
+	eventID, err := ids.New()
+	if err != nil {
+		return fmt.Errorf("generate email event ID: %w", err)
+	}
 	eventPayload, err := json.Marshal(map[string]string{"deliveryId": deliveryID.String()})
 	if err != nil {
 		return fmt.Errorf("encode email event payload: %w", err)
 	}
+	now := time.Now().UTC()
 	if err := events.Insert(ctx, tx, events.Event{
 		ID: eventID, Type: EventTypeQueued, AggregateType: "email_delivery",
-		AggregateID: deliveryID, Payload: eventPayload, OccurredAt: time.Now().UTC(),
+		AggregateID: deliveryID, Payload: eventPayload, OccurredAt: now, AvailableAt: availableAt,
 	}); err != nil {
 		return err
 	}

@@ -16,12 +16,14 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
 	defaultRelayBatchSize = 100
 	defaultPollInterval   = 5 * time.Second
-	defaultPublishLease   = time.Minute
+	defaultPublishLease   = 30 * time.Second
+	streamMaximumLength   = 50_000
 	maximumPublishError   = 1000
 )
 
@@ -32,14 +34,23 @@ type Relay struct {
 	pollInterval time.Duration
 	publishLease time.Duration
 	batchSize    int
+	concurrency  int
 }
 
-func NewRelay(pool *pgxpool.Pool, redisClient *redis.Client, logger *slog.Logger) *Relay {
+func NewRelay(
+	pool *pgxpool.Pool,
+	redisClient *redis.Client,
+	concurrency int,
+	logger *slog.Logger,
+) (*Relay, error) {
+	if concurrency < 1 {
+		return nil, fmt.Errorf("outbox publication concurrency must be positive")
+	}
 	return &Relay{
 		pool: pool, redis: redisClient, logger: logger,
 		pollInterval: defaultPollInterval, publishLease: defaultPublishLease,
-		batchSize: defaultRelayBatchSize,
-	}
+		batchSize: defaultRelayBatchSize, concurrency: concurrency,
+	}, nil
 }
 
 func (relay *Relay) Run(ctx context.Context) error {
@@ -112,42 +123,22 @@ func (relay *Relay) publishBatch(ctx context.Context) (int, error) {
 		return 0, err
 	}
 
-	type outcome struct {
-		event Event
-		err   error
+	outcomes := make([]publishOutcome, len(events))
+	var publications errgroup.Group
+	publications.SetLimit(relay.concurrency)
+	for index, event := range events {
+		publications.Go(func() error {
+			outcomes[index] = relay.publishEvent(ctx, event)
+			return nil
+		})
 	}
-	outcomes := make([]outcome, 0, len(events))
+	_ = publications.Wait()
+
 	published := 0
-	for _, event := range events {
-		messageContext := otel.GetTextMapPropagator().Extract(ctx, event.TraceContext)
-		messageContext, span := otel.Tracer("github.com/Rahmannugar/consumel-server/internal/infra/events").Start(
-			messageContext, "outbox.publish", trace.WithSpanKind(trace.SpanKindProducer),
-			trace.WithAttributes(attribute.String("messaging.message.id", event.ID.String())),
-		)
-		started := time.Now()
-		relay.logger.InfoContext(messageContext, "Outbox publication started",
-			"event", "outbox.publish.started", "operation", "outbox.publish",
-			"event_id", event.ID, "event_type", event.Type,
-			"aggregate_type", event.AggregateType, "aggregate_id", event.AggregateID)
-		publishErr := relay.publish(messageContext, event)
-		outcomes = append(outcomes, outcome{event: event, err: publishErr})
-		if publishErr != nil {
-			relay.logger.WarnContext(messageContext, "Outbox publication will retry",
-				"event", "outbox.publish.retry", "operation", "outbox.publish",
-				"event_id", event.ID, "event_type", event.Type,
-				"aggregate_type", event.AggregateType, "aggregate_id", event.AggregateID,
-				"duration_ms", time.Since(started).Milliseconds(), "error", publishErr)
-			span.RecordError(publishErr)
-			span.End()
-			continue
+	for _, outcome := range outcomes {
+		if outcome.err == nil {
+			published++
 		}
-		published++
-		relay.logger.InfoContext(messageContext, "Outbox publication completed",
-			"event", "outbox.publish.completed", "operation", "outbox.publish",
-			"event_id", event.ID, "event_type", event.Type,
-			"aggregate_type", event.AggregateType, "aggregate_id", event.AggregateID,
-			"duration_ms", time.Since(started).Milliseconds())
-		span.End()
 	}
 
 	// Redis publication happens outside database transactions. This short
@@ -185,6 +176,41 @@ func (relay *Relay) publishBatch(ctx context.Context) (int, error) {
 		return published, fmt.Errorf("commit outbox checkpoint transaction: %w", err)
 	}
 	return published, nil
+}
+
+type publishOutcome struct {
+	event Event
+	err   error
+}
+
+func (relay *Relay) publishEvent(ctx context.Context, event Event) publishOutcome {
+	messageContext := otel.GetTextMapPropagator().Extract(ctx, event.TraceContext)
+	messageContext, span := otel.Tracer("github.com/Rahmannugar/consumel-server/internal/infra/events").Start(
+		messageContext, "outbox.publish", trace.WithSpanKind(trace.SpanKindProducer),
+		trace.WithAttributes(attribute.String("messaging.message.id", event.ID.String())),
+	)
+	defer span.End()
+	started := time.Now()
+	relay.logger.InfoContext(messageContext, "Outbox publication started",
+		"event", "outbox.publish.started", "operation", "outbox.publish",
+		"event_id", event.ID, "event_type", event.Type,
+		"aggregate_type", event.AggregateType, "aggregate_id", event.AggregateID)
+	publishErr := relay.publish(messageContext, event)
+	if publishErr != nil {
+		relay.logger.WarnContext(messageContext, "Outbox publication will retry",
+			"event", "outbox.publish.retry", "operation", "outbox.publish",
+			"event_id", event.ID, "event_type", event.Type,
+			"aggregate_type", event.AggregateType, "aggregate_id", event.AggregateID,
+			"duration_ms", time.Since(started).Milliseconds(), "error", publishErr)
+		span.RecordError(publishErr)
+		return publishOutcome{event: event, err: publishErr}
+	}
+	relay.logger.InfoContext(messageContext, "Outbox publication completed",
+		"event", "outbox.publish.completed", "operation", "outbox.publish",
+		"event_id", event.ID, "event_type", event.Type,
+		"aggregate_type", event.AggregateType, "aggregate_id", event.AggregateID,
+		"duration_ms", time.Since(started).Milliseconds())
+	return publishOutcome{event: event}
 }
 
 func (relay *Relay) claimBatch(ctx context.Context, claimID uuid.UUID) ([]Event, error) {
@@ -231,7 +257,7 @@ func (relay *Relay) publish(ctx context.Context, event Event) error {
 		return fmt.Errorf("event %s has invalid JSON payload", event.ID)
 	}
 	_, err := relay.redis.XAdd(ctx, &redis.XAddArgs{
-		Stream: StreamName,
+		Stream: StreamName, Mode: "ACKED", MaxLen: streamMaximumLength, Approx: true,
 		Values: map[string]any{
 			"event_id": event.ID.String(), "event_type": event.Type,
 			"aggregate_type": event.AggregateType, "aggregate_id": event.AggregateID.String(),

@@ -22,6 +22,7 @@ type Event struct {
 	Payload       json.RawMessage
 	TraceContext  propagation.MapCarrier
 	OccurredAt    time.Time
+	AvailableAt   time.Time
 }
 
 type Execer interface {
@@ -36,10 +37,15 @@ func Insert(ctx context.Context, execer Execer, event Event) error {
 	// Persist W3C propagation fields with the business transaction so worker
 	// spans remain connected even when delivery happens much later.
 	otel.GetTextMapPropagator().Inject(ctx, traceContext)
+	availableAt := event.AvailableAt
+	if availableAt.IsZero() {
+		availableAt = event.OccurredAt
+	}
 	_, err := execer.Exec(ctx, `INSERT INTO outbox_events
-		(id, event_type, aggregate_type, aggregate_id, payload, trace_context, occurred_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		event.ID, event.Type, event.AggregateType, event.AggregateID, event.Payload, traceContext, event.OccurredAt,
+		(id, event_type, aggregate_type, aggregate_id, payload, trace_context, occurred_at, available_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		event.ID, event.Type, event.AggregateType, event.AggregateID, event.Payload,
+		traceContext, event.OccurredAt, availableAt,
 	)
 	if err != nil {
 		return fmt.Errorf("insert outbox event: %w", err)

@@ -18,7 +18,6 @@ import (
 	"github.com/Rahmannugar/consumel-server/internal/infra/events"
 	"github.com/Rahmannugar/consumel-server/internal/infra/telemetry"
 	"github.com/google/uuid"
-	"github.com/resend/resend-go/v2"
 )
 
 const (
@@ -26,6 +25,12 @@ const (
 	redisTimeout    = 5 * time.Second
 	resendTimeout   = 10 * time.Second
 	shutdownTimeout = 15 * time.Second
+	// Email calls are slow external I/O; eight slots keep one V1 worker busy
+	// while the Resend client independently enforces provider request pacing.
+	emailConcurrency = 8
+	// Redis publication is shorter I/O and can safely use a wider pool than
+	// provider delivery without increasing the PostgreSQL claim batch.
+	outboxConcurrency = 16
 )
 
 type workerResult struct {
@@ -91,8 +96,9 @@ func run() (runError error) {
 	if err != nil {
 		return fmt.Errorf("configure email delivery queue: %w", err)
 	}
-	resendClient := resend.NewCustomClient(telemetry.NewHTTPClient(resendTimeout), cfg.Resend.APIKey)
-	emailSender, err := clients.NewResendEmailClient(resendClient.Emails, cfg.Resend.NoReplyFrom)
+	emailSender, err := clients.NewResendEmailClient(
+		telemetry.NewHTTPClient(resendTimeout), cfg.Resend.APIKey, cfg.Resend.NoReplyFrom,
+	)
 	if err != nil {
 		return fmt.Errorf("configure Resend email client: %w", err)
 	}
@@ -102,10 +108,16 @@ func run() (runError error) {
 		hostname = "worker"
 	}
 	consumerName := hostname + "-" + uuid.NewString()
-	relay := events.NewRelay(databasePool, redisClient, logger)
-	emailConsumer := emaildelivery.NewConsumer(
-		databasePool, redisClient, emailQueue, emailSender, consumerName, logger,
+	relay, err := events.NewRelay(databasePool, redisClient, outboxConcurrency, logger)
+	if err != nil {
+		return fmt.Errorf("configure outbox relay: %w", err)
+	}
+	emailConsumer, err := emaildelivery.NewConsumer(
+		databasePool, redisClient, emailQueue, emailSender, consumerName, emailConcurrency, logger,
 	)
+	if err != nil {
+		return fmt.Errorf("configure email delivery consumer: %w", err)
+	}
 
 	signalContext, stopSignals := signal.NotifyContext(
 		context.Background(), syscall.SIGINT, syscall.SIGTERM,

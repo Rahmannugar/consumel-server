@@ -15,7 +15,6 @@ require (
 	github.com/knadh/koanf/v2 v2.3.6
 	github.com/redis/go-redis/extra/redisotel/v9 v9.21.0
 	github.com/redis/go-redis/v9 v9.21.0
-	github.com/resend/resend-go/v2 v2.28.0
 	github.com/testcontainers/testcontainers-go v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
 	go.opentelemetry.io/contrib/bridges/otelslog v0.20.1

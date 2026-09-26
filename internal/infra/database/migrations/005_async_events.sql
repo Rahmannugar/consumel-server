@@ -33,6 +33,7 @@ CREATE TABLE email_deliveries (
     status text NOT NULL DEFAULT 'pending',
     attempts integer NOT NULL DEFAULT 0,
     processing_started_at timestamptz,
+    processing_claim_id uuid,
     next_attempt_at timestamptz NOT NULL DEFAULT now(),
     last_error text,
     delivered_at timestamptz,
@@ -50,10 +51,6 @@ CREATE TABLE email_deliveries (
     ),
     CONSTRAINT email_deliveries_attempts_nonnegative CHECK (attempts >= 0)
 );
-
-CREATE INDEX email_deliveries_retry_idx
-    ON email_deliveries (next_attempt_at, id)
-    WHERE status IN ('pending', 'retrying');
 
 CREATE OR REPLACE FUNCTION notify_outbox_event() RETURNS trigger AS $$
 BEGIN
