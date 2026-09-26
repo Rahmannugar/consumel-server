@@ -7,13 +7,15 @@ import (
 )
 
 type operation struct {
-	Method      string
-	Path        string
-	Summary     string
-	Request     string
-	SuccessCode string
-	Success     string
-	Protected   bool
+	Method             string
+	Path               string
+	Summary            string
+	Request            string
+	SuccessCode        string
+	Success            string
+	SuccessDescription string
+	Errors             map[string]string
+	Protected          bool
 }
 
 var operations = []operation{
@@ -21,22 +23,22 @@ var operations = []operation{
 	{Method: "delete", Path: "/account/google", Summary: "Unlink Google when another sign-in method remains.", SuccessCode: "204", Protected: true},
 	{Method: "post", Path: "/account/google", Summary: "Start linking Google to the signed-in account.", SuccessCode: "200", Success: "AuthorizationURL", Protected: true},
 	{Method: "post", Path: "/auth/change-password", Summary: "Change the account password.", Request: "ChangePasswordRequest", SuccessCode: "200", Success: "User", Protected: true},
-	{Method: "post", Path: "/auth/forgot-password", Summary: "Send a single-use password-reset link when the account exists.", Request: "EmailRequest", SuccessCode: "202"},
+	{Method: "post", Path: "/auth/forgot-password", Summary: "Queue a single-use password-reset link when the account exists.", Request: "EmailRequest", SuccessCode: "202", SuccessDescription: "The request was accepted without revealing whether the account exists. An eligible account's reset email was queued for asynchronous delivery.", Errors: map[string]string{"400": "BadRequest", "429": "RateLimited", "500": "PasswordResetFailed"}},
 	{Method: "post", Path: "/auth/google", Summary: "Start Google sign-in.", SuccessCode: "200", Success: "AuthorizationURL"},
 	{Method: "get", Path: "/auth/google/callback", Summary: "Complete Google sign-in and redirect to the client.", SuccessCode: "302"},
 	{Method: "get", Path: "/auth/list-sessions", Summary: "Return the account's active sessions.", SuccessCode: "200", Success: "Sessions", Protected: true},
 	{Method: "post", Path: "/auth/remove-password", Summary: "Remove password sign-in when another method remains.", Request: "RemovePasswordRequest", SuccessCode: "204", Protected: true},
-	{Method: "post", Path: "/auth/resend-verification", Summary: "Send a new verification code when the account exists.", Request: "EmailRequest", SuccessCode: "202"},
-	{Method: "post", Path: "/auth/reset-password", Summary: "Replace the password with a valid reset token.", Request: "ResetPasswordRequest", SuccessCode: "200", Success: "User"},
+	{Method: "post", Path: "/auth/resend-verification", Summary: "Queue a new verification code when the account is eligible.", Request: "EmailRequest", SuccessCode: "202", SuccessDescription: "The request was accepted without revealing account state. When eligible, a new verification code was queued for asynchronous delivery.", Errors: map[string]string{"400": "BadRequest", "429": "RateLimited", "500": "EmailVerificationFailed"}},
+	{Method: "post", Path: "/auth/reset-password", Summary: "Replace the password with a valid reset token.", Request: "ResetPasswordRequest", SuccessCode: "200", Success: "User", SuccessDescription: "The password was replaced and existing sessions were revoked.", Errors: map[string]string{"400": "ResetPasswordInvalid", "429": "RateLimited", "500": "ResetPasswordFailed"}},
 	{Method: "post", Path: "/auth/revoke-other-sessions", Summary: "Revoke every account session except the current session.", SuccessCode: "200", Success: "Session", Protected: true},
 	{Method: "post", Path: "/auth/revoke-session", Summary: "Revoke one session belonging to the account.", Request: "RevokeSessionRequest", SuccessCode: "204", Protected: true},
 	{Method: "post", Path: "/auth/revoke-sessions", Summary: "Revoke every session belonging to the account.", SuccessCode: "204", Protected: true},
 	{Method: "get", Path: "/auth/session", Summary: "Return the current Authlier session.", SuccessCode: "200", Success: "Session", Protected: true},
 	{Method: "post", Path: "/auth/set-password", Summary: "Add password sign-in to the account.", Request: "SetPasswordRequest", SuccessCode: "200", Success: "User", Protected: true},
-	{Method: "post", Path: "/auth/sign-in", Summary: "Sign in with email and password.", Request: "CredentialsRequest", SuccessCode: "200", Success: "UserSession"},
+	{Method: "post", Path: "/auth/sign-in", Summary: "Sign in with email and password.", Request: "CredentialsRequest", SuccessCode: "200", Success: "UserSession", SuccessDescription: "The credentials were accepted and a browser session cookie was issued.", Errors: map[string]string{"400": "BadRequest", "401": "InvalidCredentials", "403": "EmailNotVerified", "429": "RateLimited", "500": "SignInFailed"}},
 	{Method: "post", Path: "/auth/sign-out", Summary: "Revoke the current session.", SuccessCode: "204", Protected: true},
-	{Method: "post", Path: "/auth/sign-up", Summary: "Create an account and send its verification code.", Request: "CredentialsRequest", SuccessCode: "201", Success: "User"},
-	{Method: "post", Path: "/auth/verify-email", Summary: "Verify the email code and sign in.", Request: "VerifyEmailRequest", SuccessCode: "200", Success: "UserSession"},
+	{Method: "post", Path: "/auth/sign-up", Summary: "Create an account and queue its verification code.", Request: "CredentialsRequest", SuccessCode: "201", Success: "User", SuccessDescription: "The unverified account was created and its verification code was queued for asynchronous delivery. No session is created until verification succeeds.", Errors: map[string]string{"400": "BadRequest", "409": "RegistrationUnavailable", "429": "RateLimited", "500": "SignUpFailed"}},
+	{Method: "post", Path: "/auth/verify-email", Summary: "Verify the email code and sign in.", Request: "VerifyEmailRequest", SuccessCode: "200", Success: "UserSession", SuccessDescription: "The email was verified and a browser session cookie was issued.", Errors: map[string]string{"400": "EmailVerificationInvalid", "429": "RateLimited", "500": "VerifyEmailFailed"}},
 	{Method: "get", Path: "/health/live", Summary: "Report whether the API process is alive.", SuccessCode: "200", Success: "Health"},
 	{Method: "get", Path: "/health/ready", Summary: "Report whether PostgreSQL is reachable.", SuccessCode: "200", Success: "Health"},
 }
@@ -57,7 +59,11 @@ func Document() ([]byte, error) {
 			path = map[string]any{}
 			paths[endpoint.Path] = path
 		}
-		response := map[string]any{"description": successDescription(endpoint.SuccessCode)}
+		description := endpoint.SuccessDescription
+		if description == "" {
+			description = successDescription(endpoint.SuccessCode)
+		}
+		response := map[string]any{"description": description}
 		if endpoint.Success != "" {
 			response["content"] = jsonContent(schemaReference(endpoint.Success), exampleFor(endpoint.Success))
 		}
@@ -140,15 +146,38 @@ func schemas() map[string]any {
 
 func errorResponses() map[string]any {
 	return map[string]any{
-		"BadRequest":       errorResponse("The request is invalid.", "invalid_request"),
-		"NotAuthenticated": errorResponse("Authentication is required.", "not_authenticated"),
-		"RateLimited":      errorResponse("Too many attempts were made.", "too_many_attempts"),
-		"ServerError":      errorResponse("The request could not be completed.", "authentication_failed"),
+		"BadRequest":               errorResponse("The JSON body or one of its fields is invalid.", "invalid_request"),
+		"EmailNotVerified":         errorResponse("The credentials are valid, but email verification is required. A fresh code was queued when the account was eligible.", "email_not_verified"),
+		"EmailVerificationFailed":  errorResponse("The verification email could not be queued.", "email_verification_failed"),
+		"EmailVerificationInvalid": errorResponseExamples("The request body or verification code is invalid.", "invalid_request", "invalid_token"),
+		"InvalidCredentials":       errorResponse("The email address or password is incorrect.", "invalid_credentials"),
+		"NotAuthenticated":         errorResponse("Authentication is required.", "not_authenticated"),
+		"PasswordResetFailed":      errorResponseExamples("The reset workflow could not be completed.", "password_reset_failed", "session_revocation_failed"),
+		"RateLimited":              errorResponse("Too many attempts were made.", "too_many_attempts"),
+		"RegistrationUnavailable":  errorResponse("Registration cannot be completed for this email address. The response does not disclose existing account state.", "registration_unavailable"),
+		"ResetPasswordInvalid":     errorResponseExamples("The request, reset token, or replacement password is invalid.", "invalid_request", "invalid_token", "invalid_password"),
+		"ServerError":              errorResponse("The request could not be completed.", "authentication_failed"),
+		"SignInFailed":             errorResponseExamples("Authentication or session creation could not be completed.", "authentication_failed", "email_verification_failed", "session_failed"),
+		"SignUpFailed":             errorResponseExamples("Account creation or verification delivery could not be completed.", "authentication_failed", "email_verification_failed"),
+		"VerifyEmailFailed":        errorResponseExamples("Verification or session creation could not be completed.", "email_verification_failed", "session_failed"),
 	}
 }
 
 func errorResponse(description, code string) map[string]any {
 	return map[string]any{"description": description, "content": jsonContent(schemaReference("Error"), map[string]any{"error": map[string]any{"code": code}})}
+}
+
+func errorResponseExamples(description string, codes ...string) map[string]any {
+	examples := make(map[string]any, len(codes))
+	for _, code := range codes {
+		examples[code] = map[string]any{"value": map[string]any{"error": map[string]any{"code": code}}}
+	}
+	return map[string]any{
+		"description": description,
+		"content": map[string]any{"application/json": map[string]any{
+			"schema": schemaReference("Error"), "examples": examples,
+		}},
+	}
 }
 
 func operationResponses(endpoint operation, success map[string]any) map[string]any {
@@ -170,6 +199,9 @@ func operationResponses(endpoint operation, success map[string]any) map[string]a
 			"description": "PostgreSQL is unavailable.",
 			"content":     jsonContent(schemaReference("Health"), map[string]any{"status": "unavailable"}),
 		}
+	}
+	for status, response := range endpoint.Errors {
+		responses[status] = responseReference(response)
 	}
 	return responses
 }

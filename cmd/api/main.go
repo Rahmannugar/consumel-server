@@ -19,19 +19,17 @@ import (
 	"github.com/Rahmannugar/consumel-server/internal/config"
 	infraauthentication "github.com/Rahmannugar/consumel-server/internal/infra/authentication"
 	"github.com/Rahmannugar/consumel-server/internal/infra/cache"
-	"github.com/Rahmannugar/consumel-server/internal/infra/clients"
 	"github.com/Rahmannugar/consumel-server/internal/infra/database"
+	"github.com/Rahmannugar/consumel-server/internal/infra/emaildelivery"
 	"github.com/Rahmannugar/consumel-server/internal/infra/ratelimit"
 	"github.com/Rahmannugar/consumel-server/internal/infra/telemetry"
 	userrepositories "github.com/Rahmannugar/consumel-server/internal/users/repositories"
 	userservices "github.com/Rahmannugar/consumel-server/internal/users/services"
-	"github.com/resend/resend-go/v2"
 )
 
 const (
 	databaseTimeout       = 10 * time.Second
 	authMigrationTimeout  = 30 * time.Second
-	resendTimeout         = 10 * time.Second
 	googleTimeout         = 10 * time.Second
 	sessionLifetime       = 7 * 24 * time.Hour
 	sessionCacheTTL       = time.Hour
@@ -53,7 +51,7 @@ func run() (runError error) {
 	if err != nil {
 		return fmt.Errorf("load configuration: %w", err)
 	}
-	telemetryRuntime, err := telemetry.New(context.Background(), string(cfg.Environment))
+	telemetryRuntime, err := telemetry.New(context.Background(), "consumel-api", string(cfg.Environment))
 	if err != nil {
 		return fmt.Errorf("initialize telemetry: %w", err)
 	}
@@ -143,13 +141,9 @@ func run() (runError error) {
 	otpAttemptGuard := infraauthentication.NewOTPAttemptGuard(distributedLimiter)
 	passwordResetAttemptGuard := infraauthentication.NewPasswordResetAttemptGuard(distributedLimiter)
 
-	resendClient := resend.NewCustomClient(telemetry.NewHTTPClient(resendTimeout), cfg.Resend.APIKey)
-	authenticationEmailSender, err := clients.NewResendAuthenticationEmailSender(
-		resendClient.Emails,
-		cfg.Resend.NoReplyFrom,
-	)
+	emailQueue, err := emaildelivery.NewQueue(databasePool, cfg.Auth.OTPHMACSecret)
 	if err != nil {
-		return fmt.Errorf("configure authentication email sender: %w", err)
+		return fmt.Errorf("configure email delivery queue: %w", err)
 	}
 
 	auth, err := authlier.New(authlier.Config{
@@ -170,15 +164,16 @@ func run() (runError error) {
 			Enabled:                     true,
 			Delivery:                    emailverification.DeliveryMethodOTP,
 			OTPSecret:                   cfg.Auth.OTPHMACSecret,
-			Sender:                      authenticationEmailSender,
+			Sender:                      emailQueue,
 			SendOnSignUp:                true,
+			SendOnSignIn:                true,
 			AutoSignInAfterVerification: true,
 			AttemptGuard:                otpAttemptGuard,
 		},
 		PasswordReset: authlier.PasswordResetConfig{
 			Enabled:      true,
 			ResetURL:     cfg.Auth.PasswordResetURL(),
-			Sender:       authenticationEmailSender,
+			Sender:       emailQueue,
 			AttemptGuard: passwordResetAttemptGuard,
 		},
 		Session: authlier.SessionConfig{

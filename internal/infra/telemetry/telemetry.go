@@ -24,7 +24,6 @@ import (
 )
 
 const (
-	serviceName          = "consumel-api"
 	instrumentationName  = "github.com/Rahmannugar/consumel-server/internal/infra/telemetry"
 	metricExportInterval = 10 * time.Second
 )
@@ -37,7 +36,10 @@ type Runtime struct {
 	propagator     propagation.TextMapPropagator
 }
 
-func New(ctx context.Context, environment string) (*Runtime, error) {
+func New(ctx context.Context, serviceName, environment string) (*Runtime, error) {
+	if serviceName == "" {
+		return nil, fmt.Errorf("telemetry service name must not be empty")
+	}
 	instanceID, err := uuid.NewV7()
 	if err != nil {
 		return nil, fmt.Errorf("create service instance ID: %w", err)

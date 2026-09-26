@@ -9,12 +9,12 @@ tasks:
     cmds:
       - docker compose up --detach --wait postgres redis
       - docker compose run --rm migrate
-      - docker compose up --detach --wait api
+      - docker compose up --detach --wait api worker
 
   up-build:
     desc: Build images and start the local containers
     cmds:
-      - docker compose build api
+      - docker compose build api worker
       - task: up
 
   down:
@@ -23,14 +23,19 @@ tasks:
       - docker compose down
 
   logs:
-    desc: Follow local API and telemetry Collector logs
+    desc: Follow local API, worker, and telemetry Collector logs
     cmds:
-      - docker compose logs --follow api otel-collector
+      - docker compose logs --follow api worker otel-collector
 
   run-api:
     desc: Run the Consumel API
     cmds:
       - go run ./cmd/api
+
+  run-worker:
+    desc: Run the Consumel worker
+    cmds:
+      - go run ./cmd/worker
 
   format:
     desc: Format Go source files

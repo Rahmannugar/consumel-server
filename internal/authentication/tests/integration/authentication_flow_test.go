@@ -4,14 +4,12 @@ package integration_test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"sync"
 	"testing"
 	"time"
 
@@ -25,12 +23,14 @@ import (
 	authenticationservices "github.com/Rahmannugar/consumel-server/internal/authentication/services"
 	"github.com/Rahmannugar/consumel-server/internal/infra/authentication"
 	"github.com/Rahmannugar/consumel-server/internal/infra/database/testdb"
+	"github.com/Rahmannugar/consumel-server/internal/infra/emaildelivery"
 	"github.com/Rahmannugar/consumel-server/internal/infra/ratelimit"
 	organizationrepositories "github.com/Rahmannugar/consumel-server/internal/organizations/repositories"
 	organizationservices "github.com/Rahmannugar/consumel-server/internal/organizations/services"
 	userrepositories "github.com/Rahmannugar/consumel-server/internal/users/repositories"
 	userservices "github.com/Rahmannugar/consumel-server/internal/users/services"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"github.com/testcontainers/testcontainers-go"
@@ -170,9 +170,51 @@ func TestSignInRateLimitUsesNormalizedEmail(t *testing.T) {
 	}
 }
 
+func TestRepeatedSignupDoesNotRevealVerificationStateAndSignInRecoversVerification(t *testing.T) {
+	app := newAuthenticationTestApp(t)
+	email := "recovery@example.com"
+	credentials := map[string]string{"email": email, "password": "Correct horse 7!"}
+
+	created := performJSONRequest(t, app.router, http.MethodPost, "/auth/sign-up", credentials, nil)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("initial sign-up status = %d, body = %s", created.Code, created.Body.String())
+	}
+	unverifiedConflict := performJSONRequest(
+		t, app.router, http.MethodPost, "/auth/sign-up", credentials, nil,
+	)
+	if unverifiedConflict.Code != http.StatusConflict {
+		t.Fatalf("unverified repeat sign-up status = %d, body = %s", unverifiedConflict.Code, unverifiedConflict.Body.String())
+	}
+
+	signIn := performJSONRequest(t, app.router, http.MethodPost, "/auth/sign-in", credentials, nil)
+	if signIn.Code != http.StatusForbidden || responseErrorCode(t, signIn) != "email_not_verified" {
+		t.Fatalf("unverified sign-in status = %d, body = %s", signIn.Code, signIn.Body.String())
+	}
+	verification := app.lastVerification(t, email)
+	verified := performJSONRequest(t, app.router, http.MethodPost, "/auth/verify-email", map[string]string{
+		"email": email, "code": verification.Code,
+	}, nil)
+	if verified.Code != http.StatusOK {
+		t.Fatalf("recovery verification status = %d, body = %s", verified.Code, verified.Body.String())
+	}
+
+	verifiedEmail := "verified-recovery@example.com"
+	_, _ = app.signUpAndVerify(t, verifiedEmail)
+	verifiedConflict := performJSONRequest(t, app.router, http.MethodPost, "/auth/sign-up", map[string]string{
+		"email": verifiedEmail, "password": "Correct horse 7!",
+	}, nil)
+	if verifiedConflict.Code != http.StatusConflict {
+		t.Fatalf("verified repeat sign-up status = %d, body = %s", verifiedConflict.Code, verifiedConflict.Body.String())
+	}
+	if verifiedConflict.Body.String() != unverifiedConflict.Body.String() {
+		t.Fatalf("repeat sign-up disclosed verification state: before=%s after=%s",
+			unverifiedConflict.Body.String(), verifiedConflict.Body.String())
+	}
+}
+
 type authenticationTestApp struct {
 	router         http.Handler
-	sender         *capturingVerificationSender
+	emailQueue     *emaildelivery.Queue
 	users          *userrepositories.UserRepository
 	pool           *pgxpool.Pool
 	redisContainer testcontainers.Container
@@ -228,7 +270,10 @@ func newAuthenticationTestApp(t *testing.T) authenticationTestApp {
 	if err != nil {
 		t.Fatalf("create Consumel Authlier database: %v", err)
 	}
-	sender := &capturingVerificationSender{}
+	emailQueue, err := emaildelivery.NewQueue(pool, secret)
+	if err != nil {
+		t.Fatalf("create email delivery queue: %v", err)
+	}
 	auth, err := authlier.New(authlier.Config{
 		AppName:         "Consumel",
 		BaseURL:         "https://api.consumel.test",
@@ -246,8 +291,9 @@ func newAuthenticationTestApp(t *testing.T) authenticationTestApp {
 			Enabled:                     true,
 			Delivery:                    emailverification.DeliveryMethodOTP,
 			OTPSecret:                   secret,
-			Sender:                      sender,
+			Sender:                      emailQueue,
 			SendOnSignUp:                true,
+			SendOnSignIn:                true,
 			AutoSignInAfterVerification: true,
 			AttemptGuard:                authentication.NewOTPAttemptGuard(distributedLimiter),
 		},
@@ -281,7 +327,7 @@ func newAuthenticationTestApp(t *testing.T) authenticationTestApp {
 
 	return authenticationTestApp{
 		router:         router,
-		sender:         sender,
+		emailQueue:     emailQueue,
 		users:          userRepository,
 		pool:           pool,
 		redisContainer: redisContainer,
@@ -299,7 +345,7 @@ func (app authenticationTestApp) signUpAndVerify(
 	if signUp.Code != http.StatusCreated {
 		t.Fatalf("sign-up status = %d, body = %s", signUp.Code, signUp.Body.String())
 	}
-	message := app.sender.last(t)
+	message := app.lastVerification(t, email)
 	verification := performJSONRequest(t, app.router, http.MethodPost, "/auth/verify-email", map[string]string{
 		"email": email, "code": message.Code,
 	}, nil)
@@ -318,29 +364,40 @@ func onlySessionCookie(t *testing.T, response *httptest.ResponseRecorder) *http.
 	return cookies[0]
 }
 
-type capturingVerificationSender struct {
-	mu       sync.Mutex
-	messages []emailverification.Message
-}
-
-func (sender *capturingVerificationSender) SendVerification(
-	_ context.Context,
-	message emailverification.Message,
-) error {
-	sender.mu.Lock()
-	defer sender.mu.Unlock()
-	sender.messages = append(sender.messages, message)
-	return nil
-}
-
-func (sender *capturingVerificationSender) last(t *testing.T) emailverification.Message {
+func (app authenticationTestApp) lastVerification(
+	t *testing.T,
+	email string,
+) emailverification.Message {
 	t.Helper()
-	sender.mu.Lock()
-	defer sender.mu.Unlock()
-	if len(sender.messages) == 0 {
-		t.Fatal("no verification email was sent")
+	var deliveryID uuid.UUID
+	var nonce []byte
+	var ciphertext []byte
+	var eventType string
+	err := app.pool.QueryRow(t.Context(), `SELECT d.id, d.payload_nonce, d.encrypted_payload, o.event_type
+		FROM email_deliveries d
+		JOIN outbox_events o ON o.aggregate_id = d.id
+		WHERE d.template = 'email_verification'
+		ORDER BY d.created_at DESC LIMIT 1`).Scan(&deliveryID, &nonce, &ciphertext, &eventType)
+	if err != nil {
+		t.Fatalf("load queued verification delivery: %v", err)
 	}
-	return sender.messages[len(sender.messages)-1]
+	if eventType != emaildelivery.EventTypeQueued {
+		t.Fatalf("outbox event type = %q, want %q", eventType, emaildelivery.EventTypeQueued)
+	}
+	if bytes.Contains(ciphertext, []byte(email)) {
+		t.Fatal("queued email payload contains the plaintext recipient")
+	}
+	payload, err := app.emailQueue.Decrypt(deliveryID, nonce, ciphertext)
+	if err != nil {
+		t.Fatalf("decrypt queued verification delivery: %v", err)
+	}
+	if payload.Recipient != email || len(payload.Code) != 6 {
+		t.Fatalf("queued verification payload = %#v", payload)
+	}
+	return emailverification.Message{
+		UserID: payload.SubjectID, Email: payload.Recipient,
+		Code: payload.Code, ExpiresAt: payload.ExpiresAt,
+	}
 }
 
 func openRedis(t *testing.T) (testcontainers.Container, *redis.Client) {
@@ -369,9 +426,9 @@ func openRedis(t *testing.T) (testcontainers.Container, *redis.Client) {
 	}
 	client := redis.NewClient(&redis.Options{
 		Addr:         net.JoinHostPort(host, port.Port()),
-		DialTimeout:  250 * time.Millisecond,
-		ReadTimeout:  250 * time.Millisecond,
-		WriteTimeout: 250 * time.Millisecond,
+		DialTimeout:  2 * time.Second,
+		ReadTimeout:  time.Second,
+		WriteTimeout: time.Second,
 		MaxRetries:   0,
 	})
 	t.Cleanup(func() {
@@ -439,4 +496,17 @@ func assertActiveSessionCount(t *testing.T, response *httptest.ResponseRecorder,
 	if len(body.Sessions) != want {
 		t.Fatalf("active session count = %d, want %d; body = %s", len(body.Sessions), want, response.Body.String())
 	}
+}
+
+func responseErrorCode(t *testing.T, response *httptest.ResponseRecorder) string {
+	t.Helper()
+	var body struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode error response: %v", err)
+	}
+	return body.Error.Code
 }

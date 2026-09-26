@@ -14,7 +14,78 @@
             }
           }
         },
-        "description": "The request is invalid."
+        "description": "The JSON body or one of its fields is invalid."
+      },
+      "EmailNotVerified": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "email_not_verified"
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The credentials are valid, but email verification is required. A fresh code was queued when the account was eligible."
+      },
+      "EmailVerificationFailed": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "email_verification_failed"
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The verification email could not be queued."
+      },
+      "EmailVerificationInvalid": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "invalid_request": {
+                "value": {
+                  "error": {
+                    "code": "invalid_request"
+                  }
+                }
+              },
+              "invalid_token": {
+                "value": {
+                  "error": {
+                    "code": "invalid_token"
+                  }
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The request body or verification code is invalid."
+      },
+      "InvalidCredentials": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "invalid_credentials"
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The email address or password is incorrect."
       },
       "NotAuthenticated": {
         "content": {
@@ -31,6 +102,32 @@
         },
         "description": "Authentication is required."
       },
+      "PasswordResetFailed": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "password_reset_failed": {
+                "value": {
+                  "error": {
+                    "code": "password_reset_failed"
+                  }
+                }
+              },
+              "session_revocation_failed": {
+                "value": {
+                  "error": {
+                    "code": "session_revocation_failed"
+                  }
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The reset workflow could not be completed."
+      },
       "RateLimited": {
         "content": {
           "application/json": {
@@ -46,6 +143,54 @@
         },
         "description": "Too many attempts were made."
       },
+      "RegistrationUnavailable": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "registration_unavailable"
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "Registration cannot be completed for this email address. The response does not disclose existing account state."
+      },
+      "ResetPasswordInvalid": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "invalid_password": {
+                "value": {
+                  "error": {
+                    "code": "invalid_password"
+                  }
+                }
+              },
+              "invalid_request": {
+                "value": {
+                  "error": {
+                    "code": "invalid_request"
+                  }
+                }
+              },
+              "invalid_token": {
+                "value": {
+                  "error": {
+                    "code": "invalid_token"
+                  }
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The request, reset token, or replacement password is invalid."
+      },
       "ServerError": {
         "content": {
           "application/json": {
@@ -60,6 +205,91 @@
           }
         },
         "description": "The request could not be completed."
+      },
+      "SignInFailed": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "authentication_failed": {
+                "value": {
+                  "error": {
+                    "code": "authentication_failed"
+                  }
+                }
+              },
+              "email_verification_failed": {
+                "value": {
+                  "error": {
+                    "code": "email_verification_failed"
+                  }
+                }
+              },
+              "session_failed": {
+                "value": {
+                  "error": {
+                    "code": "session_failed"
+                  }
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "Authentication or session creation could not be completed."
+      },
+      "SignUpFailed": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "authentication_failed": {
+                "value": {
+                  "error": {
+                    "code": "authentication_failed"
+                  }
+                }
+              },
+              "email_verification_failed": {
+                "value": {
+                  "error": {
+                    "code": "email_verification_failed"
+                  }
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "Account creation or verification delivery could not be completed."
+      },
+      "VerifyEmailFailed": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "email_verification_failed": {
+                "value": {
+                  "error": {
+                    "code": "email_verification_failed"
+                  }
+                }
+              },
+              "session_failed": {
+                "value": {
+                  "error": {
+                    "code": "session_failed"
+                  }
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "Verification or session creation could not be completed."
       }
     },
     "schemas": {
@@ -689,7 +919,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted without revealing whether the account exists."
+            "description": "The request was accepted without revealing whether the account exists. An eligible account's reset email was queued for asynchronous delivery."
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
@@ -698,10 +928,10 @@
             "$ref": "#/components/responses/RateLimited"
           },
           "500": {
-            "$ref": "#/components/responses/ServerError"
+            "$ref": "#/components/responses/PasswordResetFailed"
           }
         },
-        "summary": "Send a single-use password-reset link when the account exists.",
+        "summary": "Queue a single-use password-reset link when the account exists.",
         "tags": [
           "Authentication"
         ]
@@ -869,7 +1099,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted without revealing whether the account exists."
+            "description": "The request was accepted without revealing account state. When eligible, a new verification code was queued for asynchronous delivery."
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
@@ -878,10 +1108,10 @@
             "$ref": "#/components/responses/RateLimited"
           },
           "500": {
-            "$ref": "#/components/responses/ServerError"
+            "$ref": "#/components/responses/EmailVerificationFailed"
           }
         },
-        "summary": "Send a new verification code when the account exists.",
+        "summary": "Queue a new verification code when the account is eligible.",
         "tags": [
           "Authentication"
         ]
@@ -918,16 +1148,16 @@
                 }
               }
             },
-            "description": "Completed successfully."
+            "description": "The password was replaced and existing sessions were revoked."
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "$ref": "#/components/responses/ResetPasswordInvalid"
           },
           "429": {
             "$ref": "#/components/responses/RateLimited"
           },
           "500": {
-            "$ref": "#/components/responses/ServerError"
+            "$ref": "#/components/responses/ResetPasswordFailed"
           }
         },
         "summary": "Replace the password with a valid reset token.",
@@ -1198,16 +1428,22 @@
                 }
               }
             },
-            "description": "Completed successfully."
+            "description": "The credentials were accepted and a browser session cookie was issued."
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidCredentials"
+          },
+          "403": {
+            "$ref": "#/components/responses/EmailNotVerified"
           },
           "429": {
             "$ref": "#/components/responses/RateLimited"
           },
           "500": {
-            "$ref": "#/components/responses/ServerError"
+            "$ref": "#/components/responses/SignInFailed"
           }
         },
         "summary": "Sign in with email and password.",
@@ -1277,19 +1513,22 @@
                 }
               }
             },
-            "description": "Created."
+            "description": "The unverified account was created and its verification code was queued for asynchronous delivery. No session is created until verification succeeds."
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
+          },
+          "409": {
+            "$ref": "#/components/responses/RegistrationUnavailable"
           },
           "429": {
             "$ref": "#/components/responses/RateLimited"
           },
           "500": {
-            "$ref": "#/components/responses/ServerError"
+            "$ref": "#/components/responses/SignUpFailed"
           }
         },
-        "summary": "Create an account and send its verification code.",
+        "summary": "Create an account and queue its verification code.",
         "tags": [
           "Authentication"
         ]
@@ -1332,16 +1571,16 @@
                 }
               }
             },
-            "description": "Completed successfully."
+            "description": "The email was verified and a browser session cookie was issued."
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "$ref": "#/components/responses/EmailVerificationInvalid"
           },
           "429": {
             "$ref": "#/components/responses/RateLimited"
           },
           "500": {
-            "$ref": "#/components/responses/ServerError"
+            "$ref": "#/components/responses/VerifyEmailFailed"
           }
         },
         "summary": "Verify the email code and sign in.",

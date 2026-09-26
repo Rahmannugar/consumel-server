@@ -103,6 +103,31 @@ services:
     init: true
     stop_grace_period: 20s
 
+  worker:
+    image: consumel-server-local
+    command: ["go", "run", "./cmd/worker"]
+    env_file:
+      - .env
+    environment:
+      CONSUMEL_DATABASE_HOST: postgres
+      CONSUMEL_DATABASE_PORT: 5432
+      CONSUMEL_REDIS_URL: redis://redis:6379/0
+      CONSUMEL_AUTH_BASE_URL: http://localhost:8080
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+    volumes:
+      - .:/workspace
+      - go-modules:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    init: true
+    stop_grace_period: 20s
+
 volumes:
   postgres-data:
   redis-data:
