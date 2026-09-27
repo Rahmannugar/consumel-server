@@ -15,6 +15,7 @@ import (
 var (
 	ErrOrganizationIDRequired = errors.New("organization ID is required")
 	ErrProjectNameRequired    = errors.New("project name is required")
+	ErrUserIDRequired         = errors.New("user ID is required")
 )
 
 type ProjectRepository interface {
@@ -23,6 +24,17 @@ type ProjectRepository interface {
 		models.Project,
 		[]models.ProjectEnvironment,
 	) (models.Project, error)
+	ListAccessibleProjects(context.Context, uuid.UUID) ([]models.Project, error)
+}
+
+func (service *ProjectManagementService) ListProjects(
+	ctx context.Context,
+	userID uuid.UUID,
+) ([]models.Project, error) {
+	if userID == uuid.Nil {
+		return nil, ErrUserIDRequired
+	}
+	return service.repository.ListAccessibleProjects(ctx, userID)
 }
 
 type ProjectManagementService struct {
@@ -61,7 +73,10 @@ func (service *ProjectManagementService) CreateProject(
 	}
 
 	activatedAt := time.Now().UTC()
-	project := models.Project{ID: projectID, OrganizationID: organizationID, Name: name}
+	project := models.Project{
+		ID: projectID, OrganizationID: organizationID, Name: name,
+		Slug: models.NewProjectSlug(name, projectID),
+	}
 	environments := []models.ProjectEnvironment{
 		{ID: sandboxID, ProjectID: projectID, Name: models.ProjectEnvironmentSandbox, ActivatedAt: &activatedAt},
 		{ID: liveID, ProjectID: projectID, Name: models.ProjectEnvironmentLive},

@@ -10,6 +10,7 @@ import (
 
 	authenticationtemplates "github.com/Rahmannugar/consumel-server/internal/authentication/templates"
 	"github.com/Rahmannugar/consumel-server/internal/infra/events"
+	onboardingtemplates "github.com/Rahmannugar/consumel-server/internal/onboarding/templates"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -460,6 +461,13 @@ func render(templateName string, payload Payload, now time.Time) (renderedEmail,
 		return renderedEmail{Subject: email.Subject, Text: email.Text, HTML: email.HTML}, err
 	case TemplatePasswordReset:
 		email, err := authenticationtemplates.RenderPasswordResetEmail(payload.URL, payload.ExpiresAt, now)
+		return renderedEmail{Subject: email.Subject, Text: email.Text, HTML: email.HTML}, err
+	case TemplateWelcome:
+		email, err := onboardingtemplates.Render(
+			payload.OrganizationName,
+			payload.ProjectName,
+			payload.URL,
+		)
 		return renderedEmail{Subject: email.Subject, Text: email.Text, HTML: email.HTML}, err
 	default:
 		return renderedEmail{}, fmt.Errorf("unsupported email template %q", templateName)

@@ -2,7 +2,9 @@ version: "2"
 sql:
   - name: authentication
     engine: postgresql
-    schema: internal/infra/database/migrations
+    schema:
+      - internal/infra/database/sqlc/authlier.sql
+      - internal/infra/database/migrations
     queries: internal/authentication/queries
     gen:
       go:

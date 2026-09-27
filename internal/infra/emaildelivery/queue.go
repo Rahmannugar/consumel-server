@@ -24,6 +24,7 @@ const (
 	EventTypeQueued       = "email.delivery.queued.v1"
 	TemplateVerification  = "email_verification"
 	TemplatePasswordReset = "password_reset"
+	TemplateWelcome       = "welcome"
 	payloadKeyVersion     = 1
 )
 

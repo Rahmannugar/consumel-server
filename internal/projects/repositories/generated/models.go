@@ -9,14 +9,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type Project struct {
-	ID             uuid.UUID
-	OrganizationID uuid.UUID
-	Name           string
-	CreatedAt      pgtype.Timestamptz
-	UpdatedAt      pgtype.Timestamptz
-}
-
 type ProjectEnvironment struct {
 	ID          uuid.UUID
 	ProjectID   uuid.UUID

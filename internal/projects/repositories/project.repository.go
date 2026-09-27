@@ -2,10 +2,15 @@ package repositories
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/Rahmannugar/consumel-server/internal/projects/models"
 	projectdb "github.com/Rahmannugar/consumel-server/internal/projects/repositories/generated"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -14,11 +19,46 @@ type ProjectRepository struct {
 	queries *projectdb.Queries
 }
 
+func nullableTime(value pgtype.Timestamptz) *time.Time {
+	if !value.Valid {
+		return nil
+	}
+	return &value.Time
+}
+
 func NewProjectRepository(pool *pgxpool.Pool) *ProjectRepository {
 	return &ProjectRepository{
 		pool:    pool,
 		queries: projectdb.New(pool),
 	}
+}
+
+func (repository *ProjectRepository) ListAccessibleProjects(
+	ctx context.Context,
+	userID uuid.UUID,
+) ([]models.Project, error) {
+	rows, err := repository.queries.ListAccessibleProjects(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list accessible projects: %w", err)
+	}
+	projects := make([]models.Project, 0)
+	for _, row := range rows {
+		if len(projects) == 0 || projects[len(projects)-1].ID != row.ID {
+			projects = append(projects, models.Project{
+				ID: row.ID, OrganizationID: row.OrganizationID,
+				OrganizationName: row.OrganizationName, Name: row.Name, Slug: row.Slug,
+				CreatedAt: row.CreatedAt.Time, UpdatedAt: row.UpdatedAt.Time,
+			})
+		}
+		current := &projects[len(projects)-1]
+		current.Environments = append(current.Environments, models.ProjectEnvironment{
+			ID: row.EnvironmentID, ProjectID: row.ID,
+			Name:        models.ProjectEnvironmentName(row.Environment),
+			ActivatedAt: nullableTime(row.EnvironmentActivatedAt),
+			CreatedAt:   row.EnvironmentCreatedAt.Time,
+		})
+	}
+	return projects, nil
 }
 
 func (repository *ProjectRepository) CreateProjectWithEnvironments(
@@ -37,7 +77,15 @@ func (repository *ProjectRepository) CreateProjectWithEnvironments(
 		ID:             project.ID,
 		OrganizationID: project.OrganizationID,
 		Name:           project.Name,
+		Slug:           project.Slug,
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		project.Slug = models.ProjectSlugWithIDSuffix(project.Slug, project.ID)
+		createdProject, err = queries.CreateProject(ctx, projectdb.CreateProjectParams{
+			ID: project.ID, OrganizationID: project.OrganizationID,
+			Name: project.Name, Slug: project.Slug,
+		})
+	}
 	if err != nil {
 		return models.Project{}, fmt.Errorf("create project: %w", err)
 	}
@@ -59,6 +107,7 @@ func (repository *ProjectRepository) CreateProjectWithEnvironments(
 		ID:             createdProject.ID,
 		OrganizationID: createdProject.OrganizationID,
 		Name:           createdProject.Name,
+		Slug:           createdProject.Slug,
 		CreatedAt:      createdProject.CreatedAt.Time,
 		UpdatedAt:      createdProject.UpdatedAt.Time,
 		Environments:   createdEnvironments,

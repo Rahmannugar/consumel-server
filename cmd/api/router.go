@@ -11,7 +11,9 @@ import (
 	"github.com/Rahmannugar/consumel-server/internal/infra/cors"
 	"github.com/Rahmannugar/consumel-server/internal/infra/ratelimit"
 	"github.com/Rahmannugar/consumel-server/internal/infra/telemetry"
+	onboardinghandlers "github.com/Rahmannugar/consumel-server/internal/onboarding/handlers"
 	"github.com/Rahmannugar/consumel-server/internal/openapi"
+	projecthandlers "github.com/Rahmannugar/consumel-server/internal/projects/handlers"
 	"github.com/gin-gonic/gin"
 )
 
@@ -21,6 +23,8 @@ func newRouter(
 	database health.Database,
 	authlierHandler http.Handler,
 	tenantResolver authenticationhandlers.TenantResolver,
+	onboardingService onboardinghandlers.OnboardingService,
+	projectService projecthandlers.ProjectService,
 	limiter *ratelimit.RedisLimiter,
 	logger *slog.Logger,
 ) (*gin.Engine, error) {
@@ -50,5 +54,7 @@ func newRouter(
 		limiter,
 		logger,
 	)
+	onboardinghandlers.RegisterRoutes(router, tenantResolver, onboardingService, logger)
+	projecthandlers.RegisterRoutes(router, tenantResolver, projectService, logger)
 	return router, nil
 }

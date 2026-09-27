@@ -16,6 +16,7 @@ const getAccountContextByAuthlierSubjectID = `-- name: GetAccountContextByAuthli
 SELECT
     users.id AS user_id,
     users.authlier_subject_id,
+    authlier_users.email AS user_email,
     users.created_at AS user_created_at,
     organizations.id AS organization_id,
     organizations.name AS organization_name,
@@ -24,6 +25,8 @@ SELECT
     organization_roles.name AS role_name,
     organization_roles.system_key AS role_system_key
 FROM users
+JOIN authlier_users
+    ON authlier_users.id = users.authlier_subject_id
 LEFT JOIN organization_memberships
     ON organization_memberships.user_id = users.id
    AND organization_memberships.status = 'active'
@@ -43,6 +46,7 @@ ORDER BY organizations.created_at NULLS LAST, organizations.id
 type GetAccountContextByAuthlierSubjectIDRow struct {
 	UserID            uuid.UUID
 	AuthlierSubjectID string
+	UserEmail         string
 	UserCreatedAt     pgtype.Timestamptz
 	OrganizationID    pgtype.UUID
 	OrganizationName  *string
@@ -64,6 +68,7 @@ func (q *Queries) GetAccountContextByAuthlierSubjectID(ctx context.Context, auth
 		if err := rows.Scan(
 			&i.UserID,
 			&i.AuthlierSubjectID,
+			&i.UserEmail,
 			&i.UserCreatedAt,
 			&i.OrganizationID,
 			&i.OrganizationName,

@@ -17,16 +17,16 @@ import (
 func TestActiveOrganizationAccessExcludesInactiveLifecycleStates(t *testing.T) {
 	pool := testdb.OpenMigratedDatabase(t)
 	userService := userservices.NewUserService(userrepositories.NewUserRepository(pool))
-	user, err := userService.ResolveUser(t.Context(), "authlier-subject-access")
-	if err != nil {
-		t.Fatalf("resolve user: %v", err)
-	}
-
 	repository := repositories.NewOrganizationRepository(pool)
 	service := organizationservices.NewOrganizationManagementService(repository)
-	organizations := make([]uuid.UUID, 0, 7)
-	roleIDs := make([]uuid.UUID, 0, 7)
-	for index := range 7 {
+	users := make([]uuid.UUID, 0, 6)
+	organizations := make([]uuid.UUID, 0, 6)
+	roleIDs := make([]uuid.UUID, 0, 6)
+	for index := range 6 {
+		user, err := userService.ResolveUser(t.Context(), fmt.Sprintf("authlier-subject-access-%d", index+1))
+		if err != nil {
+			t.Fatalf("resolve user %d: %v", index+1, err)
+		}
 		organization, membership, err := service.CreateOrganization(
 			t.Context(),
 			fmt.Sprintf("Organization %d", index+1),
@@ -35,6 +35,7 @@ func TestActiveOrganizationAccessExcludesInactiveLifecycleStates(t *testing.T) {
 		if err != nil {
 			t.Fatalf("create organization %d: %v", index+1, err)
 		}
+		users = append(users, user.ID)
 		organizations = append(organizations, organization.ID)
 		roleIDs = append(roleIDs, membership.RoleID)
 	}
@@ -43,11 +44,11 @@ func TestActiveOrganizationAccessExcludesInactiveLifecycleStates(t *testing.T) {
 		query string
 		args  []any
 	}{
-		{"UPDATE organization_memberships SET removed_at = now() WHERE organization_id = $1 AND user_id = $2", []any{organizations[2], user.ID}},
-		{"UPDATE organization_memberships SET status = 'suspended' WHERE organization_id = $1 AND user_id = $2", []any{organizations[3], user.ID}},
-		{"UPDATE organizations SET deleted_at = now() WHERE id = $1", []any{organizations[4]}},
-		{"UPDATE organizations SET suspended_at = now() WHERE id = $1", []any{organizations[5]}},
-		{"UPDATE organization_roles SET deleted_at = now() WHERE id = $1", []any{roleIDs[6]}},
+		{"UPDATE organization_memberships SET removed_at = now() WHERE organization_id = $1 AND user_id = $2", []any{organizations[1], users[1]}},
+		{"UPDATE organization_memberships SET status = 'suspended' WHERE organization_id = $1 AND user_id = $2", []any{organizations[2], users[2]}},
+		{"UPDATE organizations SET deleted_at = now() WHERE id = $1", []any{organizations[3]}},
+		{"UPDATE organizations SET suspended_at = now() WHERE id = $1", []any{organizations[4]}},
+		{"UPDATE organization_roles SET deleted_at = now() WHERE id = $1", []any{roleIDs[5]}},
 	}
 	for _, statement := range statements {
 		if _, err := pool.Exec(t.Context(), statement.query, statement.args...); err != nil {
@@ -55,19 +56,29 @@ func TestActiveOrganizationAccessExcludesInactiveLifecycleStates(t *testing.T) {
 		}
 	}
 
-	access, err := repository.ActiveOrganizationAccessByUser(t.Context(), user.ID)
+	access, err := repository.ActiveOrganizationAccessByUser(t.Context(), users[0])
 	if err != nil {
 		t.Fatalf("list active organization access: %v", err)
 	}
-	if len(access) != 2 {
-		t.Fatalf("active organization count = %d, want 2", len(access))
+	if len(access) != 1 {
+		t.Fatalf("active organization count = %d, want 1", len(access))
 	}
-	if access[0].OrganizationID != organizations[0] || access[1].OrganizationID != organizations[1] {
-		t.Fatalf("active organizations = %#v, want first two organizations", access)
+	if access[0].OrganizationID != organizations[0] {
+		t.Fatalf("active organization = %#v, want first organization", access)
 	}
 	for _, organizationAccess := range access {
 		if !organizationAccess.Owner {
 			t.Fatalf("owner access for %s was not preserved", organizationAccess.OrganizationID)
+		}
+	}
+
+	for index := 1; index < len(users); index++ {
+		inactiveAccess, err := repository.ActiveOrganizationAccessByUser(t.Context(), users[index])
+		if err != nil {
+			t.Fatalf("list inactive organization access %d: %v", index, err)
+		}
+		if len(inactiveAccess) != 0 {
+			t.Fatalf("inactive organization access %d = %#v, want none", index, inactiveAccess)
 		}
 	}
 }

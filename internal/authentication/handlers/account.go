@@ -34,7 +34,8 @@ type sessionResponse struct {
 }
 
 type userResponse struct {
-	ID string `json:"id"`
+	ID    string `json:"id"`
+	Email string `json:"email"`
 }
 
 type organizationAccessResponse struct {
@@ -104,7 +105,7 @@ func (handler *AccountHandler) Get(response http.ResponseWriter, request *http.R
 			CreatedAt: tenant.Session.CreatedAt,
 			ExpiresAt: tenant.Session.ExpiresAt,
 		},
-		User:          userResponse{ID: tenant.User.ID.String()},
+		User:          userResponse{ID: tenant.User.ID.String(), Email: tenant.User.Email},
 		Organizations: organizations,
 	}); err != nil {
 		handler.logger.ErrorContext(request.Context(), "Could not send user account response",

@@ -13,24 +13,41 @@ import (
 )
 
 const createProject = `-- name: CreateProject :one
-INSERT INTO projects (id, organization_id, name)
-VALUES ($1, $2, $3)
-RETURNING id, organization_id, name, created_at, updated_at
+INSERT INTO projects (id, organization_id, name, slug)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (organization_id, slug) DO NOTHING
+RETURNING id, organization_id, name, slug, created_at, updated_at
 `
 
 type CreateProjectParams struct {
 	ID             uuid.UUID
 	OrganizationID uuid.UUID
 	Name           string
+	Slug           string
 }
 
-func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error) {
-	row := q.db.QueryRow(ctx, createProject, arg.ID, arg.OrganizationID, arg.Name)
-	var i Project
+type CreateProjectRow struct {
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+	Name           string
+	Slug           string
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+}
+
+func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (CreateProjectRow, error) {
+	row := q.db.QueryRow(ctx, createProject,
+		arg.ID,
+		arg.OrganizationID,
+		arg.Name,
+		arg.Slug,
+	)
+	var i CreateProjectRow
 	err := row.Scan(
 		&i.ID,
 		&i.OrganizationID,
 		&i.Name,
+		&i.Slug,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -68,11 +85,88 @@ func (q *Queries) CreateProjectEnvironment(ctx context.Context, arg CreateProjec
 	return i, err
 }
 
+const listAccessibleProjects = `-- name: ListAccessibleProjects :many
+SELECT
+    projects.id,
+    projects.organization_id,
+    projects.name,
+    projects.slug,
+    projects.created_at,
+    projects.updated_at,
+    organizations.name AS organization_name,
+    project_environments.id AS environment_id,
+    project_environments.environment,
+    project_environments.activated_at AS environment_activated_at,
+    project_environments.created_at AS environment_created_at
+FROM organization_memberships
+JOIN organizations
+    ON organizations.id = organization_memberships.organization_id
+JOIN projects
+    ON projects.organization_id = organizations.id
+JOIN project_environments
+    ON project_environments.project_id = projects.id
+WHERE organization_memberships.user_id = $1
+  AND organization_memberships.status = 'active'
+  AND organization_memberships.removed_at IS NULL
+  AND organizations.deleted_at IS NULL
+  AND organizations.suspended_at IS NULL
+ORDER BY
+    projects.created_at,
+    projects.id,
+    CASE project_environments.environment WHEN 'sandbox' THEN 0 ELSE 1 END
+`
+
+type ListAccessibleProjectsRow struct {
+	ID                     uuid.UUID
+	OrganizationID         uuid.UUID
+	Name                   string
+	Slug                   string
+	CreatedAt              pgtype.Timestamptz
+	UpdatedAt              pgtype.Timestamptz
+	OrganizationName       string
+	EnvironmentID          uuid.UUID
+	Environment            string
+	EnvironmentActivatedAt pgtype.Timestamptz
+	EnvironmentCreatedAt   pgtype.Timestamptz
+}
+
+func (q *Queries) ListAccessibleProjects(ctx context.Context, userID uuid.UUID) ([]ListAccessibleProjectsRow, error) {
+	rows, err := q.db.Query(ctx, listAccessibleProjects, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAccessibleProjectsRow
+	for rows.Next() {
+		var i ListAccessibleProjectsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.Name,
+			&i.Slug,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.OrganizationName,
+			&i.EnvironmentID,
+			&i.Environment,
+			&i.EnvironmentActivatedAt,
+			&i.EnvironmentCreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listProjectEnvironments = `-- name: ListProjectEnvironments :many
 SELECT id, project_id, environment, activated_at, created_at
 FROM project_environments
 WHERE project_id = $1
-ORDER BY environment
+ORDER BY CASE environment WHEN 'sandbox' THEN 0 ELSE 1 END
 `
 
 func (q *Queries) ListProjectEnvironments(ctx context.Context, projectID uuid.UUID) ([]ProjectEnvironment, error) {

@@ -24,6 +24,10 @@ import (
 	"github.com/Rahmannugar/consumel-server/internal/infra/emaildelivery"
 	"github.com/Rahmannugar/consumel-server/internal/infra/ratelimit"
 	"github.com/Rahmannugar/consumel-server/internal/infra/telemetry"
+	onboardingrepositories "github.com/Rahmannugar/consumel-server/internal/onboarding/repositories"
+	onboardingservices "github.com/Rahmannugar/consumel-server/internal/onboarding/services"
+	projectrepositories "github.com/Rahmannugar/consumel-server/internal/projects/repositories"
+	projectservices "github.com/Rahmannugar/consumel-server/internal/projects/services"
 	userrepositories "github.com/Rahmannugar/consumel-server/internal/users/repositories"
 	userservices "github.com/Rahmannugar/consumel-server/internal/users/services"
 )
@@ -219,12 +223,21 @@ func run() (runError error) {
 		userService,
 		authenticationrepositories.NewAccountContextRepository(databasePool),
 	)
+	onboardingService := onboardingservices.New(
+		onboardingrepositories.New(databasePool, emailQueue),
+		cfg.Auth.ClientBaseURL,
+	)
+	projectService := projectservices.NewProjectManagementService(
+		projectrepositories.NewProjectRepository(databasePool),
+	)
 	router, err := newRouter(
 		cfg,
 		telemetryRuntime,
 		databasePool,
 		auth.Handler(),
 		tenantService,
+		onboardingService,
+		projectService,
 		distributedLimiter,
 		logger,
 	)

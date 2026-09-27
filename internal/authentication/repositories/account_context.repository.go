@@ -34,6 +34,7 @@ func (repository *AccountContextRepository) AccountContextByAuthlierSubjectID(
 	user := usermodels.User{
 		ID:                rows[0].UserID,
 		AuthlierSubjectID: rows[0].AuthlierSubjectID,
+		Email:             rows[0].UserEmail,
 		CreatedAt:         rows[0].UserCreatedAt.Time,
 	}
 	access := make([]organizationmodels.OrganizationAccess, 0, len(rows))

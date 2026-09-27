@@ -102,6 +102,54 @@
         },
         "description": "Authentication is required."
       },
+      "OnboardingConflict": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "organization_already_exists",
+                "message": "This account already belongs to an organization that needs attention."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The account already has organization access that cannot be changed by onboarding."
+      },
+      "OnboardingFailed": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "onboarding_failed",
+                "message": "Consumel could not create your project. Try again shortly."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The onboarding transaction could not be completed."
+      },
+      "OnboardingInvalid": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "invalid_request",
+                "message": "Enter an organization name and project name between 1 and 120 characters."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The organization name or project name is invalid."
+      },
       "PasswordResetFailed": {
         "content": {
           "application/json": {
@@ -127,6 +175,22 @@
           }
         },
         "description": "The reset workflow could not be completed."
+      },
+      "ProjectsLoadFailed": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "projects_load_failed",
+                "message": "Consumel could not load your projects. Try again shortly."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The signed-in user's projects could not be loaded."
       },
       "RateLimited": {
         "content": {
@@ -300,6 +364,7 @@
             "items": {
               "$ref": "#/components/schemas/OrganizationAccess"
             },
+            "maxItems": 1,
             "type": "array"
           },
           "session": {
@@ -341,12 +406,17 @@
       "AccountUser": {
         "additionalProperties": false,
         "properties": {
+          "email": {
+            "format": "email",
+            "type": "string"
+          },
           "id": {
             "type": "string"
           }
         },
         "required": [
-          "id"
+          "id",
+          "email"
         ],
         "type": "object"
       },
@@ -428,6 +498,9 @@
             "properties": {
               "code": {
                 "type": "string"
+              },
+              "message": {
+                "type": "string"
               }
             },
             "required": [
@@ -484,6 +557,58 @@
         ],
         "type": "object"
       },
+      "OnboardingOrganization": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "OnboardingSetup": {
+        "additionalProperties": false,
+        "properties": {
+          "organization": {
+            "$ref": "#/components/schemas/OnboardingOrganization"
+          },
+          "project": {
+            "$ref": "#/components/schemas/Project"
+          }
+        },
+        "required": [
+          "organization",
+          "project"
+        ],
+        "type": "object"
+      },
+      "OnboardingSetupRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "organizationName": {
+            "maxLength": 120,
+            "minLength": 1,
+            "type": "string"
+          },
+          "projectName": {
+            "maxLength": 120,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "organizationName",
+          "projectName"
+        ],
+        "type": "object"
+      },
       "OrganizationAccess": {
         "additionalProperties": false,
         "properties": {
@@ -515,6 +640,94 @@
           "owner",
           "roleId",
           "roleName"
+        ],
+        "type": "object"
+      },
+      "Project": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "environments": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectEnvironment"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "organizationId": {
+            "type": "string"
+          },
+          "organizationName": {
+            "type": "string"
+          },
+          "slug": {
+            "example": "acme-api",
+            "maxLength": 120,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "organizationId",
+          "organizationName",
+          "name",
+          "slug",
+          "environments",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "ProjectEnvironment": {
+        "additionalProperties": false,
+        "properties": {
+          "activatedAt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "enum": [
+              "sandbox",
+              "live"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "activatedAt"
+        ],
+        "type": "object"
+      },
+      "Projects": {
+        "additionalProperties": false,
+        "properties": {
+          "projects": {
+            "items": {
+              "$ref": "#/components/schemas/Project"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "projects"
         ],
         "type": "object"
       },
@@ -729,8 +942,8 @@
                       "name": "Acme",
                       "owner": true,
                       "roleId": "01K5A80JPQ1PVX1XBQXF8VZC52",
-                      "roleName": "Owner",
-                      "roleSystemKey": null
+                      "roleName": "Admin",
+                      "roleSystemKey": "admin"
                     }
                   ],
                   "session": {
@@ -739,6 +952,7 @@
                     "id": "01K5A7Q72E9WPJ8D4J13FQ0A6R"
                   },
                   "user": {
+                    "email": "developer@example.com",
                     "id": "01K5A7PZ9SA93YN3PX84B9G6KB"
                   }
                 },
@@ -1651,6 +1865,180 @@
         "summary": "Report whether PostgreSQL is reachable.",
         "tags": [
           "Health"
+        ]
+      }
+    },
+    "/onboarding": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "organizationName": "Acme",
+                "projectName": "Acme API"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/OnboardingSetupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "organization": {
+                    "id": "0199a416-d2c8-75ea-bdb4-1d13c627169b",
+                    "name": "Acme"
+                  },
+                  "project": {
+                    "createdAt": "2026-09-25T12:08:00Z",
+                    "environments": [
+                      {
+                        "activatedAt": "2026-09-25T12:08:00Z",
+                        "id": "0199a417-1ae1-7b67-ad5b-809be2f9ca0a",
+                        "name": "sandbox"
+                      },
+                      {
+                        "activatedAt": null,
+                        "id": "0199a417-30d7-7ccc-978b-ec14f67a4d14",
+                        "name": "live"
+                      }
+                    ],
+                    "id": "0199a417-05da-7aa2-b024-2011f24972da",
+                    "name": "Acme API",
+                    "organizationId": "0199a416-d2c8-75ea-bdb4-1d13c627169b",
+                    "organizationName": "Acme",
+                    "slug": "acme-api"
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardingSetup"
+                }
+              }
+            },
+            "description": "A repeated request returned the existing first project without creating duplicates or queueing another welcome email."
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "organization": {
+                    "id": "0199a416-d2c8-75ea-bdb4-1d13c627169b",
+                    "name": "Acme"
+                  },
+                  "project": {
+                    "createdAt": "2026-09-25T12:08:00Z",
+                    "environments": [
+                      {
+                        "activatedAt": "2026-09-25T12:08:00Z",
+                        "id": "0199a417-1ae1-7b67-ad5b-809be2f9ca0a",
+                        "name": "sandbox"
+                      },
+                      {
+                        "activatedAt": null,
+                        "id": "0199a417-30d7-7ccc-978b-ec14f67a4d14",
+                        "name": "live"
+                      }
+                    ],
+                    "id": "0199a417-05da-7aa2-b024-2011f24972da",
+                    "name": "Acme API",
+                    "organizationId": "0199a416-d2c8-75ea-bdb4-1d13c627169b",
+                    "organizationName": "Acme",
+                    "slug": "acme-api"
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardingSetup"
+                }
+              }
+            },
+            "description": "The organization, owner access, first project, Sandbox, and Live environment were created, and the welcome email was queued."
+          },
+          "400": {
+            "$ref": "#/components/responses/OnboardingInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "409": {
+            "$ref": "#/components/responses/OnboardingConflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/OnboardingFailed"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "Create the signed-in owner's organization and first project.",
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/v1/projects": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "projects": [
+                    {
+                      "createdAt": "2026-09-25T12:08:00Z",
+                      "environments": [
+                        {
+                          "activatedAt": "2026-09-25T12:08:00Z",
+                          "id": "0199a417-1ae1-7b67-ad5b-809be2f9ca0a",
+                          "name": "sandbox"
+                        },
+                        {
+                          "activatedAt": null,
+                          "id": "0199a417-30d7-7ccc-978b-ec14f67a4d14",
+                          "name": "live"
+                        }
+                      ],
+                      "id": "0199a417-05da-7aa2-b024-2011f24972da",
+                      "name": "Acme API",
+                      "organizationId": "0199a416-d2c8-75ea-bdb4-1d13c627169b",
+                      "organizationName": "Acme",
+                      "slug": "acme-api"
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Projects"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "500": {
+            "$ref": "#/components/responses/ProjectsLoadFailed"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "Return the signed-in user's active projects and environments.",
+        "tags": [
+          "Projects"
         ]
       }
     }

@@ -58,4 +58,12 @@ func TestOrganizationCreationPersistsBuiltInRoles(t *testing.T) {
 	if membership.RoleID != adminRole.ID {
 		t.Fatalf("owner membership role ID = %s, want Admin role %s", membership.RoleID, adminRole.ID)
 	}
+
+	if _, _, err := service.CreateOrganization(
+		t.Context(),
+		"Second Organization",
+		user.ID,
+	); err == nil {
+		t.Fatal("created a second current organization for one user")
+	}
 }

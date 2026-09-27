@@ -3,6 +3,7 @@
 package integration_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Rahmannugar/consumel-server/internal/infra/database/testdb"
@@ -43,6 +44,24 @@ func TestProjectCreationPersistsSandboxAndLiveEnvironments(t *testing.T) {
 	}
 	if project.ID.Version() != 7 {
 		t.Fatalf("project ID version = %d, want 7", project.ID.Version())
+	}
+	if project.Slug != "consumel-test-project" {
+		t.Fatalf("project slug = %q, want consumel-test-project", project.Slug)
+	}
+	collidingProject, err := projectService.CreateProject(
+		t.Context(),
+		organization.ID,
+		"Consumel-Test Project",
+	)
+	if err != nil {
+		t.Fatalf("create project with colliding route slug: %v", err)
+	}
+	if collidingProject.Slug == project.Slug ||
+		!strings.HasPrefix(collidingProject.Slug, "consumel-test-project-") {
+		t.Fatalf(
+			"colliding project slug = %q, want a suffixed consumel-test-project slug",
+			collidingProject.Slug,
+		)
 	}
 
 	environments, err := projectRepository.ProjectEnvironments(t.Context(), project.ID)
