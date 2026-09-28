@@ -176,6 +176,148 @@
         },
         "description": "The reset workflow could not be completed."
       },
+      "ProjectAPIKeyConflict": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "api_key_already_exists": {
+                "value": {
+                  "error": {
+                    "code": "api_key_already_exists"
+                  }
+                }
+              },
+              "environment_inactive": {
+                "value": {
+                  "error": {
+                    "code": "environment_inactive"
+                  }
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The requested API key action conflicts with the environment state."
+      },
+      "ProjectAPIKeyFailed": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "api_key_operation_failed",
+                "message": "Consumel could not complete the API key action. Try again shortly."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The API key action could not be completed."
+      },
+      "ProjectAPIKeyInvalid": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "invalid_request",
+                "message": "Choose a valid project and environment."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The project ID or environment is invalid."
+      },
+      "ProjectAPIKeyNotFound": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "api_key_not_found": {
+                "value": {
+                  "error": {
+                    "code": "api_key_not_found"
+                  }
+                }
+              },
+              "project_environment_not_found": {
+                "value": {
+                  "error": {
+                    "code": "project_environment_not_found"
+                  }
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The project environment or active API key is unavailable."
+      },
+      "ProjectCreateConflict": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "organization_required": {
+                "value": {
+                  "error": {
+                    "code": "organization_required"
+                  }
+                }
+              },
+              "project_name_exists": {
+                "value": {
+                  "error": {
+                    "code": "project_name_exists"
+                  }
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The project cannot be created in the current organization state."
+      },
+      "ProjectCreateFailed": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "project_create_failed",
+                "message": "Consumel could not create the project. Try again shortly."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The project could not be created."
+      },
+      "ProjectCreateInvalid": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "invalid_request",
+                "message": "Enter a project name between 1 and 120 characters."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The project name is invalid."
+      },
       "ProjectsLoadFailed": {
         "content": {
           "application/json": {
@@ -456,6 +598,20 @@
         ],
         "type": "object"
       },
+      "CreateProjectRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
       "CredentialsRequest": {
         "additionalProperties": false,
         "properties": {
@@ -685,6 +841,93 @@
           "slug",
           "environments",
           "createdAt"
+        ],
+        "type": "object"
+      },
+      "ProjectAPIKey": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "environment": {
+            "enum": [
+              "sandbox",
+              "live"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "lastFour": {
+            "example": "QBY0",
+            "maxLength": 4,
+            "minLength": 4,
+            "type": "string"
+          },
+          "lastUsedAt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prefix": {
+            "enum": [
+              "cm_test_",
+              "cm_live_"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "environment",
+          "prefix",
+          "lastFour",
+          "createdAt",
+          "lastUsedAt"
+        ],
+        "type": "object"
+      },
+      "ProjectAPIKeyCreated": {
+        "additionalProperties": false,
+        "properties": {
+          "apiKey": {
+            "$ref": "#/components/schemas/ProjectAPIKey"
+          },
+          "secret": {
+            "example": "cm_test_3xKq7VfJm2zY8wN4aBcD6eFgH9iLpQrStUvWx0Z1A2B",
+            "pattern": "^cm_(test|live)_[A-Za-z0-9_-]{43}$",
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "apiKey",
+          "secret"
+        ],
+        "type": "object"
+      },
+      "ProjectAPIKeyStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "apiKey": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ProjectAPIKey"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "apiKey"
         ],
         "type": "object"
       },
@@ -2037,6 +2280,411 @@
           }
         ],
         "summary": "Return the signed-in user's active projects and environments.",
+        "tags": [
+          "Projects"
+        ]
+      },
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "Usage Service"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/CreateProjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {},
+                "schema": {
+                  "$ref": "#/components/schemas/Project"
+                }
+              }
+            },
+            "description": "Created."
+          },
+          "400": {
+            "$ref": "#/components/responses/ProjectCreateInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "409": {
+            "$ref": "#/components/responses/ProjectCreateConflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/ProjectCreateFailed"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "Create a project with isolated Sandbox and Live environments.",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/v1/projects/{projectId}/environments/{environment}/activate": {
+      "post": {
+        "parameters": [
+          {
+            "description": "The immutable ID of the project selected in the dashboard.",
+            "in": "path",
+            "name": "projectId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The selected isolated project environment.",
+            "in": "path",
+            "name": "environment",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {},
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectEnvironment"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "400": {
+            "$ref": "#/components/responses/ProjectAPIKeyInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProjectAPIKeyNotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/ProjectAPIKeyFailed"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "Activate the selected project environment explicitly.",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/v1/projects/{projectId}/environments/{environment}/api-key": {
+      "delete": {
+        "parameters": [
+          {
+            "description": "The immutable ID of the project selected in the dashboard.",
+            "in": "path",
+            "name": "projectId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The selected isolated project environment.",
+            "in": "path",
+            "name": "environment",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Completed without a response body."
+          },
+          "400": {
+            "$ref": "#/components/responses/ProjectAPIKeyInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProjectAPIKeyNotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/ProjectAPIKeyFailed"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "Revoke the environment's active API key.",
+        "tags": [
+          "Projects"
+        ]
+      },
+      "get": {
+        "parameters": [
+          {
+            "description": "The immutable ID of the project selected in the dashboard.",
+            "in": "path",
+            "name": "projectId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The selected isolated project environment.",
+            "in": "path",
+            "name": "environment",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "apiKey": {
+                    "createdAt": "2026-09-27T12:00:00Z",
+                    "environment": "sandbox",
+                    "id": "0199a7e1-8f18-7b6e-90c9-dc7b4ace22d1",
+                    "lastFour": "Z1A2",
+                    "lastUsedAt": null,
+                    "prefix": "cm_test_"
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectAPIKeyStatus"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "400": {
+            "$ref": "#/components/responses/ProjectAPIKeyInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProjectAPIKeyNotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/ProjectAPIKeyFailed"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "Return safe metadata for the environment's active API key.",
+        "tags": [
+          "Projects"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "description": "The immutable ID of the project selected in the dashboard.",
+            "in": "path",
+            "name": "projectId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The selected isolated project environment.",
+            "in": "path",
+            "name": "environment",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "apiKey": {
+                    "createdAt": "2026-09-27T12:00:00Z",
+                    "environment": "sandbox",
+                    "id": "0199a7e1-8f18-7b6e-90c9-dc7b4ace22d1",
+                    "lastFour": "Z1A2",
+                    "lastUsedAt": null,
+                    "prefix": "cm_test_"
+                  },
+                  "secret": "cm_test_3xKq7VfJm2zY8wN4aBcD6eFgH9iLpQrStUvWx0Z1A2B"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectAPIKeyCreated"
+                }
+              }
+            },
+            "description": "Created."
+          },
+          "400": {
+            "$ref": "#/components/responses/ProjectAPIKeyInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProjectAPIKeyNotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/ProjectAPIKeyConflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/ProjectAPIKeyFailed"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "Create the environment's first active API key and reveal its plaintext once.",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/v1/projects/{projectId}/environments/{environment}/api-key/replace": {
+      "post": {
+        "parameters": [
+          {
+            "description": "The immutable ID of the project selected in the dashboard.",
+            "in": "path",
+            "name": "projectId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The selected isolated project environment.",
+            "in": "path",
+            "name": "environment",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "apiKey": {
+                    "createdAt": "2026-09-27T12:00:00Z",
+                    "environment": "sandbox",
+                    "id": "0199a7e1-8f18-7b6e-90c9-dc7b4ace22d1",
+                    "lastFour": "Z1A2",
+                    "lastUsedAt": null,
+                    "prefix": "cm_test_"
+                  },
+                  "secret": "cm_test_3xKq7VfJm2zY8wN4aBcD6eFgH9iLpQrStUvWx0Z1A2B"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectAPIKeyCreated"
+                }
+              }
+            },
+            "description": "Created."
+          },
+          "400": {
+            "$ref": "#/components/responses/ProjectAPIKeyInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProjectAPIKeyNotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/ProjectAPIKeyConflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/ProjectAPIKeyFailed"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "Revoke the active API key and reveal its replacement once.",
         "tags": [
           "Projects"
         ]

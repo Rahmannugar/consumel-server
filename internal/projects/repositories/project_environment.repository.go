@@ -2,12 +2,14 @@ package repositories
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/Rahmannugar/consumel-server/internal/projects/models"
 	projectdb "github.com/Rahmannugar/consumel-server/internal/projects/repositories/generated"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -25,6 +27,27 @@ func (repository *ProjectRepository) ProjectEnvironments(
 		result = append(result, mapProjectEnvironment(environment))
 	}
 	return result, nil
+}
+
+func (repository *ProjectRepository) ActivateEnvironment(
+	ctx context.Context,
+	userID uuid.UUID,
+	projectID uuid.UUID,
+	environment models.ProjectEnvironmentName,
+) (models.ProjectEnvironment, error) {
+	activated, err := repository.queries.ActivateAccessibleProjectEnvironment(
+		ctx,
+		projectdb.ActivateAccessibleProjectEnvironmentParams{
+			ID: projectID, Environment: string(environment), UserID: userID,
+		},
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return models.ProjectEnvironment{}, models.ErrProjectEnvironmentUnavailable
+	}
+	if err != nil {
+		return models.ProjectEnvironment{}, fmt.Errorf("activate project environment: %w", err)
+	}
+	return mapProjectEnvironment(activated), nil
 }
 
 func createProjectEnvironment(

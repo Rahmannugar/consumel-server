@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/Rahmannugar/consumel-server/internal/common/ids"
@@ -14,7 +13,6 @@ import (
 
 var (
 	ErrOrganizationIDRequired = errors.New("organization ID is required")
-	ErrProjectNameRequired    = errors.New("project name is required")
 	ErrUserIDRequired         = errors.New("user ID is required")
 )
 
@@ -25,6 +23,40 @@ type ProjectRepository interface {
 		[]models.ProjectEnvironment,
 	) (models.Project, error)
 	ListAccessibleProjects(context.Context, uuid.UUID) ([]models.Project, error)
+	ActiveAPIKey(
+		context.Context,
+		uuid.UUID,
+		uuid.UUID,
+		models.ProjectEnvironmentName,
+	) (*models.APIKey, error)
+	CreateAPIKey(
+		context.Context,
+		uuid.UUID,
+		uuid.UUID,
+		models.ProjectEnvironmentName,
+		models.APIKey,
+		[]byte,
+	) (models.APIKey, error)
+	ReplaceAPIKey(
+		context.Context,
+		uuid.UUID,
+		uuid.UUID,
+		models.ProjectEnvironmentName,
+		models.APIKey,
+		[]byte,
+	) (models.APIKey, error)
+	RevokeAPIKey(
+		context.Context,
+		uuid.UUID,
+		uuid.UUID,
+		models.ProjectEnvironmentName,
+	) error
+	ActivateEnvironment(
+		context.Context,
+		uuid.UUID,
+		uuid.UUID,
+		models.ProjectEnvironmentName,
+	) (models.ProjectEnvironment, error)
 }
 
 func (service *ProjectManagementService) ListProjects(
@@ -54,10 +86,11 @@ func (service *ProjectManagementService) CreateProject(
 		return models.Project{}, ErrOrganizationIDRequired
 	}
 
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return models.Project{}, ErrProjectNameRequired
+	request, err := (models.CreateProjectRequest{Name: name}).Validate()
+	if err != nil {
+		return models.Project{}, err
 	}
+	name = request.Name
 
 	projectID, err := ids.New()
 	if err != nil {

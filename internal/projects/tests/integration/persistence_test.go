@@ -3,6 +3,7 @@
 package integration_test
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -62,6 +63,14 @@ func TestProjectCreationPersistsSandboxAndLiveEnvironments(t *testing.T) {
 			"colliding project slug = %q, want a suffixed consumel-test-project slug",
 			collidingProject.Slug,
 		)
+	}
+	_, err = projectService.CreateProject(
+		t.Context(),
+		organization.ID,
+		"  consumel test project  ",
+	)
+	if !errors.Is(err, projectmodels.ErrProjectNameExists) {
+		t.Fatalf("duplicate project error = %v, want ErrProjectNameExists", err)
 	}
 
 	environments, err := projectRepository.ProjectEnvironments(t.Context(), project.ID)

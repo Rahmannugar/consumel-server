@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	onboardingmodels "github.com/Rahmannugar/consumel-server/internal/onboarding/models"
+	projectmodels "github.com/Rahmannugar/consumel-server/internal/projects/models"
 )
 
 type operation struct {
@@ -19,6 +20,18 @@ type operation struct {
 	AlternateSuccess   map[string]string
 	Errors             map[string]string
 	Protected          bool
+	Parameters         []parameter
+}
+
+type parameter struct {
+	Name        string
+	Description string
+	Schema      map[string]any
+}
+
+var projectEnvironmentParameters = []parameter{
+	{Name: "projectId", Description: "The immutable ID of the project selected in the dashboard.", Schema: map[string]any{"type": "string", "format": "uuid"}},
+	{Name: "environment", Description: "The selected isolated project environment.", Schema: map[string]any{"type": "string", "enum": []string{"sandbox", "live"}}},
 }
 
 var operations = []operation{
@@ -46,6 +59,12 @@ var operations = []operation{
 	{Method: "get", Path: "/health/ready", Summary: "Report whether PostgreSQL is reachable.", SuccessCode: "200", Success: "Health"},
 	{Method: "post", Path: "/onboarding", Summary: "Create the signed-in owner's organization and first project.", Request: "OnboardingSetupRequest", SuccessCode: "201", Success: "OnboardingSetup", SuccessDescription: "The organization, owner access, first project, Sandbox, and Live environment were created, and the welcome email was queued.", AlternateSuccess: map[string]string{"200": "A repeated request returned the existing first project without creating duplicates or queueing another welcome email."}, Protected: true, Errors: map[string]string{"400": "OnboardingInvalid", "409": "OnboardingConflict", "500": "OnboardingFailed"}},
 	{Method: "get", Path: "/v1/projects", Summary: "Return the signed-in user's active projects and environments.", SuccessCode: "200", Success: "Projects", Protected: true, Errors: map[string]string{"500": "ProjectsLoadFailed"}},
+	{Method: "post", Path: "/v1/projects", Summary: "Create a project with isolated Sandbox and Live environments.", Request: "CreateProjectRequest", SuccessCode: "201", Success: "Project", Protected: true, Errors: map[string]string{"400": "ProjectCreateInvalid", "409": "ProjectCreateConflict", "500": "ProjectCreateFailed"}},
+	{Method: "get", Path: "/v1/projects/{projectId}/environments/{environment}/api-key", Summary: "Return safe metadata for the environment's active API key.", SuccessCode: "200", Success: "ProjectAPIKeyStatus", Protected: true, Parameters: projectEnvironmentParameters, Errors: map[string]string{"400": "ProjectAPIKeyInvalid", "404": "ProjectAPIKeyNotFound", "500": "ProjectAPIKeyFailed"}},
+	{Method: "post", Path: "/v1/projects/{projectId}/environments/{environment}/api-key", Summary: "Create the environment's first active API key and reveal its plaintext once.", SuccessCode: "201", Success: "ProjectAPIKeyCreated", Protected: true, Parameters: projectEnvironmentParameters, Errors: map[string]string{"400": "ProjectAPIKeyInvalid", "404": "ProjectAPIKeyNotFound", "409": "ProjectAPIKeyConflict", "500": "ProjectAPIKeyFailed"}},
+	{Method: "delete", Path: "/v1/projects/{projectId}/environments/{environment}/api-key", Summary: "Revoke the environment's active API key.", SuccessCode: "204", Protected: true, Parameters: projectEnvironmentParameters, Errors: map[string]string{"400": "ProjectAPIKeyInvalid", "404": "ProjectAPIKeyNotFound", "500": "ProjectAPIKeyFailed"}},
+	{Method: "post", Path: "/v1/projects/{projectId}/environments/{environment}/api-key/replace", Summary: "Revoke the active API key and reveal its replacement once.", SuccessCode: "201", Success: "ProjectAPIKeyCreated", Protected: true, Parameters: projectEnvironmentParameters, Errors: map[string]string{"400": "ProjectAPIKeyInvalid", "404": "ProjectAPIKeyNotFound", "409": "ProjectAPIKeyConflict", "500": "ProjectAPIKeyFailed"}},
+	{Method: "post", Path: "/v1/projects/{projectId}/environments/{environment}/activate", Summary: "Activate the selected project environment explicitly.", SuccessCode: "200", Success: "ProjectEnvironment", Protected: true, Parameters: projectEnvironmentParameters, Errors: map[string]string{"400": "ProjectAPIKeyInvalid", "404": "ProjectAPIKeyNotFound", "500": "ProjectAPIKeyFailed"}},
 }
 
 // Document builds the deterministic OpenAPI contract served by the API and
@@ -94,6 +113,16 @@ func Document() ([]byte, error) {
 				"content":  jsonContent(schemaReference(endpoint.Request), exampleFor(endpoint.Request)),
 			}
 		}
+		if len(endpoint.Parameters) > 0 {
+			parameters := make([]map[string]any, 0, len(endpoint.Parameters))
+			for _, value := range endpoint.Parameters {
+				parameters = append(parameters, map[string]any{
+					"name": value.Name, "in": "path", "required": true,
+					"description": value.Description, "schema": value.Schema,
+				})
+			}
+			operationDocument["parameters"] = parameters
+		}
 		if endpoint.Protected {
 			operationDocument["security"] = []map[string][]string{
 				{"productionCookieSession": {}},
@@ -141,6 +170,7 @@ func schemas() map[string]any {
 		"AuthorizationURL":       object([]string{"url"}, map[string]any{"url": map[string]any{"type": "string", "format": "uri"}}),
 		"ChangePasswordRequest":  object([]string{"currentPassword", "newPassword"}, map[string]any{"currentPassword": stringProperty(), "newPassword": password, "revokeOtherSessions": map[string]any{"type": "boolean"}}),
 		"CredentialsRequest":     object([]string{"email", "password"}, map[string]any{"email": map[string]any{"type": "string", "format": "email"}, "password": password}),
+		"CreateProjectRequest":   projectmodels.CreateProjectRequestOpenAPISchema(),
 		"EmailRequest":           object([]string{"email"}, map[string]any{"email": map[string]any{"type": "string", "format": "email"}}),
 		"Error":                  object([]string{"error"}, map[string]any{"error": object([]string{"code"}, map[string]any{"code": stringProperty(), "message": stringProperty()})}),
 		"Health":                 object([]string{"status"}, map[string]any{"status": map[string]any{"type": "string", "example": "ok"}}),
@@ -170,6 +200,21 @@ func schemas() map[string]any {
 		"Projects": object([]string{"projects"}, map[string]any{
 			"projects": map[string]any{"type": "array", "items": schemaReference("Project")},
 		}),
+		"ProjectAPIKey": object([]string{"id", "environment", "prefix", "lastFour", "createdAt", "lastUsedAt"}, map[string]any{
+			"id":          map[string]any{"type": "string", "format": "uuid"},
+			"environment": map[string]any{"type": "string", "enum": []string{"sandbox", "live"}},
+			"prefix":      map[string]any{"type": "string", "enum": []string{"cm_test_", "cm_live_"}},
+			"lastFour":    map[string]any{"type": "string", "minLength": 4, "maxLength": 4, "example": "QBY0"},
+			"createdAt":   map[string]any{"type": "string", "format": "date-time"},
+			"lastUsedAt":  map[string]any{"type": []string{"string", "null"}, "format": "date-time"},
+		}),
+		"ProjectAPIKeyStatus": object([]string{"apiKey"}, map[string]any{
+			"apiKey": map[string]any{"oneOf": []map[string]any{schemaReference("ProjectAPIKey"), {"type": "null"}}},
+		}),
+		"ProjectAPIKeyCreated": object([]string{"apiKey", "secret"}, map[string]any{
+			"apiKey": schemaReference("ProjectAPIKey"),
+			"secret": map[string]any{"type": "string", "writeOnly": true, "pattern": `^cm_(test|live)_[A-Za-z0-9_-]{43}$`, "example": "cm_test_3xKq7VfJm2zY8wN4aBcD6eFgH9iLpQrStUvWx0Z1A2B"},
+		}),
 		"RemovePasswordRequest": object([]string{"currentPassword"}, map[string]any{"currentPassword": stringProperty()}),
 		"ResetPasswordRequest":  object([]string{"token", "newPassword"}, map[string]any{"token": stringProperty(), "newPassword": password}),
 		"RevokeSessionRequest":  object([]string{"sessionId"}, map[string]any{"sessionId": stringProperty()}),
@@ -198,6 +243,13 @@ func errorResponses() map[string]any {
 		"OnboardingInvalid":        errorResponseWithMessage("The organization name or project name is invalid.", "invalid_request", "Enter an organization name and project name between 1 and 120 characters."),
 		"PasswordResetFailed":      errorResponseExamples("The reset workflow could not be completed.", "password_reset_failed", "session_revocation_failed"),
 		"ProjectsLoadFailed":       errorResponseWithMessage("The signed-in user's projects could not be loaded.", "projects_load_failed", "Consumel could not load your projects. Try again shortly."),
+		"ProjectCreateInvalid":     errorResponseWithMessage("The project name is invalid.", "invalid_request", "Enter a project name between 1 and 120 characters."),
+		"ProjectCreateConflict":    errorResponseExamples("The project cannot be created in the current organization state.", "project_name_exists", "organization_required"),
+		"ProjectCreateFailed":      errorResponseWithMessage("The project could not be created.", "project_create_failed", "Consumel could not create the project. Try again shortly."),
+		"ProjectAPIKeyInvalid":     errorResponseWithMessage("The project ID or environment is invalid.", "invalid_request", "Choose a valid project and environment."),
+		"ProjectAPIKeyNotFound":    errorResponseExamples("The project environment or active API key is unavailable.", "project_environment_not_found", "api_key_not_found"),
+		"ProjectAPIKeyConflict":    errorResponseExamples("The requested API key action conflicts with the environment state.", "environment_inactive", "api_key_already_exists"),
+		"ProjectAPIKeyFailed":      errorResponseWithMessage("The API key action could not be completed.", "api_key_operation_failed", "Consumel could not complete the API key action. Try again shortly."),
 		"RateLimited":              errorResponse("Too many attempts were made.", "too_many_attempts"),
 		"RegistrationUnavailable":  errorResponse("Registration cannot be completed for this email address. The response does not disclose existing account state.", "registration_unavailable"),
 		"ResetPasswordInvalid":     errorResponseExamples("The request, reset token, or replacement password is invalid.", "invalid_request", "invalid_token", "invalid_password"),
@@ -297,7 +349,7 @@ func tagFor(path string) string {
 	if path == "/onboarding" {
 		return "Onboarding"
 	}
-	if path == "/v1/projects" {
+	if len(path) >= len("/v1/projects") && path[:len("/v1/projects")] == "/v1/projects" {
 		return "Projects"
 	}
 	return "Authentication"
@@ -345,6 +397,8 @@ func exampleFor(name string) map[string]any {
 		return map[string]any{"user": user, "session": accountSession, "organizations": []any{map[string]any{"id": "01K5A80AZ99MGRM9Q7K0SZV8XJ", "name": "Acme", "owner": true, "roleId": "01K5A80JPQ1PVX1XBQXF8VZC52", "roleName": "Admin", "roleSystemKey": "admin"}}}
 	case "OnboardingSetupRequest":
 		return map[string]any{"organizationName": "Acme", "projectName": "Acme API"}
+	case "CreateProjectRequest":
+		return map[string]any{"name": "Usage Service"}
 	case "OnboardingSetup":
 		project := projectExample()
 		return map[string]any{
@@ -353,8 +407,23 @@ func exampleFor(name string) map[string]any {
 		}
 	case "Projects":
 		return map[string]any{"projects": []any{projectExample()}}
+	case "ProjectAPIKeyStatus":
+		return map[string]any{"apiKey": apiKeyExample()}
+	case "ProjectAPIKeyCreated":
+		return map[string]any{
+			"apiKey": apiKeyExample(),
+			"secret": "cm_test_3xKq7VfJm2zY8wN4aBcD6eFgH9iLpQrStUvWx0Z1A2B",
+		}
 	default:
 		return map[string]any{}
+	}
+}
+
+func apiKeyExample() map[string]any {
+	return map[string]any{
+		"id": "0199a7e1-8f18-7b6e-90c9-dc7b4ace22d1", "environment": "sandbox",
+		"prefix": "cm_test_", "lastFour": "Z1A2",
+		"createdAt": "2026-09-27T12:00:00Z", "lastUsedAt": nil,
 	}
 }
 

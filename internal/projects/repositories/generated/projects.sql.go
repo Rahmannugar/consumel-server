@@ -12,6 +12,126 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const accessibleProjectEnvironment = `-- name: AccessibleProjectEnvironment :one
+SELECT
+    project_environments.id,
+    project_environments.project_id,
+    project_environments.environment,
+    project_environments.activated_at,
+    project_environments.created_at
+FROM project_environments
+JOIN projects ON projects.id = project_environments.project_id
+JOIN organizations ON organizations.id = projects.organization_id
+JOIN organization_memberships
+    ON organization_memberships.organization_id = organizations.id
+WHERE projects.id = $1
+  AND project_environments.environment = $2
+  AND organization_memberships.user_id = $3
+  AND organization_memberships.status = 'active'
+  AND organization_memberships.removed_at IS NULL
+  AND organizations.deleted_at IS NULL
+  AND organizations.suspended_at IS NULL
+`
+
+type AccessibleProjectEnvironmentParams struct {
+	ID          uuid.UUID
+	Environment string
+	UserID      uuid.UUID
+}
+
+func (q *Queries) AccessibleProjectEnvironment(ctx context.Context, arg AccessibleProjectEnvironmentParams) (ProjectEnvironment, error) {
+	row := q.db.QueryRow(ctx, accessibleProjectEnvironment, arg.ID, arg.Environment, arg.UserID)
+	var i ProjectEnvironment
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Environment,
+		&i.ActivatedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const activateAccessibleProjectEnvironment = `-- name: ActivateAccessibleProjectEnvironment :one
+UPDATE project_environments
+SET activated_at = COALESCE(project_environments.activated_at, now())
+FROM projects, organizations, organization_memberships
+WHERE project_environments.project_id = projects.id
+  AND projects.organization_id = organizations.id
+  AND organization_memberships.organization_id = organizations.id
+  AND projects.id = $1
+  AND project_environments.environment = $2
+  AND organization_memberships.user_id = $3
+  AND organization_memberships.status = 'active'
+  AND organization_memberships.removed_at IS NULL
+  AND organizations.deleted_at IS NULL
+  AND organizations.suspended_at IS NULL
+RETURNING
+    project_environments.id,
+    project_environments.project_id,
+    project_environments.environment,
+    project_environments.activated_at,
+    project_environments.created_at
+`
+
+type ActivateAccessibleProjectEnvironmentParams struct {
+	ID          uuid.UUID
+	Environment string
+	UserID      uuid.UUID
+}
+
+func (q *Queries) ActivateAccessibleProjectEnvironment(ctx context.Context, arg ActivateAccessibleProjectEnvironmentParams) (ProjectEnvironment, error) {
+	row := q.db.QueryRow(ctx, activateAccessibleProjectEnvironment, arg.ID, arg.Environment, arg.UserID)
+	var i ProjectEnvironment
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Environment,
+		&i.ActivatedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const activeProjectAPIKey = `-- name: ActiveProjectAPIKey :one
+SELECT
+    project_api_keys.id,
+    project_api_keys.project_environment_id,
+    project_api_keys.key_prefix,
+    project_api_keys.last_four,
+    project_api_keys.created_at,
+    project_api_keys.last_used_at,
+    project_api_keys.revoked_at
+FROM project_api_keys
+WHERE project_api_keys.project_environment_id = $1
+  AND project_api_keys.revoked_at IS NULL
+`
+
+type ActiveProjectAPIKeyRow struct {
+	ID                   uuid.UUID
+	ProjectEnvironmentID uuid.UUID
+	KeyPrefix            string
+	LastFour             string
+	CreatedAt            pgtype.Timestamptz
+	LastUsedAt           pgtype.Timestamptz
+	RevokedAt            pgtype.Timestamptz
+}
+
+func (q *Queries) ActiveProjectAPIKey(ctx context.Context, projectEnvironmentID uuid.UUID) (ActiveProjectAPIKeyRow, error) {
+	row := q.db.QueryRow(ctx, activeProjectAPIKey, projectEnvironmentID)
+	var i ActiveProjectAPIKeyRow
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectEnvironmentID,
+		&i.KeyPrefix,
+		&i.LastFour,
+		&i.CreatedAt,
+		&i.LastUsedAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
 const createProject = `-- name: CreateProject :one
 INSERT INTO projects (id, organization_id, name, slug)
 VALUES ($1, $2, $3, $4)
@@ -50,6 +170,67 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (C
 		&i.Slug,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createProjectAPIKey = `-- name: CreateProjectAPIKey :one
+INSERT INTO project_api_keys (
+    id,
+    project_environment_id,
+    key_hash,
+    key_prefix,
+    last_four,
+    created_by_user_id
+)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING
+    id,
+    project_environment_id,
+    key_prefix,
+    last_four,
+    created_at,
+    last_used_at,
+    revoked_at
+`
+
+type CreateProjectAPIKeyParams struct {
+	ID                   uuid.UUID
+	ProjectEnvironmentID uuid.UUID
+	KeyHash              []byte
+	KeyPrefix            string
+	LastFour             string
+	CreatedByUserID      uuid.UUID
+}
+
+type CreateProjectAPIKeyRow struct {
+	ID                   uuid.UUID
+	ProjectEnvironmentID uuid.UUID
+	KeyPrefix            string
+	LastFour             string
+	CreatedAt            pgtype.Timestamptz
+	LastUsedAt           pgtype.Timestamptz
+	RevokedAt            pgtype.Timestamptz
+}
+
+func (q *Queries) CreateProjectAPIKey(ctx context.Context, arg CreateProjectAPIKeyParams) (CreateProjectAPIKeyRow, error) {
+	row := q.db.QueryRow(ctx, createProjectAPIKey,
+		arg.ID,
+		arg.ProjectEnvironmentID,
+		arg.KeyHash,
+		arg.KeyPrefix,
+		arg.LastFour,
+		arg.CreatedByUserID,
+	)
+	var i CreateProjectAPIKeyRow
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectEnvironmentID,
+		&i.KeyPrefix,
+		&i.LastFour,
+		&i.CreatedAt,
+		&i.LastUsedAt,
+		&i.RevokedAt,
 	)
 	return i, err
 }
@@ -193,4 +374,111 @@ func (q *Queries) ListProjectEnvironments(ctx context.Context, projectID uuid.UU
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockAccessibleProjectEnvironment = `-- name: LockAccessibleProjectEnvironment :one
+SELECT
+    project_environments.id,
+    project_environments.project_id,
+    project_environments.environment,
+    project_environments.activated_at,
+    project_environments.created_at
+FROM project_environments
+JOIN projects ON projects.id = project_environments.project_id
+JOIN organizations ON organizations.id = projects.organization_id
+JOIN organization_memberships
+    ON organization_memberships.organization_id = organizations.id
+WHERE projects.id = $1
+  AND project_environments.environment = $2
+  AND organization_memberships.user_id = $3
+  AND organization_memberships.status = 'active'
+  AND organization_memberships.removed_at IS NULL
+  AND organizations.deleted_at IS NULL
+  AND organizations.suspended_at IS NULL
+FOR UPDATE OF project_environments
+`
+
+type LockAccessibleProjectEnvironmentParams struct {
+	ID          uuid.UUID
+	Environment string
+	UserID      uuid.UUID
+}
+
+func (q *Queries) LockAccessibleProjectEnvironment(ctx context.Context, arg LockAccessibleProjectEnvironmentParams) (ProjectEnvironment, error) {
+	row := q.db.QueryRow(ctx, lockAccessibleProjectEnvironment, arg.ID, arg.Environment, arg.UserID)
+	var i ProjectEnvironment
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Environment,
+		&i.ActivatedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const projectNameExists = `-- name: ProjectNameExists :one
+SELECT EXISTS (
+    SELECT 1
+    FROM projects
+    WHERE organization_id = $1
+      AND lower(btrim(name)) = lower(btrim($2))
+)
+`
+
+type ProjectNameExistsParams struct {
+	OrganizationID uuid.UUID
+	ProjectName    string
+}
+
+func (q *Queries) ProjectNameExists(ctx context.Context, arg ProjectNameExistsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, projectNameExists, arg.OrganizationID, arg.ProjectName)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const revokeActiveProjectAPIKey = `-- name: RevokeActiveProjectAPIKey :one
+UPDATE project_api_keys
+SET revoked_at = now(), revoked_by_user_id = $2
+WHERE project_environment_id = $1
+  AND revoked_at IS NULL
+RETURNING
+    id,
+    project_environment_id,
+    key_prefix,
+    last_four,
+    created_at,
+    last_used_at,
+    revoked_at
+`
+
+type RevokeActiveProjectAPIKeyParams struct {
+	ProjectEnvironmentID uuid.UUID
+	RevokedByUserID      pgtype.UUID
+}
+
+type RevokeActiveProjectAPIKeyRow struct {
+	ID                   uuid.UUID
+	ProjectEnvironmentID uuid.UUID
+	KeyPrefix            string
+	LastFour             string
+	CreatedAt            pgtype.Timestamptz
+	LastUsedAt           pgtype.Timestamptz
+	RevokedAt            pgtype.Timestamptz
+}
+
+func (q *Queries) RevokeActiveProjectAPIKey(ctx context.Context, arg RevokeActiveProjectAPIKeyParams) (RevokeActiveProjectAPIKeyRow, error) {
+	row := q.db.QueryRow(ctx, revokeActiveProjectAPIKey, arg.ProjectEnvironmentID, arg.RevokedByUserID)
+	var i RevokeActiveProjectAPIKeyRow
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectEnvironmentID,
+		&i.KeyPrefix,
+		&i.LastFour,
+		&i.CreatedAt,
+		&i.LastUsedAt,
+		&i.RevokedAt,
+	)
+	return i, err
 }

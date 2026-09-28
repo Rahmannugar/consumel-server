@@ -10,6 +10,7 @@ import (
 	projectdb "github.com/Rahmannugar/consumel-server/internal/projects/repositories/generated"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -79,12 +80,28 @@ func (repository *ProjectRepository) CreateProjectWithEnvironments(
 		Name:           project.Name,
 		Slug:           project.Slug,
 	})
+	if projectNameExists(err) {
+		return models.Project{}, models.ErrProjectNameExists
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
+		nameExists, lookupErr := queries.ProjectNameExists(ctx, projectdb.ProjectNameExistsParams{
+			OrganizationID: project.OrganizationID,
+			ProjectName:    project.Name,
+		})
+		if lookupErr != nil {
+			return models.Project{}, fmt.Errorf("check project name: %w", lookupErr)
+		}
+		if nameExists {
+			return models.Project{}, models.ErrProjectNameExists
+		}
 		project.Slug = models.ProjectSlugWithIDSuffix(project.Slug, project.ID)
 		createdProject, err = queries.CreateProject(ctx, projectdb.CreateProjectParams{
 			ID: project.ID, OrganizationID: project.OrganizationID,
 			Name: project.Name, Slug: project.Slug,
 		})
+		if projectNameExists(err) {
+			return models.Project{}, models.ErrProjectNameExists
+		}
 	}
 	if err != nil {
 		return models.Project{}, fmt.Errorf("create project: %w", err)
@@ -112,6 +129,12 @@ func (repository *ProjectRepository) CreateProjectWithEnvironments(
 		UpdatedAt:      createdProject.UpdatedAt.Time,
 		Environments:   createdEnvironments,
 	}, nil
+}
+
+func projectNameExists(err error) bool {
+	var databaseError *pgconn.PgError
+	return errors.As(err, &databaseError) &&
+		databaseError.ConstraintName == "projects_organization_name_unique_idx"
 }
 
 func mapProjectEnvironment(
