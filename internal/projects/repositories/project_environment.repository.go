@@ -13,6 +13,27 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+func (repository *ProjectRepository) AccessibleEnvironment(
+	ctx context.Context,
+	userID uuid.UUID,
+	projectID uuid.UUID,
+	environment models.ProjectEnvironmentName,
+) (models.ProjectEnvironment, error) {
+	value, err := repository.queries.AccessibleProjectEnvironment(
+		ctx,
+		projectdb.AccessibleProjectEnvironmentParams{
+			ID: projectID, Environment: string(environment), UserID: userID,
+		},
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return models.ProjectEnvironment{}, models.ErrProjectEnvironmentUnavailable
+	}
+	if err != nil {
+		return models.ProjectEnvironment{}, fmt.Errorf("authorize project environment: %w", err)
+	}
+	return mapProjectEnvironment(value), nil
+}
+
 func (repository *ProjectRepository) ProjectEnvironments(
 	ctx context.Context,
 	projectID uuid.UUID,

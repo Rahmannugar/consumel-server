@@ -7,6 +7,7 @@ import (
 
 	authenticationhandlers "github.com/Rahmannugar/consumel-server/internal/authentication/handlers"
 	"github.com/Rahmannugar/consumel-server/internal/config"
+	customerhandlers "github.com/Rahmannugar/consumel-server/internal/customers/handlers"
 	"github.com/Rahmannugar/consumel-server/internal/health"
 	"github.com/Rahmannugar/consumel-server/internal/infra/cors"
 	"github.com/Rahmannugar/consumel-server/internal/infra/ratelimit"
@@ -23,8 +24,10 @@ func newRouter(
 	database health.Database,
 	authlierHandler http.Handler,
 	tenantResolver authenticationhandlers.TenantResolver,
+	apiKeyAuthenticator authenticationhandlers.APIKeyAuthenticator,
 	onboardingService onboardinghandlers.OnboardingService,
 	projectService projecthandlers.ProjectService,
+	customerService customerhandlers.CustomerService,
 	limiter *ratelimit.RedisLimiter,
 	logger *slog.Logger,
 ) (*gin.Engine, error) {
@@ -56,5 +59,13 @@ func newRouter(
 	)
 	onboardinghandlers.RegisterRoutes(router, tenantResolver, onboardingService, logger)
 	projecthandlers.RegisterRoutes(router, tenantResolver, projectService, logger)
+	customerhandlers.RegisterRoutes(
+		router,
+		apiKeyAuthenticator,
+		tenantResolver,
+		projectService,
+		customerService,
+		logger,
+	)
 	return router, nil
 }

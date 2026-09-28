@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 
 	onboardingmodels "github.com/Rahmannugar/consumel-server/internal/onboarding/models"
 	projectmodels "github.com/Rahmannugar/consumel-server/internal/projects/models"
@@ -13,6 +14,7 @@ type operation struct {
 	Method             string
 	Path               string
 	Summary            string
+	Tag                string
 	Request            string
 	SuccessCode        string
 	Success            string
@@ -20,21 +22,24 @@ type operation struct {
 	AlternateSuccess   map[string]string
 	Errors             map[string]string
 	Protected          bool
+	APIKeyProtected    bool
 	Parameters         []parameter
 }
 
 type parameter struct {
 	Name        string
 	Description string
+	In          string
+	Required    bool
 	Schema      map[string]any
 }
 
 var projectEnvironmentParameters = []parameter{
-	{Name: "projectId", Description: "The immutable ID of the project selected in the dashboard.", Schema: map[string]any{"type": "string", "format": "uuid"}},
-	{Name: "environment", Description: "The selected isolated project environment.", Schema: map[string]any{"type": "string", "enum": []string{"sandbox", "live"}}},
+	{Name: "projectId", Description: "The immutable ID of the project selected in the dashboard.", In: "path", Required: true, Schema: map[string]any{"type": "string", "format": "uuid"}},
+	{Name: "environment", Description: "The selected isolated project environment.", In: "path", Required: true, Schema: map[string]any{"type": "string", "enum": []string{"sandbox", "live"}}},
 }
 
-var operations = []operation{
+var baseOperations = []operation{
 	{Method: "get", Path: "/account", Summary: "Return the signed-in account and active organization access.", SuccessCode: "200", Success: "Account", Protected: true},
 	{Method: "delete", Path: "/account/google", Summary: "Unlink Google when another sign-in method remains.", SuccessCode: "204", Protected: true},
 	{Method: "post", Path: "/account/google", Summary: "Start linking Google to the signed-in account.", SuccessCode: "200", Success: "AuthorizationURL", Protected: true},
@@ -70,6 +75,8 @@ var operations = []operation{
 // Document builds the deterministic OpenAPI contract served by the API and
 // written to openapi.json for review and stale-output checks.
 func Document() ([]byte, error) {
+	operations := append([]operation{}, baseOperations...)
+	operations = append(operations, customerOperations()...)
 	sort.Slice(operations, func(i, j int) bool {
 		if operations[i].Path == operations[j].Path {
 			return operations[i].Method < operations[j].Method
@@ -102,9 +109,13 @@ func Document() ([]byte, error) {
 			}
 			responses[code] = alternate
 		}
+		tag := endpoint.Tag
+		if tag == "" {
+			tag = tagFor(endpoint.Path)
+		}
 		operationDocument := map[string]any{
 			"summary":   endpoint.Summary,
-			"tags":      []string{tagFor(endpoint.Path)},
+			"tags":      []string{tag},
 			"responses": responses,
 		}
 		if endpoint.Request != "" {
@@ -117,7 +128,7 @@ func Document() ([]byte, error) {
 			parameters := make([]map[string]any, 0, len(endpoint.Parameters))
 			for _, value := range endpoint.Parameters {
 				parameters = append(parameters, map[string]any{
-					"name": value.Name, "in": "path", "required": true,
+					"name": value.Name, "in": value.In, "required": value.Required,
 					"description": value.Description, "schema": value.Schema,
 				})
 			}
@@ -128,6 +139,9 @@ func Document() ([]byte, error) {
 				{"productionCookieSession": {}},
 				{"localCookieSession": {}},
 			}
+		}
+		if endpoint.APIKeyProtected {
+			operationDocument["security"] = []map[string][]string{{"projectAPIKey": {}}}
 		}
 		path[endpoint.Method] = operationDocument
 	}
@@ -148,6 +162,7 @@ func Document() ([]byte, error) {
 			"securitySchemes": map[string]any{
 				"productionCookieSession": map[string]any{"type": "apiKey", "in": "cookie", "name": "__Host-consumel_session"},
 				"localCookieSession":      map[string]any{"type": "apiKey", "in": "cookie", "name": "consumel_session"},
+				"projectAPIKey":           map[string]any{"type": "http", "scheme": "bearer", "bearerFormat": "cm_test_… or cm_live_…"},
 			},
 			"schemas":   schemas(),
 			"responses": errorResponses(),
@@ -163,7 +178,7 @@ func Document() ([]byte, error) {
 func schemas() map[string]any {
 	stringProperty := func() map[string]any { return map[string]any{"type": "string"} }
 	password := map[string]any{"type": "string", "minLength": 8, "maxLength": 128, "format": "password", "pattern": `^(?=.*[A-Z])(?=.*[0-9])(?=.*[^\p{L}\p{N}\s]).{8,128}$`}
-	return map[string]any{
+	result := map[string]any{
 		"Account":                object([]string{"session", "user", "organizations"}, map[string]any{"session": schemaReference("AccountSession"), "user": schemaReference("AccountUser"), "organizations": map[string]any{"type": "array", "maxItems": 1, "items": schemaReference("OrganizationAccess")}}),
 		"AccountSession":         object([]string{"id", "createdAt", "expiresAt"}, map[string]any{"id": stringProperty(), "createdAt": map[string]any{"type": "string", "format": "date-time"}, "expiresAt": map[string]any{"type": "string", "format": "date-time"}}),
 		"AccountUser":            object([]string{"id", "email"}, map[string]any{"id": stringProperty(), "email": map[string]any{"type": "string", "format": "email"}}),
@@ -228,15 +243,18 @@ func schemas() map[string]any {
 		"UserSession":           object([]string{"user", "session"}, map[string]any{"user": schemaReference("UserDetails"), "session": schemaReference("SessionDetails")}),
 		"VerifyEmailRequest":    object([]string{"email", "code"}, map[string]any{"email": map[string]any{"type": "string", "format": "email"}, "code": map[string]any{"type": "string", "pattern": `^[0-9]{6}$`, "example": "482193"}}),
 	}
+	mergeComponents(result, customerSchemas())
+	return result
 }
 
 func errorResponses() map[string]any {
-	return map[string]any{
+	result := map[string]any{
 		"BadRequest":               errorResponse("The JSON body or one of its fields is invalid.", "invalid_request"),
 		"EmailNotVerified":         errorResponse("The credentials are valid, but email verification is required. A fresh code was queued when the account was eligible.", "email_not_verified"),
 		"EmailVerificationFailed":  errorResponse("The verification email could not be queued.", "email_verification_failed"),
 		"EmailVerificationInvalid": errorResponseExamples("The request body or verification code is invalid.", "invalid_request", "invalid_token"),
 		"InvalidCredentials":       errorResponse("The email address or password is incorrect.", "invalid_credentials"),
+		"InvalidAPIKey":            errorResponseWithMessage("The project API key is missing, malformed, revoked, replaced, or inactive.", "invalid_api_key", "Provide an active project environment API key."),
 		"NotAuthenticated":         errorResponse("Authentication is required.", "not_authenticated"),
 		"OnboardingConflict":       errorResponseWithMessage("The account already has organization access that cannot be changed by onboarding.", "organization_already_exists", "This account already belongs to an organization that needs attention."),
 		"OnboardingFailed":         errorResponseWithMessage("The onboarding transaction could not be completed.", "onboarding_failed", "Consumel could not create your project. Try again shortly."),
@@ -258,6 +276,8 @@ func errorResponses() map[string]any {
 		"SignUpFailed":             errorResponseExamples("Account creation or verification delivery could not be completed.", "authentication_failed", "email_verification_failed"),
 		"VerifyEmailFailed":        errorResponseExamples("Verification or session creation could not be completed.", "email_verification_failed", "session_failed"),
 	}
+	mergeComponents(result, customerErrorResponses())
+	return result
 }
 
 func errorResponse(description, code string) map[string]any {
@@ -297,6 +317,9 @@ func operationResponses(endpoint operation, success map[string]any) map[string]a
 	}
 	if endpoint.Protected {
 		responses["401"] = responseReference("NotAuthenticated")
+	}
+	if endpoint.APIKeyProtected {
+		responses["401"] = responseReference("InvalidAPIKey")
 	}
 	if tagFor(endpoint.Path) == "Authentication" {
 		responses["429"] = responseReference("RateLimited")
@@ -349,6 +372,9 @@ func tagFor(path string) string {
 	if path == "/onboarding" {
 		return "Onboarding"
 	}
+	if strings.Contains(path, "/customers") {
+		return "Customers"
+	}
 	if len(path) >= len("/v1/projects") && path[:len("/v1/projects")] == "/v1/projects" {
 		return "Projects"
 	}
@@ -356,6 +382,9 @@ func tagFor(path string) string {
 }
 
 func exampleFor(name string) map[string]any {
+	if example, ok := customerExample(name); ok {
+		return example
+	}
 	session := map[string]any{"id": "01K5A7Q72E9WPJ8D4J13FQ0A6R", "subjectId": "01K5A7PZ9SA93YN3PX84B9G6KB", "createdAt": "2026-09-25T12:00:00Z", "expiresAt": "2026-10-02T12:00:00Z"}
 	user := map[string]any{"id": "01K5A7PZ9SA93YN3PX84B9G6KB", "email": "developer@example.com"}
 	switch name {
@@ -416,6 +445,12 @@ func exampleFor(name string) map[string]any {
 		}
 	default:
 		return map[string]any{}
+	}
+}
+
+func mergeComponents(target, additions map[string]any) {
+	for name, component := range additions {
+		target[name] = component
 	}
 }
 

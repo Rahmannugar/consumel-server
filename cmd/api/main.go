@@ -18,6 +18,8 @@ import (
 	authenticationrepositories "github.com/Rahmannugar/consumel-server/internal/authentication/repositories"
 	authenticationservices "github.com/Rahmannugar/consumel-server/internal/authentication/services"
 	"github.com/Rahmannugar/consumel-server/internal/config"
+	customerrepositories "github.com/Rahmannugar/consumel-server/internal/customers/repositories"
+	customerservices "github.com/Rahmannugar/consumel-server/internal/customers/services"
 	infraauthentication "github.com/Rahmannugar/consumel-server/internal/infra/authentication"
 	"github.com/Rahmannugar/consumel-server/internal/infra/cache"
 	"github.com/Rahmannugar/consumel-server/internal/infra/database"
@@ -230,14 +232,22 @@ func run() (runError error) {
 	projectService := projectservices.NewProjectManagementService(
 		projectrepositories.NewProjectRepository(databasePool),
 	)
+	apiKeyAuthenticator := authenticationservices.NewAPIKeyAuthenticator(
+		authenticationrepositories.NewAPIKeyContextRepository(databasePool),
+	)
+	customerService := customerservices.NewCustomerService(
+		customerrepositories.NewCustomerRepository(databasePool),
+	)
 	router, err := newRouter(
 		cfg,
 		telemetryRuntime,
 		databasePool,
 		auth.Handler(),
 		tenantService,
+		apiKeyAuthenticator,
 		onboardingService,
 		projectService,
+		customerService,
 		distributedLimiter,
 		logger,
 	)

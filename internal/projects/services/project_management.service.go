@@ -57,6 +57,12 @@ type ProjectRepository interface {
 		uuid.UUID,
 		models.ProjectEnvironmentName,
 	) (models.ProjectEnvironment, error)
+	AccessibleEnvironment(
+		context.Context,
+		uuid.UUID,
+		uuid.UUID,
+		models.ProjectEnvironmentName,
+	) (models.ProjectEnvironment, error)
 }
 
 func (service *ProjectManagementService) ListProjects(
@@ -75,6 +81,18 @@ type ProjectManagementService struct {
 
 func NewProjectManagementService(repository ProjectRepository) *ProjectManagementService {
 	return &ProjectManagementService{repository: repository}
+}
+
+func (service *ProjectManagementService) AccessibleEnvironment(
+	ctx context.Context,
+	userID uuid.UUID,
+	projectID uuid.UUID,
+	environment models.ProjectEnvironmentName,
+) (models.ProjectEnvironment, error) {
+	if err := validateAPIKeyContext(userID, projectID, environment); err != nil {
+		return models.ProjectEnvironment{}, err
+	}
+	return service.repository.AccessibleEnvironment(ctx, userID, projectID, environment)
 }
 
 func (service *ProjectManagementService) CreateProject(

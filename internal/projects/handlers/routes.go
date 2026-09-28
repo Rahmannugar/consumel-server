@@ -25,6 +25,7 @@ type ProjectService interface {
 	ReplaceAPIKey(context.Context, uuid.UUID, uuid.UUID, projectmodels.ProjectEnvironmentName) (projectmodels.CreatedAPIKey, error)
 	RevokeAPIKey(context.Context, uuid.UUID, uuid.UUID, projectmodels.ProjectEnvironmentName) error
 	ActivateEnvironment(context.Context, uuid.UUID, uuid.UUID, projectmodels.ProjectEnvironmentName) (projectmodels.ProjectEnvironment, error)
+	AccessibleEnvironment(context.Context, uuid.UUID, uuid.UUID, projectmodels.ProjectEnvironmentName) (projectmodels.ProjectEnvironment, error)
 }
 
 type Handler struct {

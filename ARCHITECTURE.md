@@ -76,6 +76,18 @@ A project is created with isolated Sandbox and Live environments in one
 transaction. Sandbox starts active; Live remains inactive until explicitly
 activated.
 
+Project API keys authenticate public integration requests. Consumel validates
+the strict Bearer-key shape, hashes the presented secret, and resolves the hash
+through one active-only PostgreSQL query. The resulting request context carries
+the organization, project, and project-environment identifiers. Revoked and
+replaced keys, inactive environments, and inactive organizations cannot resolve.
+
+Customer records are scoped by project environment. Their public
+`customer_id`, optional name and email, and bounded plan, country, and location
+metadata remain isolated between Sandbox and Live. Public API-key requests and
+signed-in dashboard requests use the same customer domain service after their
+different authentication boundaries establish the environment.
+
 ## Authentication
 
 PostgreSQL is authoritative for Authlier users, password credentials, email

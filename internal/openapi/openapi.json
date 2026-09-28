@@ -16,6 +16,190 @@
         },
         "description": "The JSON body or one of its fields is invalid."
       },
+      "CustomerConflict": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "customer_already_exists",
+                "message": "This customer ID already exists in the selected environment."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The customer ID already exists in the selected environment."
+      },
+      "CustomerCreateConflict": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "customer_already_exists": {
+                "value": {
+                  "error": {
+                    "code": "customer_already_exists"
+                  }
+                }
+              },
+              "environment_inactive": {
+                "value": {
+                  "error": {
+                    "code": "environment_inactive"
+                  }
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The customer cannot be created in the selected environment."
+      },
+      "CustomerEnvironmentConflict": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "environment_inactive",
+                "message": "Activate Live before managing its customers."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The selected project environment is not active."
+      },
+      "CustomerEnvironmentNotFound": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "project_environment_not_found",
+                "message": "This project environment is not available."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The selected project environment is unavailable."
+      },
+      "CustomerFailed": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "customer_operation_failed",
+                "message": "Consumel could not complete the customer request. Try again shortly."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The customer request could not be completed."
+      },
+      "CustomerInvalid": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "invalid_customer": {
+                "value": {
+                  "error": {
+                    "code": "invalid_customer"
+                  }
+                }
+              },
+              "invalid_request": {
+                "value": {
+                  "error": {
+                    "code": "invalid_request"
+                  }
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The customer request or identifier is invalid."
+      },
+      "CustomerListInvalid": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "invalid_cursor": {
+                "value": {
+                  "error": {
+                    "code": "invalid_cursor"
+                  }
+                }
+              },
+              "invalid_request": {
+                "value": {
+                  "error": {
+                    "code": "invalid_request"
+                  }
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The pagination input is invalid."
+      },
+      "CustomerNotFound": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "customer_not_found",
+                "message": "This customer does not exist in the selected environment."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The customer is not present in the authenticated environment."
+      },
+      "CustomerOrEnvironmentNotFound": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "customer_not_found": {
+                "value": {
+                  "error": {
+                    "code": "customer_not_found"
+                  }
+                }
+              },
+              "project_environment_not_found": {
+                "value": {
+                  "error": {
+                    "code": "project_environment_not_found"
+                  }
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The customer or selected project environment is unavailable."
+      },
       "EmailNotVerified": {
         "content": {
           "application/json": {
@@ -71,6 +255,22 @@
           }
         },
         "description": "The request body or verification code is invalid."
+      },
+      "InvalidAPIKey": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "invalid_api_key",
+                "message": "Provide an active project environment API key."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The project API key is missing, malformed, revoked, replaced, or inactive."
       },
       "InvalidCredentials": {
         "content": {
@@ -598,6 +798,67 @@
         ],
         "type": "object"
       },
+      "CreateCustomerRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "customerId": {
+            "example": "user_123",
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "maxLength": 320,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "metadata": {
+            "additionalProperties": false,
+            "properties": {
+              "country": {
+                "example": "US",
+                "pattern": "^[A-Za-z]{2}$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "location": {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "plan": {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "customerId"
+        ],
+        "type": "object"
+      },
       "CreateProjectRequest": {
         "additionalProperties": false,
         "properties": {
@@ -630,6 +891,101 @@
         "required": [
           "email",
           "password"
+        ],
+        "type": "object"
+      },
+      "Customer": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "customerId": {
+            "maxLength": 255,
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "maxLength": 320,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/CustomerMetadata"
+          },
+          "name": {
+            "maxLength": 200,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "customerId",
+          "name",
+          "email",
+          "metadata",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "CustomerMetadata": {
+        "additionalProperties": false,
+        "properties": {
+          "country": {
+            "example": "US",
+            "pattern": "^[A-Z]{2}$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "location": {
+            "maxLength": 120,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "plan": {
+            "maxLength": 120,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "Customers": {
+        "additionalProperties": false,
+        "properties": {
+          "customers": {
+            "items": {
+              "$ref": "#/components/schemas/Customer"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "customers",
+          "nextCursor"
         ],
         "type": "object"
       },
@@ -1087,6 +1443,58 @@
         ],
         "type": "object"
       },
+      "UpdateCustomerRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "format": "email",
+            "maxLength": 320,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "metadata": {
+            "additionalProperties": false,
+            "properties": {
+              "country": {
+                "example": "US",
+                "pattern": "^[A-Za-z]{2}$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "location": {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "plan": {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
       "User": {
         "additionalProperties": false,
         "properties": {
@@ -1162,6 +1570,11 @@
         "in": "cookie",
         "name": "__Host-consumel_session",
         "type": "apiKey"
+      },
+      "projectAPIKey": {
+        "bearerFormat": "cm_test_… or cm_live_…",
+        "scheme": "bearer",
+        "type": "http"
       }
     }
   },
@@ -2227,6 +2640,286 @@
         ]
       }
     },
+    "/v1/customers": {
+      "get": {
+        "parameters": [
+          {
+            "description": "The opaque next cursor from the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "The number of customers to return.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "customers": [
+                    {
+                      "createdAt": "2026-09-28T12:00:00Z",
+                      "customerId": "user_123",
+                      "email": "jordan@example.com",
+                      "metadata": {
+                        "country": "US",
+                        "location": "New York, NY",
+                        "plan": "growth"
+                      },
+                      "name": "Jordan Lee",
+                      "updatedAt": "2026-09-28T12:00:00Z"
+                    }
+                  ],
+                  "nextCursor": null
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Customers"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "400": {
+            "$ref": "#/components/responses/CustomerListInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidAPIKey"
+          },
+          "500": {
+            "$ref": "#/components/responses/CustomerFailed"
+          }
+        },
+        "security": [
+          {
+            "projectAPIKey": []
+          }
+        ],
+        "summary": "List customers in the API key's project environment.",
+        "tags": [
+          "Customers"
+        ]
+      },
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "customerId": "user_123",
+                "email": "jordan@example.com",
+                "metadata": {
+                  "country": "US",
+                  "location": "New York, NY",
+                  "plan": "growth"
+                },
+                "name": "Jordan Lee"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/CreateCustomerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "createdAt": "2026-09-28T12:00:00Z",
+                  "customerId": "user_123",
+                  "email": "jordan@example.com",
+                  "metadata": {
+                    "country": "US",
+                    "location": "New York, NY",
+                    "plan": "growth"
+                  },
+                  "name": "Jordan Lee",
+                  "updatedAt": "2026-09-28T12:00:00Z"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Customer"
+                }
+              }
+            },
+            "description": "Created."
+          },
+          "400": {
+            "$ref": "#/components/responses/CustomerInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidAPIKey"
+          },
+          "409": {
+            "$ref": "#/components/responses/CustomerConflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/CustomerFailed"
+          }
+        },
+        "security": [
+          {
+            "projectAPIKey": []
+          }
+        ],
+        "summary": "Create a customer in the API key's project environment.",
+        "tags": [
+          "Customers"
+        ]
+      }
+    },
+    "/v1/customers/{customerId}": {
+      "get": {
+        "parameters": [
+          {
+            "description": "The customer identifier supplied by the integrating application.",
+            "in": "path",
+            "name": "customerId",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "createdAt": "2026-09-28T12:00:00Z",
+                  "customerId": "user_123",
+                  "email": "jordan@example.com",
+                  "metadata": {
+                    "country": "US",
+                    "location": "New York, NY",
+                    "plan": "growth"
+                  },
+                  "name": "Jordan Lee",
+                  "updatedAt": "2026-09-28T12:00:00Z"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Customer"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "400": {
+            "$ref": "#/components/responses/CustomerInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidAPIKey"
+          },
+          "404": {
+            "$ref": "#/components/responses/CustomerNotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/CustomerFailed"
+          }
+        },
+        "security": [
+          {
+            "projectAPIKey": []
+          }
+        ],
+        "summary": "Return one customer from the API key's project environment.",
+        "tags": [
+          "Customers"
+        ]
+      },
+      "put": {
+        "parameters": [
+          {
+            "description": "The customer identifier supplied by the integrating application.",
+            "in": "path",
+            "name": "customerId",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "email": "jordan@example.com",
+                "metadata": {
+                  "country": "US",
+                  "location": "New York, NY",
+                  "plan": "growth"
+                },
+                "name": "Jordan Lee"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCustomerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "createdAt": "2026-09-28T12:00:00Z",
+                  "customerId": "user_123",
+                  "email": "jordan@example.com",
+                  "metadata": {
+                    "country": "US",
+                    "location": "New York, NY",
+                    "plan": "growth"
+                  },
+                  "name": "Jordan Lee",
+                  "updatedAt": "2026-09-28T12:00:00Z"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Customer"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "400": {
+            "$ref": "#/components/responses/CustomerInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidAPIKey"
+          },
+          "404": {
+            "$ref": "#/components/responses/CustomerNotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/CustomerFailed"
+          }
+        },
+        "security": [
+          {
+            "projectAPIKey": []
+          }
+        ],
+        "summary": "Replace a customer's optional contact information and metadata.",
+        "tags": [
+          "Customers"
+        ]
+      }
+    },
     "/v1/projects": {
       "get": {
         "responses": {
@@ -2687,6 +3380,407 @@
         "summary": "Revoke the active API key and reveal its replacement once.",
         "tags": [
           "Projects"
+        ]
+      }
+    },
+    "/v1/projects/{projectId}/environments/{environment}/customers": {
+      "get": {
+        "parameters": [
+          {
+            "description": "The immutable ID of the project selected in the dashboard.",
+            "in": "path",
+            "name": "projectId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The selected isolated project environment.",
+            "in": "path",
+            "name": "environment",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "The opaque next cursor from the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "The number of customers to return.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "customers": [
+                    {
+                      "createdAt": "2026-09-28T12:00:00Z",
+                      "customerId": "user_123",
+                      "email": "jordan@example.com",
+                      "metadata": {
+                        "country": "US",
+                        "location": "New York, NY",
+                        "plan": "growth"
+                      },
+                      "name": "Jordan Lee",
+                      "updatedAt": "2026-09-28T12:00:00Z"
+                    }
+                  ],
+                  "nextCursor": null
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Customers"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "400": {
+            "$ref": "#/components/responses/CustomerListInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/CustomerEnvironmentNotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/CustomerEnvironmentConflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/CustomerFailed"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "List customers in the signed-in project workspace.",
+        "tags": [
+          "Dashboard Customers"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "description": "The immutable ID of the project selected in the dashboard.",
+            "in": "path",
+            "name": "projectId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The selected isolated project environment.",
+            "in": "path",
+            "name": "environment",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "customerId": "user_123",
+                "email": "jordan@example.com",
+                "metadata": {
+                  "country": "US",
+                  "location": "New York, NY",
+                  "plan": "growth"
+                },
+                "name": "Jordan Lee"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/CreateCustomerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "createdAt": "2026-09-28T12:00:00Z",
+                  "customerId": "user_123",
+                  "email": "jordan@example.com",
+                  "metadata": {
+                    "country": "US",
+                    "location": "New York, NY",
+                    "plan": "growth"
+                  },
+                  "name": "Jordan Lee",
+                  "updatedAt": "2026-09-28T12:00:00Z"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Customer"
+                }
+              }
+            },
+            "description": "Created."
+          },
+          "400": {
+            "$ref": "#/components/responses/CustomerInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/CustomerEnvironmentNotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/CustomerCreateConflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/CustomerFailed"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "Create a customer from the signed-in project workspace.",
+        "tags": [
+          "Dashboard Customers"
+        ]
+      }
+    },
+    "/v1/projects/{projectId}/environments/{environment}/customers/{customerId}": {
+      "get": {
+        "parameters": [
+          {
+            "description": "The immutable ID of the project selected in the dashboard.",
+            "in": "path",
+            "name": "projectId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The selected isolated project environment.",
+            "in": "path",
+            "name": "environment",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "The customer identifier supplied by the integrating application.",
+            "in": "path",
+            "name": "customerId",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "createdAt": "2026-09-28T12:00:00Z",
+                  "customerId": "user_123",
+                  "email": "jordan@example.com",
+                  "metadata": {
+                    "country": "US",
+                    "location": "New York, NY",
+                    "plan": "growth"
+                  },
+                  "name": "Jordan Lee",
+                  "updatedAt": "2026-09-28T12:00:00Z"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Customer"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "400": {
+            "$ref": "#/components/responses/CustomerInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/CustomerOrEnvironmentNotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/CustomerEnvironmentConflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/CustomerFailed"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "Return one customer in the signed-in project workspace.",
+        "tags": [
+          "Dashboard Customers"
+        ]
+      },
+      "put": {
+        "parameters": [
+          {
+            "description": "The immutable ID of the project selected in the dashboard.",
+            "in": "path",
+            "name": "projectId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The selected isolated project environment.",
+            "in": "path",
+            "name": "environment",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "The customer identifier supplied by the integrating application.",
+            "in": "path",
+            "name": "customerId",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "email": "jordan@example.com",
+                "metadata": {
+                  "country": "US",
+                  "location": "New York, NY",
+                  "plan": "growth"
+                },
+                "name": "Jordan Lee"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCustomerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "createdAt": "2026-09-28T12:00:00Z",
+                  "customerId": "user_123",
+                  "email": "jordan@example.com",
+                  "metadata": {
+                    "country": "US",
+                    "location": "New York, NY",
+                    "plan": "growth"
+                  },
+                  "name": "Jordan Lee",
+                  "updatedAt": "2026-09-28T12:00:00Z"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Customer"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "400": {
+            "$ref": "#/components/responses/CustomerInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/CustomerOrEnvironmentNotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/CustomerEnvironmentConflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/CustomerFailed"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "Replace a customer's optional contact information and supported metadata from the signed-in project workspace.",
+        "tags": [
+          "Dashboard Customers"
         ]
       }
     }
