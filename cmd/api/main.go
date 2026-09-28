@@ -26,6 +26,8 @@ import (
 	"github.com/Rahmannugar/consumel-server/internal/infra/emaildelivery"
 	"github.com/Rahmannugar/consumel-server/internal/infra/ratelimit"
 	"github.com/Rahmannugar/consumel-server/internal/infra/telemetry"
+	meterrepositories "github.com/Rahmannugar/consumel-server/internal/meters/repositories"
+	meterservices "github.com/Rahmannugar/consumel-server/internal/meters/services"
 	onboardingrepositories "github.com/Rahmannugar/consumel-server/internal/onboarding/repositories"
 	onboardingservices "github.com/Rahmannugar/consumel-server/internal/onboarding/services"
 	projectrepositories "github.com/Rahmannugar/consumel-server/internal/projects/repositories"
@@ -238,6 +240,9 @@ func run() (runError error) {
 	customerService := customerservices.NewCustomerService(
 		customerrepositories.NewCustomerRepository(databasePool),
 	)
+	meterService := meterservices.NewMeterService(
+		meterrepositories.NewMeterRepository(databasePool),
+	)
 	router, err := newRouter(
 		cfg,
 		telemetryRuntime,
@@ -248,6 +253,7 @@ func run() (runError error) {
 		onboardingService,
 		projectService,
 		customerService,
+		meterService,
 		distributedLimiter,
 		logger,
 	)

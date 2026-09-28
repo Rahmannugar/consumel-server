@@ -287,6 +287,190 @@
         },
         "description": "The email address or password is incorrect."
       },
+      "MeterConflict": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "meter_already_exists",
+                "message": "This meter key already exists in the selected environment."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The meter key already exists in the selected environment."
+      },
+      "MeterCreateConflict": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "environment_inactive": {
+                "value": {
+                  "error": {
+                    "code": "environment_inactive"
+                  }
+                }
+              },
+              "meter_already_exists": {
+                "value": {
+                  "error": {
+                    "code": "meter_already_exists"
+                  }
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The meter cannot be created in the selected environment."
+      },
+      "MeterEnvironmentConflict": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "environment_inactive",
+                "message": "Activate Live before managing its meters."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The selected project environment is not active."
+      },
+      "MeterEnvironmentNotFound": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "project_environment_not_found",
+                "message": "This project environment is not available."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The selected project environment is unavailable."
+      },
+      "MeterFailed": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "meter_operation_failed",
+                "message": "Consumel could not complete the meter request. Try again shortly."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The meter request could not be completed."
+      },
+      "MeterInvalid": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "invalid_meter": {
+                "value": {
+                  "error": {
+                    "code": "invalid_meter"
+                  }
+                }
+              },
+              "invalid_request": {
+                "value": {
+                  "error": {
+                    "code": "invalid_request"
+                  }
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The meter request or key is invalid."
+      },
+      "MeterListInvalid": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "invalid_cursor": {
+                "value": {
+                  "error": {
+                    "code": "invalid_cursor"
+                  }
+                }
+              },
+              "invalid_request": {
+                "value": {
+                  "error": {
+                    "code": "invalid_request"
+                  }
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The pagination input is invalid."
+      },
+      "MeterNotFound": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "meter_not_found",
+                "message": "This meter does not exist in the selected environment."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The meter is not present in the authenticated environment."
+      },
+      "MeterOrEnvironmentNotFound": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "meter_not_found": {
+                "value": {
+                  "error": {
+                    "code": "meter_not_found"
+                  }
+                }
+              },
+              "project_environment_not_found": {
+                "value": {
+                  "error": {
+                    "code": "project_environment_not_found"
+                  }
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The meter or selected project environment is unavailable."
+      },
       "NotAuthenticated": {
         "content": {
           "application/json": {
@@ -859,6 +1043,48 @@
         ],
         "type": "object"
       },
+      "CreateMeterRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "example": "Requests processed by your API.",
+            "maxLength": 500,
+            "minLength": 1,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "meterKey": {
+            "example": "api_calls",
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9_-]*$",
+            "type": "string"
+          },
+          "name": {
+            "example": "API calls",
+            "maxLength": 120,
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "prepaid",
+              "postpaid",
+              "hybrid"
+            ],
+            "example": "postpaid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "meterKey",
+          "name",
+          "type"
+        ],
+        "type": "object"
+      },
       "CreateProjectRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1066,6 +1292,79 @@
           "createdAt",
           "expiresAt",
           "current"
+        ],
+        "type": "object"
+      },
+      "Meter": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "description": {
+            "maxLength": 500,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "meterKey": {
+            "maxLength": 120,
+            "pattern": "^[a-z][a-z0-9_-]*$",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 120,
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "prepaid",
+              "postpaid",
+              "hybrid"
+            ],
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "meterKey",
+          "name",
+          "description",
+          "type",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "Meters": {
+        "additionalProperties": false,
+        "properties": {
+          "meters": {
+            "items": {
+              "$ref": "#/components/schemas/Meter"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "meters",
+          "nextCursor"
         ],
         "type": "object"
       },
@@ -2920,6 +3219,196 @@
         ]
       }
     },
+    "/v1/meters": {
+      "get": {
+        "parameters": [
+          {
+            "description": "The opaque next cursor from the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "The number of meters to return.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "meters": [
+                    {
+                      "createdAt": "2026-09-28T12:00:00Z",
+                      "description": "Requests processed by your API.",
+                      "id": "0199a9f8-f0c4-7f10-90f8-6483353e4624",
+                      "meterKey": "api_calls",
+                      "name": "API calls",
+                      "type": "postpaid",
+                      "updatedAt": "2026-09-28T12:00:00Z"
+                    }
+                  ],
+                  "nextCursor": null
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Meters"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "400": {
+            "$ref": "#/components/responses/MeterListInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidAPIKey"
+          },
+          "500": {
+            "$ref": "#/components/responses/MeterFailed"
+          }
+        },
+        "security": [
+          {
+            "projectAPIKey": []
+          }
+        ],
+        "summary": "List meters in the API key's project environment.",
+        "tags": [
+          "Meters"
+        ]
+      },
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "description": "Requests processed by your API.",
+                "meterKey": "api_calls",
+                "name": "API calls",
+                "type": "postpaid"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/CreateMeterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "createdAt": "2026-09-28T12:00:00Z",
+                  "description": "Requests processed by your API.",
+                  "id": "0199a9f8-f0c4-7f10-90f8-6483353e4624",
+                  "meterKey": "api_calls",
+                  "name": "API calls",
+                  "type": "postpaid",
+                  "updatedAt": "2026-09-28T12:00:00Z"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Meter"
+                }
+              }
+            },
+            "description": "Created."
+          },
+          "400": {
+            "$ref": "#/components/responses/MeterInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidAPIKey"
+          },
+          "409": {
+            "$ref": "#/components/responses/MeterConflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/MeterFailed"
+          }
+        },
+        "security": [
+          {
+            "projectAPIKey": []
+          }
+        ],
+        "summary": "Create a meter in the API key's project environment.",
+        "tags": [
+          "Meters"
+        ]
+      }
+    },
+    "/v1/meters/{meterKey}": {
+      "get": {
+        "parameters": [
+          {
+            "description": "The stable meter key supplied when the meter was created.",
+            "in": "path",
+            "name": "meterKey",
+            "required": true,
+            "schema": {
+              "maxLength": 120,
+              "pattern": "^[a-z][a-z0-9_-]*$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "createdAt": "2026-09-28T12:00:00Z",
+                  "description": "Requests processed by your API.",
+                  "id": "0199a9f8-f0c4-7f10-90f8-6483353e4624",
+                  "meterKey": "api_calls",
+                  "name": "API calls",
+                  "type": "postpaid",
+                  "updatedAt": "2026-09-28T12:00:00Z"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Meter"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "400": {
+            "$ref": "#/components/responses/MeterInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidAPIKey"
+          },
+          "404": {
+            "$ref": "#/components/responses/MeterNotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/MeterFailed"
+          }
+        },
+        "security": [
+          {
+            "projectAPIKey": []
+          }
+        ],
+        "summary": "Return one meter from the API key's project environment.",
+        "tags": [
+          "Meters"
+        ]
+      }
+    },
     "/v1/projects": {
       "get": {
         "responses": {
@@ -2995,7 +3484,26 @@
           "201": {
             "content": {
               "application/json": {
-                "example": {},
+                "example": {
+                  "createdAt": "2026-09-25T12:08:00Z",
+                  "environments": [
+                    {
+                      "activatedAt": "2026-09-25T12:08:00Z",
+                      "id": "0199a417-1ae1-7b67-ad5b-809be2f9ca0a",
+                      "name": "sandbox"
+                    },
+                    {
+                      "activatedAt": null,
+                      "id": "0199a417-30d7-7ccc-978b-ec14f67a4d14",
+                      "name": "live"
+                    }
+                  ],
+                  "id": "0199a417-05da-7aa2-b024-2011f24972da",
+                  "name": "Acme API",
+                  "organizationId": "0199a416-d2c8-75ea-bdb4-1d13c627169b",
+                  "organizationName": "Acme",
+                  "slug": "acme-api"
+                },
                 "schema": {
                   "$ref": "#/components/schemas/Project"
                 }
@@ -3061,7 +3569,11 @@
           "200": {
             "content": {
               "application/json": {
-                "example": {},
+                "example": {
+                  "activatedAt": "2026-09-25T12:08:00Z",
+                  "id": "0199a417-1ae1-7b67-ad5b-809be2f9ca0a",
+                  "name": "sandbox"
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ProjectEnvironment"
                 }
@@ -3781,6 +4293,288 @@
         "summary": "Replace a customer's optional contact information and supported metadata from the signed-in project workspace.",
         "tags": [
           "Dashboard Customers"
+        ]
+      }
+    },
+    "/v1/projects/{projectId}/environments/{environment}/meters": {
+      "get": {
+        "parameters": [
+          {
+            "description": "The immutable ID of the project selected in the dashboard.",
+            "in": "path",
+            "name": "projectId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The selected isolated project environment.",
+            "in": "path",
+            "name": "environment",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "The opaque next cursor from the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "The number of meters to return.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "meters": [
+                    {
+                      "createdAt": "2026-09-28T12:00:00Z",
+                      "description": "Requests processed by your API.",
+                      "id": "0199a9f8-f0c4-7f10-90f8-6483353e4624",
+                      "meterKey": "api_calls",
+                      "name": "API calls",
+                      "type": "postpaid",
+                      "updatedAt": "2026-09-28T12:00:00Z"
+                    }
+                  ],
+                  "nextCursor": null
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Meters"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "400": {
+            "$ref": "#/components/responses/MeterListInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/MeterEnvironmentNotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/MeterEnvironmentConflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/MeterFailed"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "List meters in the signed-in project workspace.",
+        "tags": [
+          "Dashboard Meters"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "description": "The immutable ID of the project selected in the dashboard.",
+            "in": "path",
+            "name": "projectId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The selected isolated project environment.",
+            "in": "path",
+            "name": "environment",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "description": "Requests processed by your API.",
+                "meterKey": "api_calls",
+                "name": "API calls",
+                "type": "postpaid"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/CreateMeterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "createdAt": "2026-09-28T12:00:00Z",
+                  "description": "Requests processed by your API.",
+                  "id": "0199a9f8-f0c4-7f10-90f8-6483353e4624",
+                  "meterKey": "api_calls",
+                  "name": "API calls",
+                  "type": "postpaid",
+                  "updatedAt": "2026-09-28T12:00:00Z"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Meter"
+                }
+              }
+            },
+            "description": "Created."
+          },
+          "400": {
+            "$ref": "#/components/responses/MeterInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/MeterEnvironmentNotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/MeterCreateConflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/MeterFailed"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "Create a meter from the signed-in project workspace.",
+        "tags": [
+          "Dashboard Meters"
+        ]
+      }
+    },
+    "/v1/projects/{projectId}/environments/{environment}/meters/{meterKey}": {
+      "get": {
+        "parameters": [
+          {
+            "description": "The immutable ID of the project selected in the dashboard.",
+            "in": "path",
+            "name": "projectId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The selected isolated project environment.",
+            "in": "path",
+            "name": "environment",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "The stable meter key supplied when the meter was created.",
+            "in": "path",
+            "name": "meterKey",
+            "required": true,
+            "schema": {
+              "maxLength": 120,
+              "pattern": "^[a-z][a-z0-9_-]*$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "createdAt": "2026-09-28T12:00:00Z",
+                  "description": "Requests processed by your API.",
+                  "id": "0199a9f8-f0c4-7f10-90f8-6483353e4624",
+                  "meterKey": "api_calls",
+                  "name": "API calls",
+                  "type": "postpaid",
+                  "updatedAt": "2026-09-28T12:00:00Z"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Meter"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "400": {
+            "$ref": "#/components/responses/MeterInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/MeterOrEnvironmentNotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/MeterEnvironmentConflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/MeterFailed"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "Return one meter from the signed-in project workspace.",
+        "tags": [
+          "Dashboard Meters"
         ]
       }
     }

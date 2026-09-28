@@ -5,78 +5,25 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-
-	onboardingmodels "github.com/Rahmannugar/consumel-server/internal/onboarding/models"
-	projectmodels "github.com/Rahmannugar/consumel-server/internal/projects/models"
 )
 
 type operation struct {
-	Method             string
-	Path               string
-	Summary            string
-	Tag                string
-	Request            string
-	SuccessCode        string
-	Success            string
-	SuccessDescription string
-	AlternateSuccess   map[string]string
-	Errors             map[string]string
-	Protected          bool
-	APIKeyProtected    bool
-	Parameters         []parameter
+	Method, Path, Summary, Tag, Request, SuccessCode, Success, SuccessDescription string
+	AlternateSuccess, Errors                                                      map[string]string
+	Protected, APIKeyProtected                                                    bool
+	Parameters                                                                    []parameter
 }
 
 type parameter struct {
-	Name        string
-	Description string
-	In          string
-	Required    bool
-	Schema      map[string]any
-}
-
-var projectEnvironmentParameters = []parameter{
-	{Name: "projectId", Description: "The immutable ID of the project selected in the dashboard.", In: "path", Required: true, Schema: map[string]any{"type": "string", "format": "uuid"}},
-	{Name: "environment", Description: "The selected isolated project environment.", In: "path", Required: true, Schema: map[string]any{"type": "string", "enum": []string{"sandbox", "live"}}},
-}
-
-var baseOperations = []operation{
-	{Method: "get", Path: "/account", Summary: "Return the signed-in account and active organization access.", SuccessCode: "200", Success: "Account", Protected: true},
-	{Method: "delete", Path: "/account/google", Summary: "Unlink Google when another sign-in method remains.", SuccessCode: "204", Protected: true},
-	{Method: "post", Path: "/account/google", Summary: "Start linking Google to the signed-in account.", SuccessCode: "200", Success: "AuthorizationURL", Protected: true},
-	{Method: "post", Path: "/auth/change-password", Summary: "Change the account password.", Request: "ChangePasswordRequest", SuccessCode: "200", Success: "User", Protected: true},
-	{Method: "post", Path: "/auth/forgot-password", Summary: "Queue a single-use password-reset link when the account exists.", Request: "EmailRequest", SuccessCode: "202", SuccessDescription: "The request was accepted without revealing whether the account exists. An eligible account's reset email was queued for asynchronous delivery.", Errors: map[string]string{"400": "BadRequest", "429": "RateLimited", "500": "PasswordResetFailed"}},
-	{Method: "post", Path: "/auth/google", Summary: "Start Google sign-in.", SuccessCode: "200", Success: "AuthorizationURL"},
-	{Method: "get", Path: "/auth/google/callback", Summary: "Complete Google sign-in and redirect to the client.", SuccessCode: "303"},
-	{Method: "get", Path: "/auth/list-sessions", Summary: "Return the account's active sessions.", SuccessCode: "200", Success: "Sessions", Protected: true},
-	{Method: "post", Path: "/auth/remove-password", Summary: "Remove password sign-in when another method remains.", Request: "RemovePasswordRequest", SuccessCode: "204", Protected: true},
-	{Method: "post", Path: "/auth/resend-verification", Summary: "Queue a new verification code when the account is eligible.", Request: "EmailRequest", SuccessCode: "202", SuccessDescription: "The request was accepted without revealing account state. When eligible, a new verification code was queued for asynchronous delivery.", Errors: map[string]string{"400": "BadRequest", "429": "RateLimited", "500": "EmailVerificationFailed"}},
-	{Method: "post", Path: "/auth/reset-password", Summary: "Replace the password with a valid reset token.", Request: "ResetPasswordRequest", SuccessCode: "200", Success: "User", SuccessDescription: "The password was replaced and existing sessions were revoked.", Errors: map[string]string{"400": "ResetPasswordInvalid", "429": "RateLimited", "500": "ResetPasswordFailed"}},
-	{Method: "post", Path: "/auth/revoke-other-sessions", Summary: "Revoke every account session except the current session.", SuccessCode: "200", Success: "Session", Protected: true},
-	{Method: "post", Path: "/auth/revoke-session", Summary: "Revoke one session belonging to the account.", Request: "RevokeSessionRequest", SuccessCode: "204", Protected: true},
-	{Method: "post", Path: "/auth/revoke-sessions", Summary: "Revoke every session belonging to the account.", SuccessCode: "204", Protected: true},
-	{Method: "get", Path: "/auth/session", Summary: "Return the current Authlier session.", SuccessCode: "200", Success: "Session", Protected: true},
-	{Method: "post", Path: "/auth/set-password", Summary: "Add password sign-in to the account.", Request: "SetPasswordRequest", SuccessCode: "200", Success: "User", Protected: true},
-	{Method: "post", Path: "/auth/sign-in", Summary: "Sign in with email and password.", Request: "CredentialsRequest", SuccessCode: "200", Success: "UserSession", SuccessDescription: "The credentials were accepted and a browser session cookie was issued.", Errors: map[string]string{"400": "BadRequest", "401": "InvalidCredentials", "403": "EmailNotVerified", "429": "RateLimited", "500": "SignInFailed"}},
-	{Method: "post", Path: "/auth/sign-out", Summary: "Revoke the current session.", SuccessCode: "204", Protected: true},
-	{Method: "post", Path: "/auth/sign-up", Summary: "Create an account and queue its verification code.", Request: "CredentialsRequest", SuccessCode: "201", Success: "User", SuccessDescription: "The unverified account was created and its verification code was queued for asynchronous delivery. No session is created until verification succeeds.", Errors: map[string]string{"400": "BadRequest", "409": "RegistrationUnavailable", "429": "RateLimited", "500": "SignUpFailed"}},
-	{Method: "post", Path: "/auth/verify-email", Summary: "Verify the email code and sign in.", Request: "VerifyEmailRequest", SuccessCode: "200", Success: "UserSession", SuccessDescription: "The email was verified and a browser session cookie was issued.", Errors: map[string]string{"400": "EmailVerificationInvalid", "429": "RateLimited", "500": "VerifyEmailFailed"}},
-	{Method: "get", Path: "/health/live", Summary: "Report whether the API process is alive.", SuccessCode: "200", Success: "Health"},
-	{Method: "get", Path: "/health/ready", Summary: "Report whether PostgreSQL is reachable.", SuccessCode: "200", Success: "Health"},
-	{Method: "post", Path: "/onboarding", Summary: "Create the signed-in owner's organization and first project.", Request: "OnboardingSetupRequest", SuccessCode: "201", Success: "OnboardingSetup", SuccessDescription: "The organization, owner access, first project, Sandbox, and Live environment were created, and the welcome email was queued.", AlternateSuccess: map[string]string{"200": "A repeated request returned the existing first project without creating duplicates or queueing another welcome email."}, Protected: true, Errors: map[string]string{"400": "OnboardingInvalid", "409": "OnboardingConflict", "500": "OnboardingFailed"}},
-	{Method: "get", Path: "/v1/projects", Summary: "Return the signed-in user's active projects and environments.", SuccessCode: "200", Success: "Projects", Protected: true, Errors: map[string]string{"500": "ProjectsLoadFailed"}},
-	{Method: "post", Path: "/v1/projects", Summary: "Create a project with isolated Sandbox and Live environments.", Request: "CreateProjectRequest", SuccessCode: "201", Success: "Project", Protected: true, Errors: map[string]string{"400": "ProjectCreateInvalid", "409": "ProjectCreateConflict", "500": "ProjectCreateFailed"}},
-	{Method: "get", Path: "/v1/projects/{projectId}/environments/{environment}/api-key", Summary: "Return safe metadata for the environment's active API key.", SuccessCode: "200", Success: "ProjectAPIKeyStatus", Protected: true, Parameters: projectEnvironmentParameters, Errors: map[string]string{"400": "ProjectAPIKeyInvalid", "404": "ProjectAPIKeyNotFound", "500": "ProjectAPIKeyFailed"}},
-	{Method: "post", Path: "/v1/projects/{projectId}/environments/{environment}/api-key", Summary: "Create the environment's first active API key and reveal its plaintext once.", SuccessCode: "201", Success: "ProjectAPIKeyCreated", Protected: true, Parameters: projectEnvironmentParameters, Errors: map[string]string{"400": "ProjectAPIKeyInvalid", "404": "ProjectAPIKeyNotFound", "409": "ProjectAPIKeyConflict", "500": "ProjectAPIKeyFailed"}},
-	{Method: "delete", Path: "/v1/projects/{projectId}/environments/{environment}/api-key", Summary: "Revoke the environment's active API key.", SuccessCode: "204", Protected: true, Parameters: projectEnvironmentParameters, Errors: map[string]string{"400": "ProjectAPIKeyInvalid", "404": "ProjectAPIKeyNotFound", "500": "ProjectAPIKeyFailed"}},
-	{Method: "post", Path: "/v1/projects/{projectId}/environments/{environment}/api-key/replace", Summary: "Revoke the active API key and reveal its replacement once.", SuccessCode: "201", Success: "ProjectAPIKeyCreated", Protected: true, Parameters: projectEnvironmentParameters, Errors: map[string]string{"400": "ProjectAPIKeyInvalid", "404": "ProjectAPIKeyNotFound", "409": "ProjectAPIKeyConflict", "500": "ProjectAPIKeyFailed"}},
-	{Method: "post", Path: "/v1/projects/{projectId}/environments/{environment}/activate", Summary: "Activate the selected project environment explicitly.", SuccessCode: "200", Success: "ProjectEnvironment", Protected: true, Parameters: projectEnvironmentParameters, Errors: map[string]string{"400": "ProjectAPIKeyInvalid", "404": "ProjectAPIKeyNotFound", "500": "ProjectAPIKeyFailed"}},
+	Name, Description, In string
+	Required              bool
+	Schema                map[string]any
 }
 
 // Document builds the deterministic OpenAPI contract served by the API and
 // written to openapi.json for review and stale-output checks.
 func Document() ([]byte, error) {
-	operations := append([]operation{}, baseOperations...)
-	operations = append(operations, customerOperations()...)
+	operations := allOperations()
 	sort.Slice(operations, func(i, j int) bool {
 		if operations[i].Path == operations[j].Path {
 			return operations[i].Method < operations[j].Method
@@ -94,18 +41,15 @@ func Document() ([]byte, error) {
 		if description == "" {
 			description = successDescription(endpoint.SuccessCode)
 		}
-		response := map[string]any{"description": description}
+		success := map[string]any{"description": description}
 		if endpoint.Success != "" {
-			response["content"] = jsonContent(schemaReference(endpoint.Success), exampleFor(endpoint.Success))
+			success["content"] = jsonContent(schemaReference(endpoint.Success), exampleFor(endpoint.Success))
 		}
-		responses := operationResponses(endpoint, response)
+		responses := operationResponses(endpoint, success)
 		for code, alternateDescription := range endpoint.AlternateSuccess {
 			alternate := map[string]any{"description": alternateDescription}
 			if endpoint.Success != "" {
-				alternate["content"] = jsonContent(
-					schemaReference(endpoint.Success),
-					exampleFor(endpoint.Success),
-				)
+				alternate["content"] = jsonContent(schemaReference(endpoint.Success), exampleFor(endpoint.Success))
 			}
 			responses[code] = alternate
 		}
@@ -113,59 +57,37 @@ func Document() ([]byte, error) {
 		if tag == "" {
 			tag = tagFor(endpoint.Path)
 		}
-		operationDocument := map[string]any{
-			"summary":   endpoint.Summary,
-			"tags":      []string{tag},
-			"responses": responses,
-		}
+		operationDocument := map[string]any{"summary": endpoint.Summary, "tags": []string{tag}, "responses": responses}
 		if endpoint.Request != "" {
-			operationDocument["requestBody"] = map[string]any{
-				"required": true,
-				"content":  jsonContent(schemaReference(endpoint.Request), exampleFor(endpoint.Request)),
-			}
+			operationDocument["requestBody"] = map[string]any{"required": true, "content": jsonContent(schemaReference(endpoint.Request), exampleFor(endpoint.Request))}
 		}
 		if len(endpoint.Parameters) > 0 {
 			parameters := make([]map[string]any, 0, len(endpoint.Parameters))
 			for _, value := range endpoint.Parameters {
-				parameters = append(parameters, map[string]any{
-					"name": value.Name, "in": value.In, "required": value.Required,
-					"description": value.Description, "schema": value.Schema,
-				})
+				parameters = append(parameters, map[string]any{"name": value.Name, "in": value.In, "required": value.Required, "description": value.Description, "schema": value.Schema})
 			}
 			operationDocument["parameters"] = parameters
 		}
 		if endpoint.Protected {
-			operationDocument["security"] = []map[string][]string{
-				{"productionCookieSession": {}},
-				{"localCookieSession": {}},
-			}
+			operationDocument["security"] = []map[string][]string{{"productionCookieSession": {}}, {"localCookieSession": {}}}
 		}
 		if endpoint.APIKeyProtected {
 			operationDocument["security"] = []map[string][]string{{"projectAPIKey": {}}}
 		}
 		path[endpoint.Method] = operationDocument
 	}
-
 	document := map[string]any{
 		"openapi": "3.1.0",
-		"info": map[string]any{
-			"title":       "Consumel API",
-			"version":     "0.1.0",
-			"description": "Consumel usage-based billing infrastructure API.",
-		},
-		"servers": []map[string]string{
-			{"url": "https://api.consumel.com", "description": "Production"},
-			{"url": "http://localhost:8080", "description": "Local development"},
-		},
-		"paths": paths,
+		"info":    map[string]any{"title": "Consumel API", "version": "0.1.0", "description": "Consumel usage-based billing infrastructure API."},
+		"servers": []map[string]string{{"url": "https://api.consumel.com", "description": "Production"}, {"url": "http://localhost:8080", "description": "Local development"}},
+		"paths":   paths,
 		"components": map[string]any{
 			"securitySchemes": map[string]any{
 				"productionCookieSession": map[string]any{"type": "apiKey", "in": "cookie", "name": "__Host-consumel_session"},
 				"localCookieSession":      map[string]any{"type": "apiKey", "in": "cookie", "name": "consumel_session"},
 				"projectAPIKey":           map[string]any{"type": "http", "scheme": "bearer", "bearerFormat": "cm_test_… or cm_live_…"},
 			},
-			"schemas":   schemas(),
-			"responses": errorResponses(),
+			"schemas": schemas(), "responses": errorResponses(),
 		},
 	}
 	encoded, err := json.MarshalIndent(document, "", "  ")
@@ -175,143 +97,33 @@ func Document() ([]byte, error) {
 	return append(encoded, '\n'), nil
 }
 
-func schemas() map[string]any {
-	stringProperty := func() map[string]any { return map[string]any{"type": "string"} }
-	password := map[string]any{"type": "string", "minLength": 8, "maxLength": 128, "format": "password", "pattern": `^(?=.*[A-Z])(?=.*[0-9])(?=.*[^\p{L}\p{N}\s]).{8,128}$`}
-	result := map[string]any{
-		"Account":                object([]string{"session", "user", "organizations"}, map[string]any{"session": schemaReference("AccountSession"), "user": schemaReference("AccountUser"), "organizations": map[string]any{"type": "array", "maxItems": 1, "items": schemaReference("OrganizationAccess")}}),
-		"AccountSession":         object([]string{"id", "createdAt", "expiresAt"}, map[string]any{"id": stringProperty(), "createdAt": map[string]any{"type": "string", "format": "date-time"}, "expiresAt": map[string]any{"type": "string", "format": "date-time"}}),
-		"AccountUser":            object([]string{"id", "email"}, map[string]any{"id": stringProperty(), "email": map[string]any{"type": "string", "format": "email"}}),
-		"AuthorizationURL":       object([]string{"url"}, map[string]any{"url": map[string]any{"type": "string", "format": "uri"}}),
-		"ChangePasswordRequest":  object([]string{"currentPassword", "newPassword"}, map[string]any{"currentPassword": stringProperty(), "newPassword": password, "revokeOtherSessions": map[string]any{"type": "boolean"}}),
-		"CredentialsRequest":     object([]string{"email", "password"}, map[string]any{"email": map[string]any{"type": "string", "format": "email"}, "password": password}),
-		"CreateProjectRequest":   projectmodels.CreateProjectRequestOpenAPISchema(),
-		"EmailRequest":           object([]string{"email"}, map[string]any{"email": map[string]any{"type": "string", "format": "email"}}),
-		"Error":                  object([]string{"error"}, map[string]any{"error": object([]string{"code"}, map[string]any{"code": stringProperty(), "message": stringProperty()})}),
-		"Health":                 object([]string{"status"}, map[string]any{"status": map[string]any{"type": "string", "example": "ok"}}),
-		"OrganizationAccess":     object([]string{"id", "name", "owner", "roleId", "roleName"}, map[string]any{"id": stringProperty(), "name": stringProperty(), "owner": map[string]any{"type": "boolean"}, "roleId": stringProperty(), "roleName": stringProperty(), "roleSystemKey": map[string]any{"type": []string{"string", "null"}}}),
-		"OnboardingSetupRequest": onboardingmodels.SetupRequestOpenAPISchema(),
-		"OnboardingSetup": object([]string{"organization", "project"}, map[string]any{
-			"organization": schemaReference("OnboardingOrganization"),
-			"project":      schemaReference("Project"),
-		}),
-		"OnboardingOrganization": object([]string{"id", "name"}, map[string]any{
-			"id": stringProperty(), "name": stringProperty(),
-		}),
-		"Project": object([]string{"id", "organizationId", "organizationName", "name", "slug", "environments", "createdAt"}, map[string]any{
-			"id":               stringProperty(),
-			"organizationId":   stringProperty(),
-			"organizationName": stringProperty(),
-			"name":             stringProperty(),
-			"slug":             map[string]any{"type": "string", "minLength": 1, "maxLength": 120, "example": "acme-api"},
-			"environments":     map[string]any{"type": "array", "minItems": 2, "maxItems": 2, "items": schemaReference("ProjectEnvironment")},
-			"createdAt":        map[string]any{"type": "string", "format": "date-time"},
-		}),
-		"ProjectEnvironment": object([]string{"id", "name", "activatedAt"}, map[string]any{
-			"id":          stringProperty(),
-			"name":        map[string]any{"type": "string", "enum": []string{"sandbox", "live"}},
-			"activatedAt": map[string]any{"type": []string{"string", "null"}, "format": "date-time"},
-		}),
-		"Projects": object([]string{"projects"}, map[string]any{
-			"projects": map[string]any{"type": "array", "items": schemaReference("Project")},
-		}),
-		"ProjectAPIKey": object([]string{"id", "environment", "prefix", "lastFour", "createdAt", "lastUsedAt"}, map[string]any{
-			"id":          map[string]any{"type": "string", "format": "uuid"},
-			"environment": map[string]any{"type": "string", "enum": []string{"sandbox", "live"}},
-			"prefix":      map[string]any{"type": "string", "enum": []string{"cm_test_", "cm_live_"}},
-			"lastFour":    map[string]any{"type": "string", "minLength": 4, "maxLength": 4, "example": "QBY0"},
-			"createdAt":   map[string]any{"type": "string", "format": "date-time"},
-			"lastUsedAt":  map[string]any{"type": []string{"string", "null"}, "format": "date-time"},
-		}),
-		"ProjectAPIKeyStatus": object([]string{"apiKey"}, map[string]any{
-			"apiKey": map[string]any{"oneOf": []map[string]any{schemaReference("ProjectAPIKey"), {"type": "null"}}},
-		}),
-		"ProjectAPIKeyCreated": object([]string{"apiKey", "secret"}, map[string]any{
-			"apiKey": schemaReference("ProjectAPIKey"),
-			"secret": map[string]any{"type": "string", "writeOnly": true, "pattern": `^cm_(test|live)_[A-Za-z0-9_-]{43}$`, "example": "cm_test_3xKq7VfJm2zY8wN4aBcD6eFgH9iLpQrStUvWx0Z1A2B"},
-		}),
-		"RemovePasswordRequest": object([]string{"currentPassword"}, map[string]any{"currentPassword": stringProperty()}),
-		"ResetPasswordRequest":  object([]string{"token", "newPassword"}, map[string]any{"token": stringProperty(), "newPassword": password}),
-		"RevokeSessionRequest":  object([]string{"sessionId"}, map[string]any{"sessionId": stringProperty()}),
-		"Session":               object([]string{"session"}, map[string]any{"session": schemaReference("SessionDetails")}),
-		"SessionDetails":        object([]string{"id", "subjectId", "createdAt", "expiresAt"}, map[string]any{"id": stringProperty(), "subjectId": stringProperty(), "createdAt": map[string]any{"type": "string", "format": "date-time"}, "expiresAt": map[string]any{"type": "string", "format": "date-time"}}),
-		"ListedSession":         object([]string{"id", "subjectId", "createdAt", "expiresAt", "current"}, map[string]any{"id": stringProperty(), "subjectId": stringProperty(), "createdAt": map[string]any{"type": "string", "format": "date-time"}, "expiresAt": map[string]any{"type": "string", "format": "date-time"}, "current": map[string]any{"type": "boolean"}}),
-		"Sessions":              object([]string{"sessions"}, map[string]any{"sessions": map[string]any{"type": "array", "items": schemaReference("ListedSession")}}),
-		"SetPasswordRequest":    object([]string{"password"}, map[string]any{"password": password}),
-		"User":                  object([]string{"user"}, map[string]any{"user": schemaReference("UserDetails")}),
-		"UserDetails":           object([]string{"id", "email"}, map[string]any{"id": stringProperty(), "email": map[string]any{"type": "string", "format": "email"}}),
-		"UserSession":           object([]string{"user", "session"}, map[string]any{"user": schemaReference("UserDetails"), "session": schemaReference("SessionDetails")}),
-		"VerifyEmailRequest":    object([]string{"email", "code"}, map[string]any{"email": map[string]any{"type": "string", "format": "email"}, "code": map[string]any{"type": "string", "pattern": `^[0-9]{6}$`, "example": "482193"}}),
+func allOperations() []operation {
+	groups := [][]operation{authenticationOperations(), healthOperations(), onboardingOperations(), projectOperations(), customerOperations(), meterOperations()}
+	var result []operation
+	for _, group := range groups {
+		result = append(result, group...)
 	}
-	mergeComponents(result, customerSchemas())
+	return result
+}
+
+func schemas() map[string]any {
+	result := map[string]any{"Error": object([]string{"error"}, map[string]any{"error": object([]string{"code"}, map[string]any{"code": map[string]any{"type": "string"}, "message": map[string]any{"type": "string"}})})}
+	for _, additions := range []map[string]any{authenticationSchemas(), healthSchemas(), onboardingSchemas(), projectSchemas(), customerSchemas(), meterSchemas()} {
+		mergeComponents(result, additions)
+	}
 	return result
 }
 
 func errorResponses() map[string]any {
-	result := map[string]any{
-		"BadRequest":               errorResponse("The JSON body or one of its fields is invalid.", "invalid_request"),
-		"EmailNotVerified":         errorResponse("The credentials are valid, but email verification is required. A fresh code was queued when the account was eligible.", "email_not_verified"),
-		"EmailVerificationFailed":  errorResponse("The verification email could not be queued.", "email_verification_failed"),
-		"EmailVerificationInvalid": errorResponseExamples("The request body or verification code is invalid.", "invalid_request", "invalid_token"),
-		"InvalidCredentials":       errorResponse("The email address or password is incorrect.", "invalid_credentials"),
-		"InvalidAPIKey":            errorResponseWithMessage("The project API key is missing, malformed, revoked, replaced, or inactive.", "invalid_api_key", "Provide an active project environment API key."),
-		"NotAuthenticated":         errorResponse("Authentication is required.", "not_authenticated"),
-		"OnboardingConflict":       errorResponseWithMessage("The account already has organization access that cannot be changed by onboarding.", "organization_already_exists", "This account already belongs to an organization that needs attention."),
-		"OnboardingFailed":         errorResponseWithMessage("The onboarding transaction could not be completed.", "onboarding_failed", "Consumel could not create your project. Try again shortly."),
-		"OnboardingInvalid":        errorResponseWithMessage("The organization name or project name is invalid.", "invalid_request", "Enter an organization name and project name between 1 and 120 characters."),
-		"PasswordResetFailed":      errorResponseExamples("The reset workflow could not be completed.", "password_reset_failed", "session_revocation_failed"),
-		"ProjectsLoadFailed":       errorResponseWithMessage("The signed-in user's projects could not be loaded.", "projects_load_failed", "Consumel could not load your projects. Try again shortly."),
-		"ProjectCreateInvalid":     errorResponseWithMessage("The project name is invalid.", "invalid_request", "Enter a project name between 1 and 120 characters."),
-		"ProjectCreateConflict":    errorResponseExamples("The project cannot be created in the current organization state.", "project_name_exists", "organization_required"),
-		"ProjectCreateFailed":      errorResponseWithMessage("The project could not be created.", "project_create_failed", "Consumel could not create the project. Try again shortly."),
-		"ProjectAPIKeyInvalid":     errorResponseWithMessage("The project ID or environment is invalid.", "invalid_request", "Choose a valid project and environment."),
-		"ProjectAPIKeyNotFound":    errorResponseExamples("The project environment or active API key is unavailable.", "project_environment_not_found", "api_key_not_found"),
-		"ProjectAPIKeyConflict":    errorResponseExamples("The requested API key action conflicts with the environment state.", "environment_inactive", "api_key_already_exists"),
-		"ProjectAPIKeyFailed":      errorResponseWithMessage("The API key action could not be completed.", "api_key_operation_failed", "Consumel could not complete the API key action. Try again shortly."),
-		"RateLimited":              errorResponse("Too many attempts were made.", "too_many_attempts"),
-		"RegistrationUnavailable":  errorResponse("Registration cannot be completed for this email address. The response does not disclose existing account state.", "registration_unavailable"),
-		"ResetPasswordInvalid":     errorResponseExamples("The request, reset token, or replacement password is invalid.", "invalid_request", "invalid_token", "invalid_password"),
-		"ServerError":              errorResponse("The request could not be completed.", "authentication_failed"),
-		"SignInFailed":             errorResponseExamples("Authentication or session creation could not be completed.", "authentication_failed", "email_verification_failed", "session_failed"),
-		"SignUpFailed":             errorResponseExamples("Account creation or verification delivery could not be completed.", "authentication_failed", "email_verification_failed"),
-		"VerifyEmailFailed":        errorResponseExamples("Verification or session creation could not be completed.", "email_verification_failed", "session_failed"),
+	result := map[string]any{"ServerError": errorResponse("The request could not be completed.", "authentication_failed")}
+	for _, additions := range []map[string]any{authenticationErrorResponses(), onboardingErrorResponses(), projectErrorResponses(), customerErrorResponses(), meterErrorResponses()} {
+		mergeComponents(result, additions)
 	}
-	mergeComponents(result, customerErrorResponses())
 	return result
 }
 
-func errorResponse(description, code string) map[string]any {
-	return map[string]any{"description": description, "content": jsonContent(schemaReference("Error"), map[string]any{"error": map[string]any{"code": code}})}
-}
-
-func errorResponseWithMessage(description, code, message string) map[string]any {
-	return map[string]any{
-		"description": description,
-		"content": jsonContent(
-			schemaReference("Error"),
-			map[string]any{"error": map[string]any{"code": code, "message": message}},
-		),
-	}
-}
-
-func errorResponseExamples(description string, codes ...string) map[string]any {
-	examples := make(map[string]any, len(codes))
-	for _, code := range codes {
-		examples[code] = map[string]any{"value": map[string]any{"error": map[string]any{"code": code}}}
-	}
-	return map[string]any{
-		"description": description,
-		"content": map[string]any{"application/json": map[string]any{
-			"schema": schemaReference("Error"), "examples": examples,
-		}},
-	}
-}
-
 func operationResponses(endpoint operation, success map[string]any) map[string]any {
-	responses := map[string]any{
-		endpoint.SuccessCode: success,
-		"500":                responseReference("ServerError"),
-	}
+	responses := map[string]any{endpoint.SuccessCode: success, "500": responseReference("ServerError")}
 	if endpoint.Request != "" || endpoint.Path == "/auth/google/callback" {
 		responses["400"] = responseReference("BadRequest")
 	}
@@ -325,10 +137,7 @@ func operationResponses(endpoint operation, success map[string]any) map[string]a
 		responses["429"] = responseReference("RateLimited")
 	}
 	if endpoint.Path == "/health/ready" {
-		responses["503"] = map[string]any{
-			"description": "PostgreSQL is unavailable.",
-			"content":     jsonContent(schemaReference("Health"), map[string]any{"status": "unavailable"}),
-		}
+		responses["503"] = map[string]any{"description": "PostgreSQL is unavailable.", "content": jsonContent(schemaReference("Health"), map[string]any{"status": "unavailable"})}
 	}
 	for status, response := range endpoint.Errors {
 		responses[status] = responseReference(response)
@@ -336,6 +145,46 @@ func operationResponses(endpoint operation, success map[string]any) map[string]a
 	return responses
 }
 
+func exampleFor(name string) map[string]any {
+	providers := []func(string) (map[string]any, bool){authenticationExample, healthExample, onboardingExample, projectExampleFor, customerExample, meterExample}
+	for _, provider := range providers {
+		if example, ok := provider(name); ok {
+			return example
+		}
+	}
+	return map[string]any{}
+}
+
+func tagFor(path string) string {
+	switch {
+	case strings.HasPrefix(path, "/health"):
+		return "Health"
+	case path == "/onboarding":
+		return "Onboarding"
+	case strings.Contains(path, "/customers"):
+		return "Customers"
+	case strings.Contains(path, "/meters"):
+		return "Meters"
+	case strings.HasPrefix(path, "/v1/projects"):
+		return "Projects"
+	default:
+		return "Authentication"
+	}
+}
+
+func errorResponse(description, code string) map[string]any {
+	return map[string]any{"description": description, "content": jsonContent(schemaReference("Error"), map[string]any{"error": map[string]any{"code": code}})}
+}
+func errorResponseWithMessage(description, code, message string) map[string]any {
+	return map[string]any{"description": description, "content": jsonContent(schemaReference("Error"), map[string]any{"error": map[string]any{"code": code, "message": message}})}
+}
+func errorResponseExamples(description string, codes ...string) map[string]any {
+	examples := make(map[string]any, len(codes))
+	for _, code := range codes {
+		examples[code] = map[string]any{"value": map[string]any{"error": map[string]any{"code": code}}}
+	}
+	return map[string]any{"description": description, "content": map[string]any{"application/json": map[string]any{"schema": schemaReference("Error"), "examples": examples}}}
+}
 func responseReference(name string) map[string]any {
 	return map[string]any{"$ref": "#/components/responses/" + name}
 }
@@ -348,131 +197,22 @@ func jsonContent(schema, example map[string]any) map[string]any {
 func object(required []string, properties map[string]any) map[string]any {
 	return map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": properties}
 }
-
-func successDescription(status string) string {
-	if status == "201" {
-		return "Created."
-	}
-	if status == "202" {
-		return "Accepted without revealing whether the account exists."
-	}
-	if status == "204" {
-		return "Completed without a response body."
-	}
-	if status == "303" {
-		return "Redirects to the client after authentication."
-	}
-	return "Completed successfully."
-}
-
-func tagFor(path string) string {
-	if len(path) >= 7 && path[:7] == "/health" {
-		return "Health"
-	}
-	if path == "/onboarding" {
-		return "Onboarding"
-	}
-	if strings.Contains(path, "/customers") {
-		return "Customers"
-	}
-	if len(path) >= len("/v1/projects") && path[:len("/v1/projects")] == "/v1/projects" {
-		return "Projects"
-	}
-	return "Authentication"
-}
-
-func exampleFor(name string) map[string]any {
-	if example, ok := customerExample(name); ok {
-		return example
-	}
-	session := map[string]any{"id": "01K5A7Q72E9WPJ8D4J13FQ0A6R", "subjectId": "01K5A7PZ9SA93YN3PX84B9G6KB", "createdAt": "2026-09-25T12:00:00Z", "expiresAt": "2026-10-02T12:00:00Z"}
-	user := map[string]any{"id": "01K5A7PZ9SA93YN3PX84B9G6KB", "email": "developer@example.com"}
-	switch name {
-	case "CredentialsRequest":
-		return map[string]any{"email": "developer@example.com", "password": "Correct horse 7!"}
-	case "EmailRequest":
-		return map[string]any{"email": "developer@example.com"}
-	case "VerifyEmailRequest":
-		return map[string]any{"email": "developer@example.com", "code": "482193"}
-	case "ResetPasswordRequest":
-		return map[string]any{"token": "single-use-reset-token", "newPassword": "Correct horse 7!"}
-	case "ChangePasswordRequest":
-		return map[string]any{"currentPassword": "Previous horse 6!", "newPassword": "Correct horse 7!", "revokeOtherSessions": true}
-	case "SetPasswordRequest":
-		return map[string]any{"password": "Correct horse 7!"}
-	case "RemovePasswordRequest":
-		return map[string]any{"currentPassword": "Correct horse 7!"}
-	case "RevokeSessionRequest":
-		return map[string]any{"sessionId": "01K5A7Q72E9WPJ8D4J13FQ0A6R"}
-	case "AuthorizationURL":
-		return map[string]any{"url": "https://accounts.google.com/o/oauth2/v2/auth?..."}
-	case "Health":
-		return map[string]any{"status": "ok"}
-	case "Session":
-		return map[string]any{"session": session}
-	case "Sessions":
-		listedSession := map[string]any{}
-		for key, value := range session {
-			listedSession[key] = value
-		}
-		listedSession["current"] = true
-		return map[string]any{"sessions": []any{listedSession}}
-	case "User":
-		return map[string]any{"user": user}
-	case "UserSession":
-		return map[string]any{"user": user, "session": session}
-	case "Account":
-		accountSession := map[string]any{"id": session["id"], "createdAt": session["createdAt"], "expiresAt": session["expiresAt"]}
-		return map[string]any{"user": user, "session": accountSession, "organizations": []any{map[string]any{"id": "01K5A80AZ99MGRM9Q7K0SZV8XJ", "name": "Acme", "owner": true, "roleId": "01K5A80JPQ1PVX1XBQXF8VZC52", "roleName": "Admin", "roleSystemKey": "admin"}}}
-	case "OnboardingSetupRequest":
-		return map[string]any{"organizationName": "Acme", "projectName": "Acme API"}
-	case "CreateProjectRequest":
-		return map[string]any{"name": "Usage Service"}
-	case "OnboardingSetup":
-		project := projectExample()
-		return map[string]any{
-			"organization": map[string]any{"id": project["organizationId"], "name": "Acme"},
-			"project":      project,
-		}
-	case "Projects":
-		return map[string]any{"projects": []any{projectExample()}}
-	case "ProjectAPIKeyStatus":
-		return map[string]any{"apiKey": apiKeyExample()}
-	case "ProjectAPIKeyCreated":
-		return map[string]any{
-			"apiKey": apiKeyExample(),
-			"secret": "cm_test_3xKq7VfJm2zY8wN4aBcD6eFgH9iLpQrStUvWx0Z1A2B",
-		}
-	default:
-		return map[string]any{}
-	}
-}
-
 func mergeComponents(target, additions map[string]any) {
 	for name, component := range additions {
 		target[name] = component
 	}
 }
-
-func apiKeyExample() map[string]any {
-	return map[string]any{
-		"id": "0199a7e1-8f18-7b6e-90c9-dc7b4ace22d1", "environment": "sandbox",
-		"prefix": "cm_test_", "lastFour": "Z1A2",
-		"createdAt": "2026-09-27T12:00:00Z", "lastUsedAt": nil,
-	}
-}
-
-func projectExample() map[string]any {
-	return map[string]any{
-		"id":               "0199a417-05da-7aa2-b024-2011f24972da",
-		"organizationId":   "0199a416-d2c8-75ea-bdb4-1d13c627169b",
-		"organizationName": "Acme",
-		"name":             "Acme API",
-		"slug":             "acme-api",
-		"createdAt":        "2026-09-25T12:08:00Z",
-		"environments": []any{
-			map[string]any{"id": "0199a417-1ae1-7b67-ad5b-809be2f9ca0a", "name": "sandbox", "activatedAt": "2026-09-25T12:08:00Z"},
-			map[string]any{"id": "0199a417-30d7-7ccc-978b-ec14f67a4d14", "name": "live", "activatedAt": nil},
-		},
+func successDescription(status string) string {
+	switch status {
+	case "201":
+		return "Created."
+	case "202":
+		return "Accepted without revealing whether the account exists."
+	case "204":
+		return "Completed without a response body."
+	case "303":
+		return "Redirects to the client after authentication."
+	default:
+		return "Completed successfully."
 	}
 }
