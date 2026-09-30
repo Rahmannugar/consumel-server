@@ -95,33 +95,6 @@ func (q *Queries) ActiveConsumptionMeter(ctx context.Context, arg ActiveConsumpt
 	return i, err
 }
 
-const applyConsumptionBalance = `-- name: ApplyConsumptionBalance :one
-UPDATE balances
-SET quantity = $2, updated_at = now()
-WHERE id = $1
-RETURNING id, project_environment_id, customer_id, meter_id, quantity, created_at, updated_at
-`
-
-type ApplyConsumptionBalanceParams struct {
-	ID       uuid.UUID
-	Quantity int64
-}
-
-func (q *Queries) ApplyConsumptionBalance(ctx context.Context, arg ApplyConsumptionBalanceParams) (Balance, error) {
-	row := q.db.QueryRow(ctx, applyConsumptionBalance, arg.ID, arg.Quantity)
-	var i Balance
-	err := row.Scan(
-		&i.ID,
-		&i.ProjectEnvironmentID,
-		&i.CustomerID,
-		&i.MeterID,
-		&i.Quantity,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
 const balanceForConsumption = `-- name: BalanceForConsumption :one
 SELECT id, project_environment_id, customer_id, meter_id, quantity, created_at, updated_at
 FROM balances
@@ -341,6 +314,26 @@ func (q *Queries) EnsureHybridBalance(ctx context.Context, arg EnsureHybridBalan
 		arg.CustomerID,
 		arg.MeterID,
 	)
+	return err
+}
+
+const recordConsumptionGrantAllocation = `-- name: RecordConsumptionGrantAllocation :exec
+INSERT INTO consumption_grant_allocations (
+    consumption_operation_id,
+    entitlement_grant_id,
+    quantity
+)
+VALUES ($1, $2, $3)
+`
+
+type RecordConsumptionGrantAllocationParams struct {
+	ConsumptionOperationID uuid.UUID
+	EntitlementGrantID     uuid.UUID
+	Quantity               int64
+}
+
+func (q *Queries) RecordConsumptionGrantAllocation(ctx context.Context, arg RecordConsumptionGrantAllocationParams) error {
+	_, err := q.db.Exec(ctx, recordConsumptionGrantAllocation, arg.ConsumptionOperationID, arg.EntitlementGrantID, arg.Quantity)
 	return err
 }
 

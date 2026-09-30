@@ -20,20 +20,22 @@ type Balance struct {
 }
 
 type BalanceOperation struct {
-	ID                   uuid.UUID
-	ProjectEnvironmentID uuid.UUID
-	IdempotencyKey       pgtype.UUID
-	OperationType        string
-	RequestCustomerID    string
-	RequestMeterKey      string
-	RequestedQuantity    int64
-	CustomerID           uuid.UUID
-	MeterID              uuid.UUID
-	BalanceID            pgtype.UUID
-	ResultingQuantity    *int64
-	ResultingCreatedAt   pgtype.Timestamptz
-	ResultingUpdatedAt   pgtype.Timestamptz
-	CreatedAt            pgtype.Timestamptz
+	ID                     uuid.UUID
+	ProjectEnvironmentID   uuid.UUID
+	IdempotencyKey         pgtype.UUID
+	OperationType          string
+	RequestCustomerID      string
+	RequestMeterKey        string
+	RequestedQuantity      int64
+	CustomerID             uuid.UUID
+	MeterID                uuid.UUID
+	BalanceID              pgtype.UUID
+	ResultingQuantity      *int64
+	ResultingCreatedAt     pgtype.Timestamptz
+	ResultingUpdatedAt     pgtype.Timestamptz
+	CreatedAt              pgtype.Timestamptz
+	RequestedExpiresAt     pgtype.Timestamptz
+	ResultingNextExpiresAt pgtype.Timestamptz
 }
 
 type ConsumptionOperation struct {
@@ -55,4 +57,16 @@ type ConsumptionOperation struct {
 	CreatedAt            pgtype.Timestamptz
 	ReplayCount          int64
 	LastReplayedAt       pgtype.Timestamptz
+}
+
+type EntitlementGrant struct {
+	ID                          uuid.UUID
+	BalanceID                   uuid.UUID
+	SourceType                  string
+	GrantedQuantity             int64
+	RemainingQuantity           int64
+	ExpiresAt                   pgtype.Timestamptz
+	CreatedByBalanceOperationID pgtype.UUID
+	CreatedAt                   pgtype.Timestamptz
+	UpdatedAt                   pgtype.Timestamptz
 }

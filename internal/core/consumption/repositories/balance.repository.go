@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
+	"time"
 
 	consumptionmodels "github.com/Rahmannugar/consumel-server/internal/core/consumption/models"
 	consumptiondb "github.com/Rahmannugar/consumel-server/internal/core/consumption/repositories/generated"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -26,7 +27,7 @@ func (repository *BalanceRepository) Add(
 	ctx context.Context,
 	projectEnvironmentID uuid.UUID,
 	request consumptionmodels.AddBalanceRequest,
-	idempotencyKey, operationID, balanceID uuid.UUID,
+	idempotencyKey, operationID, balanceID, grantID uuid.UUID,
 ) (consumptionmodels.Balance, bool, error) {
 	tx, err := repository.pool.Begin(ctx)
 	if err != nil {
@@ -50,9 +51,13 @@ func (repository *BalanceRepository) Add(
 	}
 	_, err = queries.ClaimBalanceAddition(ctx, consumptiondb.ClaimBalanceAdditionParams{
 		ID: operationID, ProjectEnvironmentID: projectEnvironmentID,
-		IdempotencyKey:    pgtype.UUID{Bytes: idempotencyKey, Valid: true},
-		RequestCustomerID: request.CustomerID, RequestMeterKey: request.MeterKey,
-		RequestedQuantity: request.Quantity, CustomerID: subject.CustomerID, MeterID: subject.MeterID,
+		IdempotencyKey:     pgtype.UUID{Bytes: idempotencyKey, Valid: true},
+		RequestCustomerID:  request.CustomerID,
+		RequestMeterKey:    request.MeterKey,
+		RequestedQuantity:  request.Quantity,
+		RequestedExpiresAt: timestamp(request.ExpiresAt),
+		CustomerID:         subject.CustomerID,
+		MeterID:            subject.MeterID,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		existing, loadErr := operationByIdempotencyKey(ctx, queries, projectEnvironmentID, idempotencyKey)
@@ -66,28 +71,33 @@ func (repository *BalanceRepository) Add(
 		return consumptionmodels.Balance{}, false, fmt.Errorf("claim balance addition: %w", err)
 	}
 
-	stored, err := queries.AddBalance(ctx, consumptiondb.AddBalanceParams{
+	stored, err := queries.EnsureBalance(ctx, consumptiondb.EnsureBalanceParams{
 		ID: balanceID, ProjectEnvironmentID: projectEnvironmentID,
-		CustomerID: subject.CustomerID, MeterID: subject.MeterID, Quantity: request.Quantity,
+		CustomerID: subject.CustomerID, MeterID: subject.MeterID,
 	})
-	if quantityOverflow(err) {
+	if err != nil {
+		return consumptionmodels.Balance{}, false, fmt.Errorf("ensure balance: %w", err)
+	}
+	if _, err := queries.BalanceForUpdate(ctx, stored.ID); err != nil {
+		return consumptionmodels.Balance{}, false, fmt.Errorf("lock balance: %w", err)
+	}
+	before, err := queries.ActiveEntitlementSummary(ctx, stored.ID)
+	if err != nil {
+		return consumptionmodels.Balance{}, false, fmt.Errorf("summarize balance: %w", err)
+	}
+	if before.Quantity > math.MaxInt64-request.Quantity {
 		return consumptionmodels.Balance{}, false, consumptionmodels.ErrBalanceOverflow
 	}
-	if err != nil {
-		return consumptionmodels.Balance{}, false, fmt.Errorf("add balance: %w", err)
-	}
-	result := consumptionmodels.Balance{
-		ID: stored.ID, ProjectEnvironmentID: projectEnvironmentID,
-		CustomerID: request.CustomerID, MeterKey: request.MeterKey,
-		Quantity: stored.Quantity, CreatedAt: stored.CreatedAt.Time, UpdatedAt: stored.UpdatedAt.Time,
-	}
-	if _, err := queries.FinalizeBalanceOperation(ctx, consumptiondb.FinalizeBalanceOperationParams{
-		ID: operationID, BalanceID: pgtype.UUID{Bytes: stored.ID, Valid: true},
-		ResultingQuantity:  &result.Quantity,
-		ResultingCreatedAt: pgtype.Timestamptz{Time: result.CreatedAt, Valid: true},
-		ResultingUpdatedAt: pgtype.Timestamptz{Time: result.UpdatedAt, Valid: true},
+	if _, err := queries.InsertEntitlementGrant(ctx, consumptiondb.InsertEntitlementGrantParams{
+		ID: grantID, BalanceID: stored.ID, GrantedQuantity: request.Quantity,
+		ExpiresAt:                   timestamp(request.ExpiresAt),
+		CreatedByBalanceOperationID: pgtype.UUID{Bytes: operationID, Valid: true},
 	}); err != nil {
-		return consumptionmodels.Balance{}, false, fmt.Errorf("finalize balance addition: %w", err)
+		return consumptionmodels.Balance{}, false, fmt.Errorf("insert entitlement grant: %w", err)
+	}
+	result, err := finalizeBalance(ctx, queries, operationID, stored, request.CustomerID, request.MeterKey)
+	if err != nil {
+		return consumptionmodels.Balance{}, false, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return consumptionmodels.Balance{}, false, fmt.Errorf("commit balance addition: %w", err)
@@ -100,7 +110,7 @@ func (repository *BalanceRepository) Set(
 	projectEnvironmentID uuid.UUID,
 	customerID, meterKey string,
 	quantity int64,
-	operationID, balanceID uuid.UUID,
+	operationID, balanceID, grantID uuid.UUID,
 ) (consumptionmodels.Balance, error) {
 	tx, err := repository.pool.Begin(ctx)
 	if err != nil {
@@ -112,27 +122,44 @@ func (repository *BalanceRepository) Set(
 	if err != nil {
 		return consumptionmodels.Balance{}, err
 	}
-	stored, err := queries.SetBalance(ctx, consumptiondb.SetBalanceParams{
+	stored, err := queries.EnsureBalance(ctx, consumptiondb.EnsureBalanceParams{
 		ID: balanceID, ProjectEnvironmentID: projectEnvironmentID,
-		CustomerID: subject.CustomerID, MeterID: subject.MeterID, Quantity: quantity,
+		CustomerID: subject.CustomerID, MeterID: subject.MeterID,
 	})
 	if err != nil {
-		return consumptionmodels.Balance{}, fmt.Errorf("set exact balance: %w", err)
+		return consumptionmodels.Balance{}, fmt.Errorf("ensure exact balance: %w", err)
 	}
-	result := consumptionmodels.Balance{
-		ID: stored.ID, ProjectEnvironmentID: projectEnvironmentID,
-		CustomerID: customerID, MeterKey: meterKey, Quantity: stored.Quantity,
-		CreatedAt: stored.CreatedAt.Time, UpdatedAt: stored.UpdatedAt.Time,
+	if _, err := queries.BalanceForUpdate(ctx, stored.ID); err != nil {
+		return consumptionmodels.Balance{}, fmt.Errorf("lock exact balance: %w", err)
 	}
-	if err := queries.RecordBalanceSet(ctx, consumptiondb.RecordBalanceSetParams{
+	if _, err := queries.RecordBalanceSet(ctx, consumptiondb.RecordBalanceSetParams{
 		ID: operationID, ProjectEnvironmentID: projectEnvironmentID,
 		RequestCustomerID: customerID, RequestMeterKey: meterKey, RequestedQuantity: quantity,
 		CustomerID: subject.CustomerID, MeterID: subject.MeterID,
-		BalanceID: pgtype.UUID{Bytes: stored.ID, Valid: true}, ResultingQuantity: &result.Quantity,
-		ResultingCreatedAt: pgtype.Timestamptz{Time: result.CreatedAt, Valid: true},
-		ResultingUpdatedAt: pgtype.Timestamptz{Time: result.UpdatedAt, Valid: true},
 	}); err != nil {
 		return consumptionmodels.Balance{}, fmt.Errorf("record exact balance update: %w", err)
+	}
+	grants, err := queries.SpendableEntitlementGrants(ctx, stored.ID)
+	if err != nil {
+		return consumptionmodels.Balance{}, fmt.Errorf("load entitlement grants: %w", err)
+	}
+	current := sumGrantQuantity(grants)
+	switch {
+	case quantity > current:
+		if _, err := queries.InsertEntitlementGrant(ctx, consumptiondb.InsertEntitlementGrantParams{
+			ID: grantID, BalanceID: stored.ID, GrantedQuantity: quantity - current,
+			CreatedByBalanceOperationID: pgtype.UUID{Bytes: operationID, Valid: true},
+		}); err != nil {
+			return consumptionmodels.Balance{}, fmt.Errorf("insert exact balance grant: %w", err)
+		}
+	case quantity < current:
+		if err := reduceGrants(ctx, queries, grants, current-quantity, operationID, uuid.Nil); err != nil {
+			return consumptionmodels.Balance{}, err
+		}
+	}
+	result, err := finalizeBalance(ctx, queries, operationID, stored, customerID, meterKey)
+	if err != nil {
+		return consumptionmodels.Balance{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return consumptionmodels.Balance{}, fmt.Errorf("commit exact balance update: %w", err)
@@ -161,7 +188,8 @@ func (repository *BalanceRepository) Get(
 	return consumptionmodels.Balance{
 		ID: row.ID, ProjectEnvironmentID: row.ProjectEnvironmentID,
 		CustomerID: row.PublicCustomerID, MeterKey: row.MeterKey, Quantity: row.Quantity,
-		CreatedAt: row.CreatedAt.Time, UpdatedAt: row.UpdatedAt.Time,
+		NextExpiresAt: entitlementTimePointer(row.NextExpiresAt),
+		CreatedAt:     row.CreatedAt.Time, UpdatedAt: row.UpdatedAt.Time,
 	}, nil
 }
 
@@ -189,10 +217,92 @@ func (repository *BalanceRepository) List(
 		balances = append(balances, consumptionmodels.Balance{
 			ID: row.ID, ProjectEnvironmentID: row.ProjectEnvironmentID,
 			CustomerID: row.PublicCustomerID, MeterKey: row.MeterKey, Quantity: row.Quantity,
-			CreatedAt: row.CreatedAt.Time, UpdatedAt: row.UpdatedAt.Time,
+			NextExpiresAt: entitlementTimePointer(row.NextExpiresAt),
+			CreatedAt:     row.CreatedAt.Time, UpdatedAt: row.UpdatedAt.Time,
 		})
 	}
 	return balances, nil
+}
+
+func finalizeBalance(
+	ctx context.Context,
+	queries *consumptiondb.Queries,
+	operationID uuid.UUID,
+	stored consumptiondb.Balance,
+	customerID, meterKey string,
+) (consumptionmodels.Balance, error) {
+	refreshed, err := queries.RefreshBalanceProjection(ctx, stored.ID)
+	if err != nil {
+		return consumptionmodels.Balance{}, fmt.Errorf("refresh balance projection: %w", err)
+	}
+	summary, err := queries.ActiveEntitlementSummary(ctx, stored.ID)
+	if err != nil {
+		return consumptionmodels.Balance{}, fmt.Errorf("summarize updated balance: %w", err)
+	}
+	result := consumptionmodels.Balance{
+		ID: refreshed.ID, ProjectEnvironmentID: refreshed.ProjectEnvironmentID,
+		CustomerID: customerID, MeterKey: meterKey, Quantity: summary.Quantity,
+		NextExpiresAt: entitlementTimePointer(summary.NextExpiresAt),
+		CreatedAt:     refreshed.CreatedAt.Time, UpdatedAt: refreshed.UpdatedAt.Time,
+	}
+	if _, err := queries.FinalizeBalanceOperation(ctx, consumptiondb.FinalizeBalanceOperationParams{
+		ID: operationID, BalanceID: pgtype.UUID{Bytes: refreshed.ID, Valid: true},
+		ResultingQuantity:      &result.Quantity,
+		ResultingNextExpiresAt: timestamp(result.NextExpiresAt),
+		ResultingCreatedAt:     pgtype.Timestamptz{Time: result.CreatedAt, Valid: true},
+		ResultingUpdatedAt:     pgtype.Timestamptz{Time: result.UpdatedAt, Valid: true},
+	}); err != nil {
+		return consumptionmodels.Balance{}, fmt.Errorf("finalize balance operation: %w", err)
+	}
+	return result, nil
+}
+
+func reduceGrants(
+	ctx context.Context,
+	queries *consumptiondb.Queries,
+	grants []consumptiondb.EntitlementGrant,
+	quantity int64,
+	balanceOperationID, consumptionOperationID uuid.UUID,
+) error {
+	remaining := quantity
+	for _, grant := range grants {
+		if remaining == 0 {
+			break
+		}
+		allocated := min(grant.RemainingQuantity, remaining)
+		if err := queries.UpdateEntitlementGrantRemaining(ctx, consumptiondb.UpdateEntitlementGrantRemainingParams{
+			ID: grant.ID, RemainingQuantity: grant.RemainingQuantity - allocated,
+		}); err != nil {
+			return fmt.Errorf("debit entitlement grant: %w", err)
+		}
+		if balanceOperationID != uuid.Nil {
+			if err := queries.RecordBalanceGrantAllocation(ctx, consumptiondb.RecordBalanceGrantAllocationParams{
+				BalanceOperationID: balanceOperationID, EntitlementGrantID: grant.ID, Quantity: allocated,
+			}); err != nil {
+				return fmt.Errorf("record balance grant allocation: %w", err)
+			}
+		}
+		if consumptionOperationID != uuid.Nil {
+			if err := queries.RecordConsumptionGrantAllocation(ctx, consumptiondb.RecordConsumptionGrantAllocationParams{
+				ConsumptionOperationID: consumptionOperationID, EntitlementGrantID: grant.ID, Quantity: allocated,
+			}); err != nil {
+				return fmt.Errorf("record consumption grant allocation: %w", err)
+			}
+		}
+		remaining -= allocated
+	}
+	if remaining != 0 {
+		return fmt.Errorf("entitlement grant allocation is incomplete")
+	}
+	return nil
+}
+
+func sumGrantQuantity(grants []consumptiondb.EntitlementGrant) int64 {
+	var total int64
+	for _, grant := range grants {
+		total += grant.RemainingQuantity
+	}
+	return total
 }
 
 type balanceQueries interface {
@@ -235,7 +345,8 @@ func replayBalance(
 ) (consumptionmodels.Balance, error) {
 	if operation.RequestCustomerID != request.CustomerID ||
 		operation.RequestMeterKey != request.MeterKey ||
-		operation.RequestedQuantity != request.Quantity {
+		operation.RequestedQuantity != request.Quantity ||
+		!sameTimestamp(operation.RequestedExpiresAt, request.ExpiresAt) {
 		return consumptionmodels.Balance{}, consumptionmodels.ErrIdempotencyKeyConflict
 	}
 	if !operation.BalanceID.Valid || operation.ResultingQuantity == nil ||
@@ -245,12 +356,30 @@ func replayBalance(
 	return consumptionmodels.Balance{
 		ID: operation.BalanceID.Bytes, ProjectEnvironmentID: operation.ProjectEnvironmentID,
 		CustomerID: operation.RequestCustomerID, MeterKey: operation.RequestMeterKey,
-		Quantity:  *operation.ResultingQuantity,
-		CreatedAt: operation.ResultingCreatedAt.Time, UpdatedAt: operation.ResultingUpdatedAt.Time,
+		Quantity:      *operation.ResultingQuantity,
+		NextExpiresAt: entitlementTimePointer(operation.ResultingNextExpiresAt),
+		CreatedAt:     operation.ResultingCreatedAt.Time, UpdatedAt: operation.ResultingUpdatedAt.Time,
 	}, nil
 }
 
-func quantityOverflow(err error) bool {
-	var databaseError *pgconn.PgError
-	return errors.As(err, &databaseError) && databaseError.Code == "22003"
+func timestamp(value *time.Time) pgtype.Timestamptz {
+	if value == nil {
+		return pgtype.Timestamptz{}
+	}
+	return pgtype.Timestamptz{Time: value.UTC(), Valid: true}
+}
+
+func entitlementTimePointer(value pgtype.Timestamptz) *time.Time {
+	if !value.Valid {
+		return nil
+	}
+	result := value.Time
+	return &result
+}
+
+func sameTimestamp(stored pgtype.Timestamptz, requested *time.Time) bool {
+	if requested == nil {
+		return !stored.Valid
+	}
+	return stored.Valid && stored.Time.Equal(*requested)
 }

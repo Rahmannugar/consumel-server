@@ -7,7 +7,7 @@ GET /v1/customers/{customerId}/balances/{meterKey}
 Returns one active customer and meter balance from the project environment authenticated by the API key.
 
 POST /v1/balances
-Adds an idempotent quantity to a customer and meter balance in the project environment authenticated by the API key.
+Adds an idempotent, optionally expiring quantity to a customer and meter balance in the project environment authenticated by the API key.
 
 PUT /v1/balances/{customerId}/{meterKey}
 Sets one customer and meter balance to an exact quantity in the project environment authenticated by the API key.
@@ -24,7 +24,7 @@ GET /v1/projects/{projectId}/environments/{environment}/customers/{customerId}/b
 Returns one active customer and meter balance from the signed-in project workspace.
 
 POST /v1/projects/{projectId}/environments/{environment}/balances
-Adds an idempotent quantity to a customer and meter balance from the signed-in project workspace.
+Adds an idempotent, optionally expiring quantity to a customer and meter balance from the signed-in project workspace.
 
 PUT /v1/projects/{projectId}/environments/{environment}/balances/{customerId}/{meterKey}
 Sets one customer and meter balance to an exact quantity from the signed-in project workspace.

@@ -177,15 +177,24 @@ func (repository *ConsumeRepository) applyConsumption(
 	case metermodels.MeterTypePrepaid:
 		stored, err := lockedBalance(ctx, queries, operation)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return consumptionmodels.UsageEvent{}, denyConsumption(ctx, queries, operation, nil)
+			return consumptionmodels.UsageEvent{}, denyConsumption(ctx, queries, operation, nil, 0)
 		}
 		if err != nil {
 			return consumptionmodels.UsageEvent{}, fmt.Errorf("lock prepaid balance: %w", err)
 		}
-		if stored.Quantity < request.Quantity {
-			return consumptionmodels.UsageEvent{}, denyConsumption(ctx, queries, operation, &stored)
+		grants, err := queries.SpendableEntitlementGrants(ctx, stored.ID)
+		if err != nil {
+			return consumptionmodels.UsageEvent{}, fmt.Errorf("load prepaid entitlement grants: %w", err)
 		}
-		balance, err = applyBalance(ctx, queries, stored, stored.Quantity-request.Quantity)
+		available := sumGrantQuantity(grants)
+		if available < request.Quantity {
+			return consumptionmodels.UsageEvent{}, denyConsumption(ctx, queries, operation, &stored, available)
+		}
+		err = reduceGrants(ctx, queries, grants, request.Quantity, uuid.Nil, operation.ID)
+		if err != nil {
+			return consumptionmodels.UsageEvent{}, fmt.Errorf("debit prepaid entitlement grants: %w", err)
+		}
+		balance, err = refreshConsumedBalance(ctx, queries, stored)
 		if err != nil {
 			return consumptionmodels.UsageEvent{}, err
 		}
@@ -202,8 +211,16 @@ func (repository *ConsumeRepository) applyConsumption(
 		if err != nil {
 			return consumptionmodels.UsageEvent{}, fmt.Errorf("lock hybrid balance: %w", err)
 		}
-		debited = min(stored.Quantity, request.Quantity)
-		balance, err = applyBalance(ctx, queries, stored, stored.Quantity-debited)
+		grants, err := queries.SpendableEntitlementGrants(ctx, stored.ID)
+		if err != nil {
+			return consumptionmodels.UsageEvent{}, fmt.Errorf("load hybrid entitlement grants: %w", err)
+		}
+		debited = min(sumGrantQuantity(grants), request.Quantity)
+		err = reduceGrants(ctx, queries, grants, debited, uuid.Nil, operation.ID)
+		if err != nil {
+			return consumptionmodels.UsageEvent{}, fmt.Errorf("debit hybrid entitlement grants: %w", err)
+		}
+		balance, err = refreshConsumedBalance(ctx, queries, stored)
 		if err != nil {
 			return consumptionmodels.UsageEvent{}, err
 		}
@@ -240,17 +257,14 @@ func lockedBalance(
 	})
 }
 
-func applyBalance(
+func refreshConsumedBalance(
 	ctx context.Context,
 	queries *consumptiondb.Queries,
 	balance consumptiondb.Balance,
-	quantity int64,
 ) (consumptiondb.Balance, error) {
-	updated, err := queries.ApplyConsumptionBalance(ctx, consumptiondb.ApplyConsumptionBalanceParams{
-		ID: balance.ID, Quantity: quantity,
-	})
+	updated, err := queries.RefreshBalanceProjection(ctx, balance.ID)
 	if err != nil {
-		return consumptiondb.Balance{}, fmt.Errorf("apply consumption balance: %w", err)
+		return consumptiondb.Balance{}, fmt.Errorf("refresh consumed balance: %w", err)
 	}
 	return updated, nil
 }
@@ -260,12 +274,13 @@ func denyConsumption(
 	queries *consumptiondb.Queries,
 	operation consumptiondb.ConsumptionOperation,
 	balance *consumptiondb.Balance,
+	available int64,
 ) error {
 	var balanceID pgtype.UUID
 	var remaining *int64
 	if balance != nil {
 		balanceID = pgtype.UUID{Bytes: balance.ID, Valid: true}
-		remaining = &balance.Quantity
+		remaining = &available
 	}
 	if _, err := queries.DenyConsumptionOperation(ctx, consumptiondb.DenyConsumptionOperationParams{
 		ID: operation.ID, BalanceID: balanceID, ResultingBalance: remaining,

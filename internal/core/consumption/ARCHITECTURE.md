@@ -16,10 +16,12 @@ original result. An exact replay returns that result, while reusing the key for
 a different request returns a conflict. The claim, balance mutation, and stored
 result commit in one transaction.
 
-Additive and exact-value mutations use PostgreSQL row conflict handling. This
-serializes concurrent changes to the same balance without application-level
-locks. Exact setting is naturally idempotent; concurrent add and set requests
-take effect in commit order.
+The balance row serializes concurrent changes, while durable entitlement grant
+lots are the source of available quantity. Additions may expire. Reads exclude
+expired lots without depending on scheduled cleanup, and reductions spend the
+earliest-expiring lots first. Grant allocations preserve which lots funded a
+usage operation or an exact downward adjustment. Exact setting is naturally
+idempotent; concurrent add and set requests take effect in commit order.
 
 Normal reads join the active environment meter configuration and therefore
 exclude balances for archived meters. Historical operation records retain the
@@ -48,7 +50,7 @@ make the dashboard's durable history incomplete.
 This domain currently implements the atomic quantity operation and the balance
 behavior associated with prepaid, postpaid, and hybrid meters. It does not
 claim to complete Consumel's broader metering product. Aggregation, recurring
-allowances, resets, rollover, expiry, customer overrides, pricing tiers,
+allowance policies, scheduled resets, rollover, customer overrides, pricing tiers,
 minimum commitments, billing periods, stable pricing snapshots,
 reconciliation, provider activity, and background-job visibility remain owned
 by their applicable metering, pricing, billing, reconciliation, connector, and

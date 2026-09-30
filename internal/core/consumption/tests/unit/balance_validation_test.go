@@ -3,6 +3,7 @@ package unit_test
 import (
 	"errors"
 	"testing"
+	"time"
 
 	consumptionmodels "github.com/Rahmannugar/consumel-server/internal/core/consumption/models"
 )
@@ -16,6 +17,27 @@ func TestAddBalanceRequestValidationNormalizesPublicKeys(t *testing.T) {
 	}
 	if request.CustomerID != "customer_123" || request.MeterKey != "api_calls" {
 		t.Fatalf("normalized request = %#v", request)
+	}
+}
+
+func TestAddBalanceRequestRequiresFutureExpiration(t *testing.T) {
+	now := time.Date(2026, time.September, 30, 12, 0, 0, 0, time.UTC)
+	past := now.Add(-time.Second)
+	request := consumptionmodels.AddBalanceRequest{
+		CustomerID: "customer_123", MeterKey: "api_calls", Quantity: 25, ExpiresAt: &past,
+	}
+	if _, err := request.ValidateAt(now); !errors.Is(err, consumptionmodels.ErrBalanceExpirationInvalid) {
+		t.Fatalf("expiration validation error = %v", err)
+	}
+	future := now.Add(time.Hour + 987*time.Nanosecond)
+	request.ExpiresAt = &future
+	validated, err := request.ValidateAt(now)
+	if err != nil {
+		t.Fatalf("validate future expiration: %v", err)
+	}
+	if validated.ExpiresAt == nil || validated.ExpiresAt.Location() != time.UTC ||
+		validated.ExpiresAt.Nanosecond()%1000 != 0 {
+		t.Fatalf("normalized expiration = %v", validated.ExpiresAt)
 	}
 }
 

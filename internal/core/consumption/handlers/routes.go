@@ -171,8 +171,9 @@ func (handler *Handler) writeBalanceError(response http.ResponseWriter, request 
 	case errors.Is(err, consumptionmodels.ErrBalanceCustomerInvalid),
 		errors.Is(err, consumptionmodels.ErrBalanceMeterInvalid),
 		errors.Is(err, consumptionmodels.ErrBalanceQuantityInvalid),
+		errors.Is(err, consumptionmodels.ErrBalanceExpirationInvalid),
 		errors.Is(err, consumptionmodels.ErrIdempotencyKeyInvalid):
-		_ = httpresponse.WriteError(response, http.StatusBadRequest, "invalid_balance", "Check the customer ID, meter key, quantity, and idempotency key.")
+		_ = httpresponse.WriteError(response, http.StatusBadRequest, "invalid_balance", "Check the customer ID, meter key, quantity, expiration, and idempotency key.")
 	case errors.Is(err, consumptionmodels.ErrBalanceSubjectNotFound):
 		_ = httpresponse.WriteError(response, http.StatusNotFound, "balance_subject_not_found", "The customer or active meter does not exist in this environment.")
 	case errors.Is(err, consumptionmodels.ErrBalanceNotFound):

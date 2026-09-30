@@ -60,11 +60,13 @@ VALUES ($1, $2, $3, $4, 0)
 ON CONFLICT (project_environment_id, customer_id, meter_id)
 DO NOTHING;
 
--- name: ApplyConsumptionBalance :one
-UPDATE balances
-SET quantity = $2, updated_at = now()
-WHERE id = $1
-RETURNING *;
+-- name: RecordConsumptionGrantAllocation :exec
+INSERT INTO consumption_grant_allocations (
+    consumption_operation_id,
+    entitlement_grant_id,
+    quantity
+)
+VALUES ($1, $2, $3);
 
 -- name: AcceptConsumptionOperation :one
 UPDATE consumption_operations

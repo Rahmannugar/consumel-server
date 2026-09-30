@@ -12,56 +12,46 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const addBalance = `-- name: AddBalance :one
-INSERT INTO balances (
-    id,
-    project_environment_id,
-    customer_id,
-    meter_id,
-    quantity
-)
-VALUES ($1, $2, $3, $4, $5)
-ON CONFLICT (project_environment_id, customer_id, meter_id)
-DO UPDATE SET
-    quantity = balances.quantity + EXCLUDED.quantity,
-    updated_at = now()
-RETURNING id, project_environment_id, customer_id, meter_id, quantity, created_at, updated_at
+const activeEntitlementSummary = `-- name: ActiveEntitlementSummary :one
+SELECT
+    COALESCE(SUM(remaining_quantity), 0)::bigint AS quantity,
+    (
+        SELECT expiring.expires_at
+        FROM entitlement_grants expiring
+        WHERE expiring.balance_id = $1
+          AND expiring.remaining_quantity > 0
+          AND expiring.expires_at > now()
+        ORDER BY expiring.expires_at
+        LIMIT 1
+    ) AS next_expires_at
+FROM entitlement_grants
+WHERE balance_id = $1
+  AND remaining_quantity > 0
+  AND (expires_at IS NULL OR expires_at > now())
 `
 
-type AddBalanceParams struct {
-	ID                   uuid.UUID
-	ProjectEnvironmentID uuid.UUID
-	CustomerID           uuid.UUID
-	MeterID              uuid.UUID
-	Quantity             int64
+type ActiveEntitlementSummaryRow struct {
+	Quantity      int64
+	NextExpiresAt pgtype.Timestamptz
 }
 
-func (q *Queries) AddBalance(ctx context.Context, arg AddBalanceParams) (Balance, error) {
-	row := q.db.QueryRow(ctx, addBalance,
-		arg.ID,
-		arg.ProjectEnvironmentID,
-		arg.CustomerID,
-		arg.MeterID,
-		arg.Quantity,
-	)
-	var i Balance
-	err := row.Scan(
-		&i.ID,
-		&i.ProjectEnvironmentID,
-		&i.CustomerID,
-		&i.MeterID,
-		&i.Quantity,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
+func (q *Queries) ActiveEntitlementSummary(ctx context.Context, balanceID uuid.UUID) (ActiveEntitlementSummaryRow, error) {
+	row := q.db.QueryRow(ctx, activeEntitlementSummary, balanceID)
+	var i ActiveEntitlementSummaryRow
+	err := row.Scan(&i.Quantity, &i.NextExpiresAt)
 	return i, err
 }
 
 const balanceByPublicKeys = `-- name: BalanceByPublicKeys :one
 SELECT
-    b.id, b.project_environment_id, b.customer_id, b.meter_id, b.quantity, b.created_at, b.updated_at,
+    b.id,
+    b.project_environment_id,
     c.customer_id AS public_customer_id,
-    m.meter_key
+    m.meter_key,
+    entitlement.quantity,
+    entitlement.next_expires_at,
+    b.created_at,
+    b.updated_at
 FROM balances b
 JOIN customers c
     ON c.project_environment_id = b.project_environment_id
@@ -71,6 +61,23 @@ JOIN project_environment_meters pem
     ON pem.project_environment_id = b.project_environment_id
    AND pem.meter_id = b.meter_id
    AND pem.archived_at IS NULL
+LEFT JOIN LATERAL (
+    SELECT
+        COALESCE(SUM(g.remaining_quantity), 0)::bigint AS quantity,
+        (
+            SELECT expiring.expires_at
+            FROM entitlement_grants expiring
+            WHERE expiring.balance_id = b.id
+              AND expiring.remaining_quantity > 0
+              AND expiring.expires_at > now()
+            ORDER BY expiring.expires_at
+            LIMIT 1
+        ) AS next_expires_at
+    FROM entitlement_grants g
+    WHERE g.balance_id = b.id
+      AND g.remaining_quantity > 0
+      AND (g.expires_at IS NULL OR g.expires_at > now())
+) entitlement ON true
 WHERE b.project_environment_id = $1
   AND c.customer_id = $2
   AND m.meter_key = $3
@@ -85,13 +92,12 @@ type BalanceByPublicKeysParams struct {
 type BalanceByPublicKeysRow struct {
 	ID                   uuid.UUID
 	ProjectEnvironmentID uuid.UUID
-	CustomerID           uuid.UUID
-	MeterID              uuid.UUID
-	Quantity             int64
-	CreatedAt            pgtype.Timestamptz
-	UpdatedAt            pgtype.Timestamptz
 	PublicCustomerID     string
 	MeterKey             string
+	Quantity             int64
+	NextExpiresAt        pgtype.Timestamptz
+	CreatedAt            pgtype.Timestamptz
+	UpdatedAt            pgtype.Timestamptz
 }
 
 func (q *Queries) BalanceByPublicKeys(ctx context.Context, arg BalanceByPublicKeysParams) (BalanceByPublicKeysRow, error) {
@@ -100,19 +106,40 @@ func (q *Queries) BalanceByPublicKeys(ctx context.Context, arg BalanceByPublicKe
 	err := row.Scan(
 		&i.ID,
 		&i.ProjectEnvironmentID,
+		&i.PublicCustomerID,
+		&i.MeterKey,
+		&i.Quantity,
+		&i.NextExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const balanceForUpdate = `-- name: BalanceForUpdate :one
+SELECT id, project_environment_id, customer_id, meter_id, quantity, created_at, updated_at
+FROM balances
+WHERE balances.id = $1
+FOR UPDATE
+`
+
+func (q *Queries) BalanceForUpdate(ctx context.Context, id uuid.UUID) (Balance, error) {
+	row := q.db.QueryRow(ctx, balanceForUpdate, id)
+	var i Balance
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectEnvironmentID,
 		&i.CustomerID,
 		&i.MeterID,
 		&i.Quantity,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.PublicCustomerID,
-		&i.MeterKey,
 	)
 	return i, err
 }
 
 const balanceOperationByIdempotencyKey = `-- name: BalanceOperationByIdempotencyKey :one
-SELECT id, project_environment_id, idempotency_key, operation_type, request_customer_id, request_meter_key, requested_quantity, customer_id, meter_id, balance_id, resulting_quantity, resulting_created_at, resulting_updated_at, created_at
+SELECT id, project_environment_id, idempotency_key, operation_type, request_customer_id, request_meter_key, requested_quantity, customer_id, meter_id, balance_id, resulting_quantity, resulting_created_at, resulting_updated_at, created_at, requested_expires_at, resulting_next_expires_at
 FROM balance_operations
 WHERE project_environment_id = $1
   AND idempotency_key = $2
@@ -141,6 +168,8 @@ func (q *Queries) BalanceOperationByIdempotencyKey(ctx context.Context, arg Bala
 		&i.ResultingCreatedAt,
 		&i.ResultingUpdatedAt,
 		&i.CreatedAt,
+		&i.RequestedExpiresAt,
+		&i.ResultingNextExpiresAt,
 	)
 	return i, err
 }
@@ -187,14 +216,15 @@ INSERT INTO balance_operations (
     request_customer_id,
     request_meter_key,
     requested_quantity,
+    requested_expires_at,
     customer_id,
     meter_id
 )
-VALUES ($1, $2, $3, 'add', $4, $5, $6, $7, $8)
+VALUES ($1, $2, $3, 'add', $4, $5, $6, $7, $8, $9)
 ON CONFLICT (project_environment_id, idempotency_key)
     WHERE idempotency_key IS NOT NULL
     DO NOTHING
-RETURNING id, project_environment_id, idempotency_key, operation_type, request_customer_id, request_meter_key, requested_quantity, customer_id, meter_id, balance_id, resulting_quantity, resulting_created_at, resulting_updated_at, created_at
+RETURNING id, project_environment_id, idempotency_key, operation_type, request_customer_id, request_meter_key, requested_quantity, customer_id, meter_id, balance_id, resulting_quantity, resulting_created_at, resulting_updated_at, created_at, requested_expires_at, resulting_next_expires_at
 `
 
 type ClaimBalanceAdditionParams struct {
@@ -204,6 +234,7 @@ type ClaimBalanceAdditionParams struct {
 	RequestCustomerID    string
 	RequestMeterKey      string
 	RequestedQuantity    int64
+	RequestedExpiresAt   pgtype.Timestamptz
 	CustomerID           uuid.UUID
 	MeterID              uuid.UUID
 }
@@ -216,6 +247,7 @@ func (q *Queries) ClaimBalanceAddition(ctx context.Context, arg ClaimBalanceAddi
 		arg.RequestCustomerID,
 		arg.RequestMeterKey,
 		arg.RequestedQuantity,
+		arg.RequestedExpiresAt,
 		arg.CustomerID,
 		arg.MeterID,
 	)
@@ -235,6 +267,8 @@ func (q *Queries) ClaimBalanceAddition(ctx context.Context, arg ClaimBalanceAddi
 		&i.ResultingCreatedAt,
 		&i.ResultingUpdatedAt,
 		&i.CreatedAt,
+		&i.RequestedExpiresAt,
+		&i.ResultingNextExpiresAt,
 	)
 	return i, err
 }
@@ -258,23 +292,60 @@ func (q *Queries) ConsumptionCustomerByPublicID(ctx context.Context, arg Consump
 	return id, err
 }
 
+const ensureBalance = `-- name: EnsureBalance :one
+INSERT INTO balances (id, project_environment_id, customer_id, meter_id, quantity)
+VALUES ($1, $2, $3, $4, 0)
+ON CONFLICT (project_environment_id, customer_id, meter_id)
+DO UPDATE SET customer_id = EXCLUDED.customer_id
+RETURNING id, project_environment_id, customer_id, meter_id, quantity, created_at, updated_at
+`
+
+type EnsureBalanceParams struct {
+	ID                   uuid.UUID
+	ProjectEnvironmentID uuid.UUID
+	CustomerID           uuid.UUID
+	MeterID              uuid.UUID
+}
+
+func (q *Queries) EnsureBalance(ctx context.Context, arg EnsureBalanceParams) (Balance, error) {
+	row := q.db.QueryRow(ctx, ensureBalance,
+		arg.ID,
+		arg.ProjectEnvironmentID,
+		arg.CustomerID,
+		arg.MeterID,
+	)
+	var i Balance
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectEnvironmentID,
+		&i.CustomerID,
+		&i.MeterID,
+		&i.Quantity,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const finalizeBalanceOperation = `-- name: FinalizeBalanceOperation :one
 UPDATE balance_operations
 SET
     balance_id = $2,
     resulting_quantity = $3,
-    resulting_created_at = $4,
-    resulting_updated_at = $5
+    resulting_next_expires_at = $4,
+    resulting_created_at = $5,
+    resulting_updated_at = $6
 WHERE id = $1
-RETURNING id, project_environment_id, idempotency_key, operation_type, request_customer_id, request_meter_key, requested_quantity, customer_id, meter_id, balance_id, resulting_quantity, resulting_created_at, resulting_updated_at, created_at
+RETURNING id, project_environment_id, idempotency_key, operation_type, request_customer_id, request_meter_key, requested_quantity, customer_id, meter_id, balance_id, resulting_quantity, resulting_created_at, resulting_updated_at, created_at, requested_expires_at, resulting_next_expires_at
 `
 
 type FinalizeBalanceOperationParams struct {
-	ID                 uuid.UUID
-	BalanceID          pgtype.UUID
-	ResultingQuantity  *int64
-	ResultingCreatedAt pgtype.Timestamptz
-	ResultingUpdatedAt pgtype.Timestamptz
+	ID                     uuid.UUID
+	BalanceID              pgtype.UUID
+	ResultingQuantity      *int64
+	ResultingNextExpiresAt pgtype.Timestamptz
+	ResultingCreatedAt     pgtype.Timestamptz
+	ResultingUpdatedAt     pgtype.Timestamptz
 }
 
 func (q *Queries) FinalizeBalanceOperation(ctx context.Context, arg FinalizeBalanceOperationParams) (BalanceOperation, error) {
@@ -282,6 +353,7 @@ func (q *Queries) FinalizeBalanceOperation(ctx context.Context, arg FinalizeBala
 		arg.ID,
 		arg.BalanceID,
 		arg.ResultingQuantity,
+		arg.ResultingNextExpiresAt,
 		arg.ResultingCreatedAt,
 		arg.ResultingUpdatedAt,
 	)
@@ -301,15 +373,67 @@ func (q *Queries) FinalizeBalanceOperation(ctx context.Context, arg FinalizeBala
 		&i.ResultingCreatedAt,
 		&i.ResultingUpdatedAt,
 		&i.CreatedAt,
+		&i.RequestedExpiresAt,
+		&i.ResultingNextExpiresAt,
+	)
+	return i, err
+}
+
+const insertEntitlementGrant = `-- name: InsertEntitlementGrant :one
+INSERT INTO entitlement_grants (
+    id,
+    balance_id,
+    source_type,
+    granted_quantity,
+    remaining_quantity,
+    expires_at,
+    created_by_balance_operation_id
+)
+VALUES ($1, $2, 'manual', $3, $3, $4, $5)
+RETURNING id, balance_id, source_type, granted_quantity, remaining_quantity, expires_at, created_by_balance_operation_id, created_at, updated_at
+`
+
+type InsertEntitlementGrantParams struct {
+	ID                          uuid.UUID
+	BalanceID                   uuid.UUID
+	GrantedQuantity             int64
+	ExpiresAt                   pgtype.Timestamptz
+	CreatedByBalanceOperationID pgtype.UUID
+}
+
+func (q *Queries) InsertEntitlementGrant(ctx context.Context, arg InsertEntitlementGrantParams) (EntitlementGrant, error) {
+	row := q.db.QueryRow(ctx, insertEntitlementGrant,
+		arg.ID,
+		arg.BalanceID,
+		arg.GrantedQuantity,
+		arg.ExpiresAt,
+		arg.CreatedByBalanceOperationID,
+	)
+	var i EntitlementGrant
+	err := row.Scan(
+		&i.ID,
+		&i.BalanceID,
+		&i.SourceType,
+		&i.GrantedQuantity,
+		&i.RemainingQuantity,
+		&i.ExpiresAt,
+		&i.CreatedByBalanceOperationID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const listCustomerBalances = `-- name: ListCustomerBalances :many
 SELECT
-    b.id, b.project_environment_id, b.customer_id, b.meter_id, b.quantity, b.created_at, b.updated_at,
+    b.id,
+    b.project_environment_id,
     c.customer_id AS public_customer_id,
-    m.meter_key
+    m.meter_key,
+    entitlement.quantity,
+    entitlement.next_expires_at,
+    b.created_at,
+    b.updated_at
 FROM balances b
 JOIN customers c
     ON c.project_environment_id = b.project_environment_id
@@ -319,6 +443,23 @@ JOIN project_environment_meters pem
     ON pem.project_environment_id = b.project_environment_id
    AND pem.meter_id = b.meter_id
    AND pem.archived_at IS NULL
+LEFT JOIN LATERAL (
+    SELECT
+        COALESCE(SUM(g.remaining_quantity), 0)::bigint AS quantity,
+        (
+            SELECT expiring.expires_at
+            FROM entitlement_grants expiring
+            WHERE expiring.balance_id = b.id
+              AND expiring.remaining_quantity > 0
+              AND expiring.expires_at > now()
+            ORDER BY expiring.expires_at
+            LIMIT 1
+        ) AS next_expires_at
+    FROM entitlement_grants g
+    WHERE g.balance_id = b.id
+      AND g.remaining_quantity > 0
+      AND (g.expires_at IS NULL OR g.expires_at > now())
+) entitlement ON true
 WHERE b.project_environment_id = $1
   AND c.customer_id = $2
 ORDER BY m.meter_key
@@ -332,13 +473,12 @@ type ListCustomerBalancesParams struct {
 type ListCustomerBalancesRow struct {
 	ID                   uuid.UUID
 	ProjectEnvironmentID uuid.UUID
-	CustomerID           uuid.UUID
-	MeterID              uuid.UUID
-	Quantity             int64
-	CreatedAt            pgtype.Timestamptz
-	UpdatedAt            pgtype.Timestamptz
 	PublicCustomerID     string
 	MeterKey             string
+	Quantity             int64
+	NextExpiresAt        pgtype.Timestamptz
+	CreatedAt            pgtype.Timestamptz
+	UpdatedAt            pgtype.Timestamptz
 }
 
 func (q *Queries) ListCustomerBalances(ctx context.Context, arg ListCustomerBalancesParams) ([]ListCustomerBalancesRow, error) {
@@ -353,13 +493,12 @@ func (q *Queries) ListCustomerBalances(ctx context.Context, arg ListCustomerBala
 		if err := rows.Scan(
 			&i.ID,
 			&i.ProjectEnvironmentID,
-			&i.CustomerID,
-			&i.MeterID,
-			&i.Quantity,
-			&i.CreatedAt,
-			&i.UpdatedAt,
 			&i.PublicCustomerID,
 			&i.MeterKey,
+			&i.Quantity,
+			&i.NextExpiresAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -371,7 +510,27 @@ func (q *Queries) ListCustomerBalances(ctx context.Context, arg ListCustomerBala
 	return items, nil
 }
 
-const recordBalanceSet = `-- name: RecordBalanceSet :exec
+const recordBalanceGrantAllocation = `-- name: RecordBalanceGrantAllocation :exec
+INSERT INTO balance_operation_grant_allocations (
+    balance_operation_id,
+    entitlement_grant_id,
+    quantity
+)
+VALUES ($1, $2, $3)
+`
+
+type RecordBalanceGrantAllocationParams struct {
+	BalanceOperationID uuid.UUID
+	EntitlementGrantID uuid.UUID
+	Quantity           int64
+}
+
+func (q *Queries) RecordBalanceGrantAllocation(ctx context.Context, arg RecordBalanceGrantAllocationParams) error {
+	_, err := q.db.Exec(ctx, recordBalanceGrantAllocation, arg.BalanceOperationID, arg.EntitlementGrantID, arg.Quantity)
+	return err
+}
+
+const recordBalanceSet = `-- name: RecordBalanceSet :one
 INSERT INTO balance_operations (
     id,
     project_environment_id,
@@ -380,13 +539,10 @@ INSERT INTO balance_operations (
     request_meter_key,
     requested_quantity,
     customer_id,
-    meter_id,
-    balance_id,
-    resulting_quantity,
-    resulting_created_at,
-    resulting_updated_at
+    meter_id
 )
-VALUES ($1, $2, 'set', $3, $4, $5, $6, $7, $8, $9, $10, $11)
+VALUES ($1, $2, 'set', $3, $4, $5, $6, $7)
+RETURNING id, project_environment_id, idempotency_key, operation_type, request_customer_id, request_meter_key, requested_quantity, customer_id, meter_id, balance_id, resulting_quantity, resulting_created_at, resulting_updated_at, created_at, requested_expires_at, resulting_next_expires_at
 `
 
 type RecordBalanceSetParams struct {
@@ -397,14 +553,10 @@ type RecordBalanceSetParams struct {
 	RequestedQuantity    int64
 	CustomerID           uuid.UUID
 	MeterID              uuid.UUID
-	BalanceID            pgtype.UUID
-	ResultingQuantity    *int64
-	ResultingCreatedAt   pgtype.Timestamptz
-	ResultingUpdatedAt   pgtype.Timestamptz
 }
 
-func (q *Queries) RecordBalanceSet(ctx context.Context, arg RecordBalanceSetParams) error {
-	_, err := q.db.Exec(ctx, recordBalanceSet,
+func (q *Queries) RecordBalanceSet(ctx context.Context, arg RecordBalanceSetParams) (BalanceOperation, error) {
+	row := q.db.QueryRow(ctx, recordBalanceSet,
 		arg.ID,
 		arg.ProjectEnvironmentID,
 		arg.RequestCustomerID,
@@ -412,46 +564,46 @@ func (q *Queries) RecordBalanceSet(ctx context.Context, arg RecordBalanceSetPara
 		arg.RequestedQuantity,
 		arg.CustomerID,
 		arg.MeterID,
-		arg.BalanceID,
-		arg.ResultingQuantity,
-		arg.ResultingCreatedAt,
-		arg.ResultingUpdatedAt,
 	)
-	return err
+	var i BalanceOperation
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectEnvironmentID,
+		&i.IdempotencyKey,
+		&i.OperationType,
+		&i.RequestCustomerID,
+		&i.RequestMeterKey,
+		&i.RequestedQuantity,
+		&i.CustomerID,
+		&i.MeterID,
+		&i.BalanceID,
+		&i.ResultingQuantity,
+		&i.ResultingCreatedAt,
+		&i.ResultingUpdatedAt,
+		&i.CreatedAt,
+		&i.RequestedExpiresAt,
+		&i.ResultingNextExpiresAt,
+	)
+	return i, err
 }
 
-const setBalance = `-- name: SetBalance :one
-INSERT INTO balances (
-    id,
-    project_environment_id,
-    customer_id,
-    meter_id,
-    quantity
-)
-VALUES ($1, $2, $3, $4, $5)
-ON CONFLICT (project_environment_id, customer_id, meter_id)
-DO UPDATE SET
-    quantity = EXCLUDED.quantity,
+const refreshBalanceProjection = `-- name: RefreshBalanceProjection :one
+UPDATE balances
+SET
+    quantity = (
+        SELECT COALESCE(SUM(remaining_quantity), 0)::bigint
+        FROM entitlement_grants
+        WHERE balance_id = balances.id
+          AND remaining_quantity > 0
+          AND (expires_at IS NULL OR expires_at > now())
+    ),
     updated_at = now()
+WHERE balances.id = $1
 RETURNING id, project_environment_id, customer_id, meter_id, quantity, created_at, updated_at
 `
 
-type SetBalanceParams struct {
-	ID                   uuid.UUID
-	ProjectEnvironmentID uuid.UUID
-	CustomerID           uuid.UUID
-	MeterID              uuid.UUID
-	Quantity             int64
-}
-
-func (q *Queries) SetBalance(ctx context.Context, arg SetBalanceParams) (Balance, error) {
-	row := q.db.QueryRow(ctx, setBalance,
-		arg.ID,
-		arg.ProjectEnvironmentID,
-		arg.CustomerID,
-		arg.MeterID,
-		arg.Quantity,
-	)
+func (q *Queries) RefreshBalanceProjection(ctx context.Context, id uuid.UUID) (Balance, error) {
+	row := q.db.QueryRow(ctx, refreshBalanceProjection, id)
 	var i Balance
 	err := row.Scan(
 		&i.ID,
@@ -463,4 +615,60 @@ func (q *Queries) SetBalance(ctx context.Context, arg SetBalanceParams) (Balance
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const spendableEntitlementGrants = `-- name: SpendableEntitlementGrants :many
+SELECT id, balance_id, source_type, granted_quantity, remaining_quantity, expires_at, created_by_balance_operation_id, created_at, updated_at
+FROM entitlement_grants
+WHERE balance_id = $1
+  AND remaining_quantity > 0
+  AND (expires_at IS NULL OR expires_at > now())
+ORDER BY expires_at ASC NULLS LAST, created_at, id
+FOR UPDATE
+`
+
+func (q *Queries) SpendableEntitlementGrants(ctx context.Context, balanceID uuid.UUID) ([]EntitlementGrant, error) {
+	rows, err := q.db.Query(ctx, spendableEntitlementGrants, balanceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []EntitlementGrant
+	for rows.Next() {
+		var i EntitlementGrant
+		if err := rows.Scan(
+			&i.ID,
+			&i.BalanceID,
+			&i.SourceType,
+			&i.GrantedQuantity,
+			&i.RemainingQuantity,
+			&i.ExpiresAt,
+			&i.CreatedByBalanceOperationID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateEntitlementGrantRemaining = `-- name: UpdateEntitlementGrantRemaining :exec
+UPDATE entitlement_grants
+SET remaining_quantity = $2, updated_at = now()
+WHERE id = $1
+`
+
+type UpdateEntitlementGrantRemainingParams struct {
+	ID                uuid.UUID
+	RemainingQuantity int64
+}
+
+func (q *Queries) UpdateEntitlementGrantRemaining(ctx context.Context, arg UpdateEntitlementGrantRemainingParams) error {
+	_, err := q.db.Exec(ctx, updateEntitlementGrantRemaining, arg.ID, arg.RemainingQuantity)
+	return err
 }

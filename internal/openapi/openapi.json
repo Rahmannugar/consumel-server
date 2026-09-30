@@ -1359,6 +1359,14 @@
             "minLength": 1,
             "type": "string"
           },
+          "expiresAt": {
+            "description": "Optional instant when the added entitlement stops being available.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "meterKey": {
             "example": "api_calls",
             "maxLength": 120,
@@ -1412,6 +1420,13 @@
             "pattern": "^[a-z][a-z0-9_-]*$",
             "type": "string"
           },
+          "nextExpiresAt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "quantity": {
             "format": "int64",
             "minimum": 0,
@@ -1427,6 +1442,7 @@
           "customerId",
           "meterKey",
           "quantity",
+          "nextExpiresAt",
           "createdAt",
           "updatedAt"
         ],
@@ -3665,6 +3681,7 @@
             "application/json": {
               "example": {
                 "customerId": "user_123",
+                "expiresAt": "2026-10-31T00:00:00Z",
                 "meterKey": "api_calls",
                 "quantity": 10000
               },
@@ -3684,6 +3701,7 @@
                   "customerId": "user_123",
                   "id": "0199aa81-ce8c-73bf-a880-8e84654b9a6c",
                   "meterKey": "api_calls",
+                  "nextExpiresAt": "2026-10-31T00:00:00Z",
                   "quantity": 10000,
                   "updatedAt": "2026-09-28T12:00:00Z"
                 },
@@ -3729,7 +3747,7 @@
             "projectAPIKey": []
           }
         ],
-        "summary": "Add an idempotent quantity to a customer and meter balance.",
+        "summary": "Add an optionally expiring, idempotent quantity to a customer and meter balance.",
         "tags": [
           "Balances"
         ]
@@ -3782,6 +3800,7 @@
                   "customerId": "user_123",
                   "id": "0199aa81-ce8c-73bf-a880-8e84654b9a6c",
                   "meterKey": "api_calls",
+                  "nextExpiresAt": "2026-10-31T00:00:00Z",
                   "quantity": 10000,
                   "updatedAt": "2026-09-28T12:00:00Z"
                 },
@@ -4226,6 +4245,7 @@
                       "customerId": "user_123",
                       "id": "0199aa81-ce8c-73bf-a880-8e84654b9a6c",
                       "meterKey": "api_calls",
+                      "nextExpiresAt": "2026-10-31T00:00:00Z",
                       "quantity": 10000,
                       "updatedAt": "2026-09-28T12:00:00Z"
                     }
@@ -4296,6 +4316,7 @@
                   "customerId": "user_123",
                   "id": "0199aa81-ce8c-73bf-a880-8e84654b9a6c",
                   "meterKey": "api_calls",
+                  "nextExpiresAt": "2026-10-31T00:00:00Z",
                   "quantity": 10000,
                   "updatedAt": "2026-09-28T12:00:00Z"
                 },
@@ -5058,6 +5079,7 @@
             "application/json": {
               "example": {
                 "customerId": "user_123",
+                "expiresAt": "2026-10-31T00:00:00Z",
                 "meterKey": "api_calls",
                 "quantity": 10000
               },
@@ -5077,6 +5099,7 @@
                   "customerId": "user_123",
                   "id": "0199aa81-ce8c-73bf-a880-8e84654b9a6c",
                   "meterKey": "api_calls",
+                  "nextExpiresAt": "2026-10-31T00:00:00Z",
                   "quantity": 10000,
                   "updatedAt": "2026-09-28T12:00:00Z"
                 },
@@ -5122,7 +5145,7 @@
             "localCookieSession": []
           }
         ],
-        "summary": "Add an idempotent quantity to a customer and meter balance from the signed-in project workspace.",
+        "summary": "Add an optionally expiring, idempotent quantity to a customer and meter balance from the signed-in project workspace.",
         "tags": [
           "Dashboard Balances"
         ]
@@ -5198,6 +5221,7 @@
                   "customerId": "user_123",
                   "id": "0199aa81-ce8c-73bf-a880-8e84654b9a6c",
                   "meterKey": "api_calls",
+                  "nextExpiresAt": "2026-10-31T00:00:00Z",
                   "quantity": 10000,
                   "updatedAt": "2026-09-28T12:00:00Z"
                 },
@@ -5697,6 +5721,7 @@
                       "customerId": "user_123",
                       "id": "0199aa81-ce8c-73bf-a880-8e84654b9a6c",
                       "meterKey": "api_calls",
+                      "nextExpiresAt": "2026-10-31T00:00:00Z",
                       "quantity": 10000,
                       "updatedAt": "2026-09-28T12:00:00Z"
                     }
@@ -5796,6 +5821,7 @@
                   "customerId": "user_123",
                   "id": "0199aa81-ce8c-73bf-a880-8e84654b9a6c",
                   "meterKey": "api_calls",
+                  "nextExpiresAt": "2026-10-31T00:00:00Z",
                   "quantity": 10000,
                   "updatedAt": "2026-09-28T12:00:00Z"
                 },

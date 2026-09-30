@@ -6,6 +6,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	consumptionmodels "github.com/Rahmannugar/consumel-server/internal/core/consumption/models"
 	consumptionrepositories "github.com/Rahmannugar/consumel-server/internal/core/consumption/repositories"
@@ -199,6 +200,79 @@ func TestConcurrentConsumeCannotOverspendOrRepeatOneLogicalOperation(t *testing.
 	balance, err = balanceService.Get(t.Context(), fixture.sandboxID, fixture.customerID, fixture.meterKey)
 	if err != nil || balance.Quantity != 2 {
 		t.Fatalf("same-key balance = %#v, error %v", balance, err)
+	}
+}
+
+func TestConsumeUsesEarliestExpiringEntitlementsAndExpiredGrantsDisappear(t *testing.T) {
+	pool := openConsumptionDatabase(t)
+	fixture := createBalanceFixture(t, pool)
+	balanceService := consumptionservices.NewBalanceService(consumptionrepositories.NewBalanceRepository(pool))
+	consumeService := consumptionservices.NewConsumeService(consumptionrepositories.NewConsumeRepository(pool))
+	soon := time.Now().UTC().Add(24 * time.Hour).Truncate(time.Microsecond)
+	later := soon.Add(24 * time.Hour)
+
+	for _, grant := range []struct {
+		quantity  int64
+		expiresAt *time.Time
+	}{{quantity: 5, expiresAt: &later}, {quantity: 3, expiresAt: &soon}, {quantity: 7}} {
+		if _, _, err := balanceService.Add(
+			t.Context(), fixture.sandboxID, newV7(t).String(),
+			consumptionmodels.AddBalanceRequest{
+				CustomerID: fixture.customerID, MeterKey: fixture.meterKey,
+				Quantity: grant.quantity, ExpiresAt: grant.expiresAt,
+			},
+		); err != nil {
+			t.Fatalf("add entitlement grant: %v", err)
+		}
+	}
+	balance, err := balanceService.Get(t.Context(), fixture.sandboxID, fixture.customerID, fixture.meterKey)
+	if err != nil || balance.Quantity != 15 || balance.NextExpiresAt == nil || !balance.NextExpiresAt.Equal(soon) {
+		t.Fatalf("balance before consumption = %#v, error %v", balance, err)
+	}
+
+	event, _, err := consumeService.Consume(t.Context(), fixture.sandboxID, newV7(t).String(), consumptionmodels.ConsumeRequest{
+		CustomerID: fixture.customerID, MeterKey: fixture.meterKey, Quantity: 4,
+	})
+	if err != nil {
+		t.Fatalf("consume expiring entitlement: %v", err)
+	}
+	rows, err := pool.Query(t.Context(), `
+		SELECT allocation.quantity, entitlement_grant.expires_at
+		FROM consumption_grant_allocations allocation
+		JOIN entitlement_grants entitlement_grant ON entitlement_grant.id = allocation.entitlement_grant_id
+		WHERE allocation.consumption_operation_id = $1
+		ORDER BY entitlement_grant.expires_at ASC NULLS LAST
+	`, event.ID)
+	if err != nil {
+		t.Fatalf("load consumption allocations: %v", err)
+	}
+	defer rows.Close()
+	var allocations []int64
+	for rows.Next() {
+		var quantity int64
+		var expiresAt time.Time
+		if err := rows.Scan(&quantity, &expiresAt); err != nil {
+			t.Fatalf("scan consumption allocation: %v", err)
+		}
+		allocations = append(allocations, quantity)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate consumption allocations: %v", err)
+	}
+	if len(allocations) != 2 || allocations[0] != 3 || allocations[1] != 1 {
+		t.Fatalf("consumption allocations = %v, want [3 1]", allocations)
+	}
+
+	if _, err := pool.Exec(t.Context(), `
+		UPDATE entitlement_grants
+		SET expires_at = now() - interval '1 second'
+		WHERE balance_id = $1 AND expires_at IS NOT NULL
+	`, balance.ID); err != nil {
+		t.Fatalf("expire entitlement grants: %v", err)
+	}
+	balance, err = balanceService.Get(t.Context(), fixture.sandboxID, fixture.customerID, fixture.meterKey)
+	if err != nil || balance.Quantity != 7 || balance.NextExpiresAt != nil {
+		t.Fatalf("balance after expiration = %#v, error %v", balance, err)
 	}
 }
 

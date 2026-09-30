@@ -14,8 +14,8 @@ import (
 )
 
 type BalanceRepository interface {
-	Add(context.Context, uuid.UUID, consumptionmodels.AddBalanceRequest, uuid.UUID, uuid.UUID, uuid.UUID) (consumptionmodels.Balance, bool, error)
-	Set(context.Context, uuid.UUID, string, string, int64, uuid.UUID, uuid.UUID) (consumptionmodels.Balance, error)
+	Add(context.Context, uuid.UUID, consumptionmodels.AddBalanceRequest, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID) (consumptionmodels.Balance, bool, error)
+	Set(context.Context, uuid.UUID, string, string, int64, uuid.UUID, uuid.UUID, uuid.UUID) (consumptionmodels.Balance, error)
 	Get(context.Context, uuid.UUID, string, string) (consumptionmodels.Balance, error)
 	List(context.Context, uuid.UUID, string) ([]consumptionmodels.Balance, error)
 }
@@ -42,11 +42,11 @@ func (service *BalanceService) Add(
 	if err != nil || key.Version() != 7 {
 		return consumptionmodels.Balance{}, false, consumptionmodels.ErrIdempotencyKeyInvalid
 	}
-	operationID, balanceID, err := newOperationAndBalanceIDs()
+	operationID, balanceID, grantID, err := newBalanceIDs()
 	if err != nil {
 		return consumptionmodels.Balance{}, false, err
 	}
-	return service.repository.Add(ctx, projectEnvironmentID, request, key, operationID, balanceID)
+	return service.repository.Add(ctx, projectEnvironmentID, request, key, operationID, balanceID, grantID)
 }
 
 func (service *BalanceService) Set(
@@ -63,11 +63,11 @@ func (service *BalanceService) Set(
 	if err != nil {
 		return consumptionmodels.Balance{}, err
 	}
-	operationID, balanceID, err := newOperationAndBalanceIDs()
+	operationID, balanceID, grantID, err := newBalanceIDs()
 	if err != nil {
 		return consumptionmodels.Balance{}, err
 	}
-	return service.repository.Set(ctx, projectEnvironmentID, customerID, meterKey, request.Quantity, operationID, balanceID)
+	return service.repository.Set(ctx, projectEnvironmentID, customerID, meterKey, request.Quantity, operationID, balanceID, grantID)
 }
 
 func (service *BalanceService) Get(
@@ -106,14 +106,18 @@ func validateSubjectKeys(customerID, meterKey string) (string, string, error) {
 	return customerID, meterKey, nil
 }
 
-func newOperationAndBalanceIDs() (uuid.UUID, uuid.UUID, error) {
+func newBalanceIDs() (uuid.UUID, uuid.UUID, uuid.UUID, error) {
 	operationID, err := ids.New()
 	if err != nil {
-		return uuid.Nil, uuid.Nil, fmt.Errorf("generate balance operation ID: %w", err)
+		return uuid.Nil, uuid.Nil, uuid.Nil, fmt.Errorf("generate balance operation ID: %w", err)
 	}
 	balanceID, err := ids.New()
 	if err != nil {
-		return uuid.Nil, uuid.Nil, fmt.Errorf("generate balance ID: %w", err)
+		return uuid.Nil, uuid.Nil, uuid.Nil, fmt.Errorf("generate balance ID: %w", err)
 	}
-	return operationID, balanceID, nil
+	grantID, err := ids.New()
+	if err != nil {
+		return uuid.Nil, uuid.Nil, uuid.Nil, fmt.Errorf("generate entitlement grant ID: %w", err)
+	}
+	return operationID, balanceID, grantID, nil
 }

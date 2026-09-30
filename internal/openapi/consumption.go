@@ -50,11 +50,11 @@ func consumptionOperations() []operation {
 		), Errors: map[string]string{"400": "OperationListInvalid", "404": "OperationEnvironmentNotFound", "409": "OperationEnvironmentConflict", "500": "OperationListFailed"}},
 		{Method: "get", Path: "/v1/customers/{customerId}/balances", Summary: "List a customer's active meter balances in the API key's project environment.", Tag: "Balances", SuccessCode: "200", Success: "Balances", APIKeyProtected: true, Parameters: []parameter{customerID}, Errors: publicReadErrors},
 		{Method: "get", Path: "/v1/customers/{customerId}/balances/{meterKey}", Summary: "Return one customer and meter balance from the API key's project environment.", Tag: "Balances", SuccessCode: "200", Success: "Balance", APIKeyProtected: true, Parameters: []parameter{customerID, meterKey}, Errors: publicReadErrors},
-		{Method: "post", Path: "/v1/balances", Summary: "Add an idempotent quantity to a customer and meter balance.", Tag: "Balances", Request: "AddBalanceRequest", SuccessCode: "200", Success: "Balance", SuccessHeaders: replayHeader, APIKeyProtected: true, Parameters: []parameter{idempotencyKey}, Errors: publicAddErrors},
+		{Method: "post", Path: "/v1/balances", Summary: "Add an optionally expiring, idempotent quantity to a customer and meter balance.", Tag: "Balances", Request: "AddBalanceRequest", SuccessCode: "200", Success: "Balance", SuccessHeaders: replayHeader, APIKeyProtected: true, Parameters: []parameter{idempotencyKey}, Errors: publicAddErrors},
 		{Method: "put", Path: "/v1/balances/{customerId}/{meterKey}", Summary: "Set a customer and meter balance to an exact quantity.", Tag: "Balances", Request: "SetBalanceRequest", SuccessCode: "200", Success: "Balance", APIKeyProtected: true, Parameters: []parameter{customerID, meterKey}, Errors: publicSetErrors},
 		{Method: "get", Path: "/v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances", Summary: "List a customer's active meter balances from the signed-in project workspace.", Tag: "Dashboard Balances", SuccessCode: "200", Success: "Balances", Protected: true, Parameters: dashboardParameters(customerID), Errors: dashboardReadErrors},
 		{Method: "get", Path: "/v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances/{meterKey}", Summary: "Return one customer and meter balance from the signed-in project workspace.", Tag: "Dashboard Balances", SuccessCode: "200", Success: "Balance", Protected: true, Parameters: dashboardParameters(customerID, meterKey), Errors: dashboardReadErrors},
-		{Method: "post", Path: "/v1/projects/{projectId}/environments/{environment}/balances", Summary: "Add an idempotent quantity to a customer and meter balance from the signed-in project workspace.", Tag: "Dashboard Balances", Request: "AddBalanceRequest", SuccessCode: "200", Success: "Balance", SuccessHeaders: replayHeader, Protected: true, Parameters: dashboardParameters(idempotencyKey), Errors: dashboardAddErrors},
+		{Method: "post", Path: "/v1/projects/{projectId}/environments/{environment}/balances", Summary: "Add an optionally expiring, idempotent quantity to a customer and meter balance from the signed-in project workspace.", Tag: "Dashboard Balances", Request: "AddBalanceRequest", SuccessCode: "200", Success: "Balance", SuccessHeaders: replayHeader, Protected: true, Parameters: dashboardParameters(idempotencyKey), Errors: dashboardAddErrors},
 		{Method: "put", Path: "/v1/projects/{projectId}/environments/{environment}/balances/{customerId}/{meterKey}", Summary: "Set a customer and meter balance to an exact quantity from the signed-in project workspace.", Tag: "Dashboard Balances", Request: "SetBalanceRequest", SuccessCode: "200", Success: "Balance", Protected: true, Parameters: dashboardParameters(customerID, meterKey), Errors: dashboardSetErrors},
 	}
 }
@@ -64,13 +64,14 @@ func consumptionSchemas() map[string]any {
 		"ConsumeRequest":    consumptionmodels.ConsumeRequestOpenAPISchema(),
 		"AddBalanceRequest": consumptionmodels.AddBalanceRequestOpenAPISchema(),
 		"SetBalanceRequest": consumptionmodels.SetBalanceRequestOpenAPISchema(),
-		"Balance": object([]string{"id", "customerId", "meterKey", "quantity", "createdAt", "updatedAt"}, map[string]any{
-			"id":         map[string]any{"type": "string", "format": "uuid"},
-			"customerId": map[string]any{"type": "string", "maxLength": customermodels.MaximumCustomerIDLength},
-			"meterKey":   map[string]any{"type": "string", "maxLength": metermodels.MaximumMeterKeyLength, "pattern": `^[a-z][a-z0-9_-]*$`},
-			"quantity":   map[string]any{"type": "integer", "format": "int64", "minimum": 0},
-			"createdAt":  map[string]any{"type": "string", "format": "date-time"},
-			"updatedAt":  map[string]any{"type": "string", "format": "date-time"},
+		"Balance": object([]string{"id", "customerId", "meterKey", "quantity", "nextExpiresAt", "createdAt", "updatedAt"}, map[string]any{
+			"id":            map[string]any{"type": "string", "format": "uuid"},
+			"customerId":    map[string]any{"type": "string", "maxLength": customermodels.MaximumCustomerIDLength},
+			"meterKey":      map[string]any{"type": "string", "maxLength": metermodels.MaximumMeterKeyLength, "pattern": `^[a-z][a-z0-9_-]*$`},
+			"quantity":      map[string]any{"type": "integer", "format": "int64", "minimum": 0},
+			"nextExpiresAt": map[string]any{"type": []string{"string", "null"}, "format": "date-time"},
+			"createdAt":     map[string]any{"type": "string", "format": "date-time"},
+			"updatedAt":     map[string]any{"type": "string", "format": "date-time"},
 		}),
 		"Balances": object([]string{"balances"}, map[string]any{
 			"balances": map[string]any{"type": "array", "items": schemaReference("Balance")},
@@ -128,13 +129,13 @@ func consumptionErrorResponses() map[string]any {
 func consumptionExample(name string) (map[string]any, bool) {
 	balance := map[string]any{
 		"id": "0199aa81-ce8c-73bf-a880-8e84654b9a6c", "customerId": "user_123", "meterKey": "api_calls",
-		"quantity": 10000, "createdAt": "2026-09-28T12:00:00Z", "updatedAt": "2026-09-28T12:00:00Z",
+		"quantity": 10000, "nextExpiresAt": "2026-10-31T00:00:00Z", "createdAt": "2026-09-28T12:00:00Z", "updatedAt": "2026-09-28T12:00:00Z",
 	}
 	switch name {
 	case "ConsumeRequest":
 		return map[string]any{"customerId": "customer_123", "meterKey": "api_calls", "quantity": 500}, true
 	case "AddBalanceRequest":
-		return map[string]any{"customerId": "user_123", "meterKey": "api_calls", "quantity": 10000}, true
+		return map[string]any{"customerId": "user_123", "meterKey": "api_calls", "quantity": 10000, "expiresAt": "2026-10-31T00:00:00Z"}, true
 	case "SetBalanceRequest":
 		return map[string]any{"quantity": 10000}, true
 	case "Balance":

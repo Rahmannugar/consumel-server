@@ -7,12 +7,13 @@ import (
 )
 
 type balanceResponse struct {
-	ID         string    `json:"id"`
-	CustomerID string    `json:"customerId"`
-	MeterKey   string    `json:"meterKey"`
-	Quantity   int64     `json:"quantity"`
-	CreatedAt  time.Time `json:"createdAt"`
-	UpdatedAt  time.Time `json:"updatedAt"`
+	ID            string     `json:"id"`
+	CustomerID    string     `json:"customerId"`
+	MeterKey      string     `json:"meterKey"`
+	Quantity      int64      `json:"quantity"`
+	NextExpiresAt *time.Time `json:"nextExpiresAt"`
+	CreatedAt     time.Time  `json:"createdAt"`
+	UpdatedAt     time.Time  `json:"updatedAt"`
 }
 
 type balanceListResponse struct {
@@ -55,7 +56,8 @@ type operationListResponse struct {
 func balanceJSON(balance consumptionmodels.Balance) balanceResponse {
 	return balanceResponse{
 		ID: balance.ID.String(), CustomerID: balance.CustomerID, MeterKey: balance.MeterKey,
-		Quantity: balance.Quantity, CreatedAt: balance.CreatedAt, UpdatedAt: balance.UpdatedAt,
+		Quantity: balance.Quantity, NextExpiresAt: balance.NextExpiresAt,
+		CreatedAt: balance.CreatedAt, UpdatedAt: balance.UpdatedAt,
 	}
 }
 

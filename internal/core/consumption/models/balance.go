@@ -12,20 +12,22 @@ import (
 )
 
 var (
-	ErrBalanceCustomerInvalid = errors.New("balance customer ID is invalid")
-	ErrBalanceMeterInvalid    = errors.New("balance meter key is invalid")
-	ErrBalanceQuantityInvalid = errors.New("balance quantity is invalid")
-	ErrBalanceNotFound        = errors.New("balance not found")
-	ErrBalanceSubjectNotFound = errors.New("balance customer or meter not found")
-	ErrBalanceOverflow        = errors.New("balance quantity exceeds the supported range")
-	ErrIdempotencyKeyInvalid  = errors.New("idempotency key must be a UUID v7")
-	ErrIdempotencyKeyConflict = errors.New("idempotency key was used for another request")
+	ErrBalanceCustomerInvalid   = errors.New("balance customer ID is invalid")
+	ErrBalanceMeterInvalid      = errors.New("balance meter key is invalid")
+	ErrBalanceQuantityInvalid   = errors.New("balance quantity is invalid")
+	ErrBalanceExpirationInvalid = errors.New("balance expiration must be in the future")
+	ErrBalanceNotFound          = errors.New("balance not found")
+	ErrBalanceSubjectNotFound   = errors.New("balance customer or meter not found")
+	ErrBalanceOverflow          = errors.New("balance quantity exceeds the supported range")
+	ErrIdempotencyKeyInvalid    = errors.New("idempotency key must be a UUID v7")
+	ErrIdempotencyKeyConflict   = errors.New("idempotency key was used for another request")
 )
 
 type AddBalanceRequest struct {
-	CustomerID string `json:"customerId"`
-	MeterKey   string `json:"meterKey"`
-	Quantity   int64  `json:"quantity"`
+	CustomerID string     `json:"customerId"`
+	MeterKey   string     `json:"meterKey"`
+	Quantity   int64      `json:"quantity"`
+	ExpiresAt  *time.Time `json:"expiresAt"`
 }
 
 type SetBalanceRequest struct {
@@ -38,6 +40,7 @@ type Balance struct {
 	CustomerID           string
 	MeterKey             string
 	Quantity             int64
+	NextExpiresAt        *time.Time
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
 }
@@ -48,8 +51,16 @@ type Subject struct {
 }
 
 func (request AddBalanceRequest) Validate() (AddBalanceRequest, error) {
+	return request.ValidateAt(time.Now())
+}
+
+func (request AddBalanceRequest) ValidateAt(now time.Time) (AddBalanceRequest, error) {
 	request.CustomerID = strings.TrimSpace(request.CustomerID)
 	request.MeterKey = strings.TrimSpace(request.MeterKey)
+	if request.ExpiresAt != nil {
+		normalized := request.ExpiresAt.UTC().Truncate(time.Microsecond)
+		request.ExpiresAt = &normalized
+	}
 	switch {
 	case request.CustomerID == "" || utf8.RuneCountInString(request.CustomerID) > customermodels.MaximumCustomerIDLength:
 		return AddBalanceRequest{}, ErrBalanceCustomerInvalid
@@ -57,6 +68,8 @@ func (request AddBalanceRequest) Validate() (AddBalanceRequest, error) {
 		return AddBalanceRequest{}, ErrBalanceMeterInvalid
 	case request.Quantity <= 0:
 		return AddBalanceRequest{}, ErrBalanceQuantityInvalid
+	case request.ExpiresAt != nil && !request.ExpiresAt.After(now):
+		return AddBalanceRequest{}, ErrBalanceExpirationInvalid
 	default:
 		return request, nil
 	}
@@ -74,6 +87,7 @@ func AddBalanceRequestOpenAPISchema() map[string]any {
 		"customerId": map[string]any{"type": "string", "minLength": 1, "maxLength": customermodels.MaximumCustomerIDLength, "example": "user_123"},
 		"meterKey":   map[string]any{"type": "string", "minLength": 1, "maxLength": metermodels.MaximumMeterKeyLength, "example": "api_calls"},
 		"quantity":   map[string]any{"type": "integer", "format": "int64", "minimum": 1, "example": 10000},
+		"expiresAt":  map[string]any{"type": []string{"string", "null"}, "format": "date-time", "description": "Optional instant when the added entitlement stops being available."},
 	})
 }
 

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	consumptionmodels "github.com/Rahmannugar/consumel-server/internal/core/consumption/models"
 	consumptionrepositories "github.com/Rahmannugar/consumel-server/internal/core/consumption/repositories"
@@ -54,6 +55,12 @@ func TestBalancesPreserveIdempotencyConcurrencyAndEnvironmentIsolation(t *testin
 		CustomerID: fixture.customerID, MeterKey: fixture.meterKey, Quantity: 11,
 	}); !errors.Is(err, consumptionmodels.ErrIdempotencyKeyConflict) {
 		t.Fatalf("reused key error = %v, want conflict", err)
+	}
+	expiresAt := time.Now().Add(24 * time.Hour)
+	if _, _, err := service.Add(t.Context(), fixture.sandboxID, key.String(), consumptionmodels.AddBalanceRequest{
+		CustomerID: fixture.customerID, MeterKey: fixture.meterKey, Quantity: 10, ExpiresAt: &expiresAt,
+	}); !errors.Is(err, consumptionmodels.ErrIdempotencyKeyConflict) {
+		t.Fatalf("reused key with changed expiration error = %v, want conflict", err)
 	}
 
 	const sameKeyRequests = 8
