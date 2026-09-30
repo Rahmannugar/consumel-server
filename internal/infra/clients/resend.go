@@ -33,11 +33,11 @@ type ResendEmailClient struct {
 
 func NewResendEmailClient(httpClient *http.Client, apiKey, from string) (*ResendEmailClient, error) {
 	if httpClient == nil {
-		return nil, fmt.Errorf("Resend HTTP client is required")
+		return nil, fmt.Errorf("HTTP client is required for Resend")
 	}
 	apiKey = strings.TrimSpace(apiKey)
 	if apiKey == "" {
-		return nil, fmt.Errorf("Resend API key is required")
+		return nil, fmt.Errorf("API key is required for Resend")
 	}
 	from = strings.TrimSpace(from)
 	if _, err := mail.ParseAddress(from); err != nil {
@@ -74,7 +74,7 @@ func (client *ResendEmailClient) Send(
 	if err != nil {
 		return "", newResendFailure(fmt.Errorf("send email through Resend: %w", err), true, 0)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	body, readErr := io.ReadAll(io.LimitReader(response.Body, maximumErrorBody))
 	if readErr != nil {
 		return "", newResendFailure(fmt.Errorf("read Resend response: %w", readErr), true, 0)
@@ -101,7 +101,7 @@ func (client *ResendEmailClient) Send(
 		(response.StatusCode == http.StatusConflict && providerError.Name == "concurrent_idempotent_requests")
 	retryAfter := parseRetryAfter(response.Header.Get("Retry-After"), time.Now().UTC())
 	return "", newResendFailure(
-		fmt.Errorf("Resend rejected email: status=%d code=%s", response.StatusCode, boundedCode(providerError.Name)),
+		fmt.Errorf("email rejected by Resend: status=%d code=%s", response.StatusCode, boundedCode(providerError.Name)),
 		retryable,
 		retryAfter,
 	)

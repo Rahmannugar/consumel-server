@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/Rahmannugar/consumel-server/internal/common/ids"
 	metermodels "github.com/Rahmannugar/consumel-server/internal/meters/models"
@@ -18,7 +19,7 @@ const (
 type MeterRepository interface {
 	Create(context.Context, metermodels.Meter) (metermodels.Meter, error)
 	Get(context.Context, uuid.UUID, string) (metermodels.Meter, error)
-	List(context.Context, uuid.UUID, *metermodels.ListCursor, int) ([]metermodels.Meter, *metermodels.ListCursor, error)
+	List(context.Context, uuid.UUID, *metermodels.ListCursor, int, string) ([]metermodels.Meter, *metermodels.ListCursor, error)
 }
 
 type MeterService struct {
@@ -65,6 +66,7 @@ func (service *MeterService) List(
 	projectEnvironmentID uuid.UUID,
 	cursor *metermodels.ListCursor,
 	limit int,
+	search string,
 ) ([]metermodels.Meter, *metermodels.ListCursor, error) {
 	if limit <= 0 {
 		limit = DefaultPageSize
@@ -72,15 +74,17 @@ func (service *MeterService) List(
 	if limit > MaximumPageSize {
 		limit = MaximumPageSize
 	}
-	return service.repository.List(ctx, projectEnvironmentID, cursor, limit)
+	search = strings.TrimSpace(search)
+	if utf8.RuneCountInString(search) > metermodels.MaximumMeterSearchLength {
+		return nil, nil, metermodels.ErrMeterSearchInvalid
+	}
+	return service.repository.List(ctx, projectEnvironmentID, cursor, limit, search)
 }
 
 func validateMeterKey(value string) (string, error) {
-	request, err := (metermodels.CreateMeterRequest{
-		MeterKey: strings.TrimSpace(value), Name: "validation", Type: metermodels.MeterTypePrepaid,
-	}).Validate()
-	if err != nil {
-		return "", err
+	value = strings.TrimSpace(value)
+	if !metermodels.ValidMeterKey(value) {
+		return "", metermodels.ErrMeterKeyInvalid
 	}
-	return request.MeterKey, nil
+	return value, nil
 }

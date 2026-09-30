@@ -32,6 +32,34 @@ WHERE project_environment_id = sqlc.arg(project_environment_id)
 ORDER BY created_at DESC, id DESC
 LIMIT sqlc.arg(page_size);
 
+-- name: SearchCustomers :many
+WITH matching_customer_ids AS (
+    SELECT customers.id
+    FROM customers
+    WHERE customers.project_environment_id = sqlc.arg(search_project_environment_id)
+      AND customers.search_vector @@ websearch_to_tsquery('simple', sqlc.arg(search_query))
+
+    UNION
+
+    SELECT customers.id
+    FROM customers
+    WHERE customers.project_environment_id = sqlc.arg(search_project_environment_id)
+      AND char_length(sqlc.arg(search_query)) >= 3
+      AND customers.search_text LIKE '%' || lower(sqlc.arg(search_query)) || '%'
+)
+SELECT customers.*
+FROM customers
+JOIN matching_customer_ids ON matching_customer_ids.id = customers.id
+WHERE (
+      sqlc.narg(cursor_created_at)::timestamptz IS NULL
+      OR (customers.created_at, customers.id) < (
+          sqlc.narg(cursor_created_at)::timestamptz,
+          sqlc.narg(cursor_id)::uuid
+      )
+  )
+ORDER BY customers.created_at DESC, customers.id DESC
+LIMIT sqlc.arg(page_size);
+
 -- name: UpdateCustomer :one
 UPDATE customers
 SET

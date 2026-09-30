@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   validate:
-    name: Format, test, vet, and build
+    name: Format, test, lint, and build
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -45,8 +45,10 @@ jobs:
       - name: Test database integration
         run: go test -p 1 -tags=integration ./...
 
-      - name: Vet
-        run: go vet ./...
+      - name: Lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version-file: .golangci-lint-version
 
       - name: Build
         run: go build ./...

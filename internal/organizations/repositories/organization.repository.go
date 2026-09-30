@@ -33,7 +33,7 @@ func (repository *OrganizationRepository) CreateOrganizationWithOwner(
 	if err != nil {
 		return models.Organization{}, models.OrganizationMembership{}, fmt.Errorf("begin transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	queries := repository.queries.WithTx(tx)
 	createdOrganization, err := queries.CreateOrganization(ctx, organizationdb.CreateOrganizationParams{

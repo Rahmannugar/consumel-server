@@ -4,7 +4,7 @@ POST /v1/customers
 Creates a customer in the project environment authenticated by the API key.
 
 GET /v1/customers
-Returns a cursor-paginated customer list from the project environment authenticated by the API key.
+Returns a cursor-paginated, searchable customer list from the project environment authenticated by the API key.
 
 GET /v1/customers/{customerId}
 Returns one customer from the project environment authenticated by the API key.
@@ -18,7 +18,7 @@ POST /v1/projects/{projectId}/environments/{environment}/customers
 Creates a customer from the signed-in project workspace.
 
 GET /v1/projects/{projectId}/environments/{environment}/customers
-Returns a cursor-paginated customer list for the signed-in project workspace.
+Returns a cursor-paginated, searchable customer list for the signed-in project workspace.
 
 GET /v1/projects/{projectId}/environments/{environment}/customers/{customerId}
 Returns one customer for the signed-in project workspace.

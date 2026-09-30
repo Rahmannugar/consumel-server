@@ -8,10 +8,11 @@ import (
 )
 
 type operation struct {
-	Method, Path, Summary, Tag, Request, SuccessCode, Success, SuccessDescription string
-	AlternateSuccess, Errors                                                      map[string]string
-	Protected, APIKeyProtected                                                    bool
-	Parameters                                                                    []parameter
+	Method, Path, Summary, Tag, Request, SuccessCode, Success, SuccessDescription, SuccessMediaType string
+	AlternateSuccess, Errors                                                                        map[string]string
+	SuccessHeaders                                                                                  map[string]any
+	Protected, APIKeyProtected                                                                      bool
+	Parameters                                                                                      []parameter
 }
 
 type parameter struct {
@@ -42,7 +43,14 @@ func Document() ([]byte, error) {
 			description = successDescription(endpoint.SuccessCode)
 		}
 		success := map[string]any{"description": description}
-		if endpoint.Success != "" {
+		if len(endpoint.SuccessHeaders) > 0 {
+			success["headers"] = endpoint.SuccessHeaders
+		}
+		if endpoint.SuccessMediaType != "" {
+			success["content"] = map[string]any{endpoint.SuccessMediaType: map[string]any{
+				"schema": map[string]any{"type": "string"},
+			}}
+		} else if endpoint.Success != "" {
 			success["content"] = jsonContent(schemaReference(endpoint.Success), exampleFor(endpoint.Success))
 		}
 		responses := operationResponses(endpoint, success)
@@ -98,7 +106,7 @@ func Document() ([]byte, error) {
 }
 
 func allOperations() []operation {
-	groups := [][]operation{authenticationOperations(), healthOperations(), onboardingOperations(), projectOperations(), customerOperations(), meterOperations()}
+	groups := [][]operation{authenticationOperations(), healthOperations(), onboardingOperations(), projectOperations(), customerOperations(), meterOperations(), consumptionOperations()}
 	var result []operation
 	for _, group := range groups {
 		result = append(result, group...)
@@ -108,7 +116,7 @@ func allOperations() []operation {
 
 func schemas() map[string]any {
 	result := map[string]any{"Error": object([]string{"error"}, map[string]any{"error": object([]string{"code"}, map[string]any{"code": map[string]any{"type": "string"}, "message": map[string]any{"type": "string"}})})}
-	for _, additions := range []map[string]any{authenticationSchemas(), healthSchemas(), onboardingSchemas(), projectSchemas(), customerSchemas(), meterSchemas()} {
+	for _, additions := range []map[string]any{authenticationSchemas(), healthSchemas(), onboardingSchemas(), projectSchemas(), customerSchemas(), meterSchemas(), consumptionSchemas()} {
 		mergeComponents(result, additions)
 	}
 	return result
@@ -116,7 +124,7 @@ func schemas() map[string]any {
 
 func errorResponses() map[string]any {
 	result := map[string]any{"ServerError": errorResponse("The request could not be completed.", "authentication_failed")}
-	for _, additions := range []map[string]any{authenticationErrorResponses(), onboardingErrorResponses(), projectErrorResponses(), customerErrorResponses(), meterErrorResponses()} {
+	for _, additions := range []map[string]any{authenticationErrorResponses(), onboardingErrorResponses(), projectErrorResponses(), customerErrorResponses(), meterErrorResponses(), consumptionErrorResponses()} {
 		mergeComponents(result, additions)
 	}
 	return result
@@ -146,7 +154,7 @@ func operationResponses(endpoint operation, success map[string]any) map[string]a
 }
 
 func exampleFor(name string) map[string]any {
-	providers := []func(string) (map[string]any, bool){authenticationExample, healthExample, onboardingExample, projectExampleFor, customerExample, meterExample}
+	providers := []func(string) (map[string]any, bool){authenticationExample, healthExample, onboardingExample, projectExampleFor, customerExample, meterExample, consumptionExample}
 	for _, provider := range providers {
 		if example, ok := provider(name); ok {
 			return example

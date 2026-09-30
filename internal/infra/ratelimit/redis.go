@@ -96,7 +96,7 @@ func NewRedisLimiter(
 	keyPrefix string,
 ) (*RedisLimiter, error) {
 	if client == nil {
-		return nil, fmt.Errorf("Redis client is required")
+		return nil, fmt.Errorf("client is required for Redis")
 	}
 	if len(secret) < 32 {
 		return nil, fmt.Errorf("rate-limit key secret must contain at least 32 bytes")

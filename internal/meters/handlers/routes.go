@@ -26,7 +26,7 @@ const maximumMeterRequestBytes = 16 << 10
 type MeterService interface {
 	Create(context.Context, uuid.UUID, metermodels.CreateMeterRequest) (metermodels.Meter, error)
 	Get(context.Context, uuid.UUID, string) (metermodels.Meter, error)
-	List(context.Context, uuid.UUID, *metermodels.ListCursor, int) ([]metermodels.Meter, *metermodels.ListCursor, error)
+	List(context.Context, uuid.UUID, *metermodels.ListCursor, int, string) ([]metermodels.Meter, *metermodels.ListCursor, error)
 }
 
 type ProjectEnvironmentAuthorizer interface {
@@ -100,8 +100,14 @@ func (handler *Handler) List(response http.ResponseWriter, request *http.Request
 		_ = httpresponse.WriteError(response, http.StatusBadRequest, "invalid_request", "Limit must be a number between 1 and 100.")
 		return
 	}
-	meters, next, err := handler.service.List(request.Context(), environmentID, cursor, limit)
+	meters, next, err := handler.service.List(
+		request.Context(), environmentID, cursor, limit, request.URL.Query().Get("q"),
+	)
 	if err != nil {
+		if errors.Is(err, metermodels.ErrMeterSearchInvalid) {
+			_ = httpresponse.WriteError(response, http.StatusBadRequest, "invalid_search", "Search must be 120 characters or fewer.")
+			return
+		}
 		handler.fail(response, request, err)
 		return
 	}
@@ -180,6 +186,8 @@ func (handler *Handler) writeMeterError(response http.ResponseWriter, request *h
 		_ = httpresponse.WriteError(response, http.StatusBadRequest, "invalid_meter", "Check the meter key, name, description, and type.")
 	case errors.Is(err, metermodels.ErrMeterExists):
 		_ = httpresponse.WriteError(response, http.StatusConflict, "meter_already_exists", "This meter key already exists in the selected environment.")
+	case errors.Is(err, metermodels.ErrMeterDefinitionConflict):
+		_ = httpresponse.WriteError(response, http.StatusConflict, "meter_definition_conflict", "This meter key already has a different project-level definition.")
 	case errors.Is(err, metermodels.ErrMeterNotFound):
 		_ = httpresponse.WriteError(response, http.StatusNotFound, "meter_not_found", "This meter does not exist in the selected environment.")
 	default:

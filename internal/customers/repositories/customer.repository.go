@@ -63,6 +63,7 @@ func (repository *CustomerRepository) List(
 	projectEnvironmentID uuid.UUID,
 	cursor *customermodels.ListCursor,
 	limit int,
+	search string,
 ) ([]customermodels.Customer, *customermodels.ListCursor, error) {
 	params := customerdb.ListCustomersParams{
 		ProjectEnvironmentID: projectEnvironmentID, PageSize: int32(limit + 1),
@@ -71,7 +72,17 @@ func (repository *CustomerRepository) List(
 		params.CursorCreatedAt = pgtype.Timestamptz{Time: cursor.CreatedAt, Valid: true}
 		params.CursorID = pgtype.UUID{Bytes: cursor.ID, Valid: true}
 	}
-	rows, err := repository.queries.ListCustomers(ctx, params)
+	var rows []customerdb.Customer
+	var err error
+	if search == "" {
+		rows, err = repository.queries.ListCustomers(ctx, params)
+	} else {
+		rows, err = repository.queries.SearchCustomers(ctx, customerdb.SearchCustomersParams{
+			SearchProjectEnvironmentID: params.ProjectEnvironmentID,
+			SearchQuery:                search, CursorCreatedAt: params.CursorCreatedAt,
+			CursorID: params.CursorID, PageSize: params.PageSize,
+		})
+	}
 	if err != nil {
 		return nil, nil, fmt.Errorf("list customers: %w", err)
 	}

@@ -148,7 +148,7 @@ func (relay *Relay) publishBatch(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("begin outbox checkpoint transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	for _, outcome := range outcomes {
 		if outcome.err != nil {
 			message := outcome.err.Error()

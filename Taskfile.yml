@@ -3,6 +3,10 @@ version: "3"
 dotenv:
   - .env
 
+vars:
+  GOLANGCI_LINT_VERSION:
+    sh: tr -d '[:space:]' < .golangci-lint-version
+
 tasks:
   up:
     desc: Start the local containers using existing images
@@ -63,11 +67,21 @@ tasks:
     cmds:
       - go test -p 1 -tags=integration ./...
 
+  lint:
+    desc: Run the pinned Go linters
+    preconditions:
+      - sh: command -v golangci-lint >/dev/null
+        msg: Install golangci-lint {{.GOLANGCI_LINT_VERSION}} before running lint.
+      - sh: test "v$(golangci-lint version --short)" = "{{.GOLANGCI_LINT_VERSION}}"
+        msg: Install golangci-lint {{.GOLANGCI_LINT_VERSION}}; another version is currently active.
+    cmds:
+      - golangci-lint run ./...
+
   check:
-    desc: Validate formatting, tests, vet, and builds
+    desc: Validate generation, formatting, tests, lint, and builds
     cmds:
       - go tool sqlc generate
       - test -z "$(gofmt -l .)"
       - go test ./...
-      - go vet ./...
+      - task: lint
       - go build ./...

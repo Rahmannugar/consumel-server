@@ -300,7 +300,7 @@ func (consumer *Consumer) claim(ctx context.Context, id uuid.UUID) (delivery, cl
 	if err != nil {
 		return delivery{}, claimUnavailable, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	var item delivery
 	var status string
 	var startedAt *time.Time
@@ -390,7 +390,7 @@ func (consumer *Consumer) recordFailure(
 	if err != nil {
 		return terminal, false, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	var tag pgconn.CommandTag
 	if terminal {
 		tag, err = tx.Exec(ctx, `UPDATE email_deliveries SET

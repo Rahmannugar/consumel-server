@@ -24,7 +24,7 @@ INSERT INTO customers (
     metadata_location
 )
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, project_environment_id, customer_id, name, email, metadata_plan, metadata_country, metadata_location, created_at, updated_at
+RETURNING id, project_environment_id, customer_id, name, email, metadata_plan, metadata_country, metadata_location, created_at, updated_at, search_text, search_vector
 `
 
 type CreateCustomerParams struct {
@@ -61,12 +61,14 @@ func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) 
 		&i.MetadataLocation,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SearchText,
+		&i.SearchVector,
 	)
 	return i, err
 }
 
 const customerByPublicID = `-- name: CustomerByPublicID :one
-SELECT id, project_environment_id, customer_id, name, email, metadata_plan, metadata_country, metadata_location, created_at, updated_at
+SELECT id, project_environment_id, customer_id, name, email, metadata_plan, metadata_country, metadata_location, created_at, updated_at, search_text, search_vector
 FROM customers
 WHERE project_environment_id = $1
   AND customer_id = $2
@@ -91,12 +93,14 @@ func (q *Queries) CustomerByPublicID(ctx context.Context, arg CustomerByPublicID
 		&i.MetadataLocation,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SearchText,
+		&i.SearchVector,
 	)
 	return i, err
 }
 
 const listCustomers = `-- name: ListCustomers :many
-SELECT id, project_environment_id, customer_id, name, email, metadata_plan, metadata_country, metadata_location, created_at, updated_at
+SELECT id, project_environment_id, customer_id, name, email, metadata_plan, metadata_country, metadata_location, created_at, updated_at, search_text, search_vector
 FROM customers
 WHERE project_environment_id = $1
   AND (
@@ -142,6 +146,84 @@ func (q *Queries) ListCustomers(ctx context.Context, arg ListCustomersParams) ([
 			&i.MetadataLocation,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.SearchText,
+			&i.SearchVector,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchCustomers = `-- name: SearchCustomers :many
+WITH matching_customer_ids AS (
+    SELECT customers.id
+    FROM customers
+    WHERE customers.project_environment_id = $4
+      AND customers.search_vector @@ websearch_to_tsquery('simple', $5)
+
+    UNION
+
+    SELECT customers.id
+    FROM customers
+    WHERE customers.project_environment_id = $4
+      AND char_length($5) >= 3
+      AND customers.search_text LIKE '%' || lower($5) || '%'
+)
+SELECT customers.id, customers.project_environment_id, customers.customer_id, customers.name, customers.email, customers.metadata_plan, customers.metadata_country, customers.metadata_location, customers.created_at, customers.updated_at, customers.search_text, customers.search_vector
+FROM customers
+JOIN matching_customer_ids ON matching_customer_ids.id = customers.id
+WHERE (
+      $1::timestamptz IS NULL
+      OR (customers.created_at, customers.id) < (
+          $1::timestamptz,
+          $2::uuid
+      )
+  )
+ORDER BY customers.created_at DESC, customers.id DESC
+LIMIT $3
+`
+
+type SearchCustomersParams struct {
+	CursorCreatedAt            pgtype.Timestamptz
+	CursorID                   pgtype.UUID
+	PageSize                   int32
+	SearchProjectEnvironmentID uuid.UUID
+	SearchQuery                string
+}
+
+func (q *Queries) SearchCustomers(ctx context.Context, arg SearchCustomersParams) ([]Customer, error) {
+	rows, err := q.db.Query(ctx, searchCustomers,
+		arg.CursorCreatedAt,
+		arg.CursorID,
+		arg.PageSize,
+		arg.SearchProjectEnvironmentID,
+		arg.SearchQuery,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Customer
+	for rows.Next() {
+		var i Customer
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectEnvironmentID,
+			&i.CustomerID,
+			&i.Name,
+			&i.Email,
+			&i.MetadataPlan,
+			&i.MetadataCountry,
+			&i.MetadataLocation,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.SearchText,
+			&i.SearchVector,
 		); err != nil {
 			return nil, err
 		}
@@ -164,7 +246,7 @@ SET
     updated_at = now()
 WHERE project_environment_id = $1
   AND customer_id = $2
-RETURNING id, project_environment_id, customer_id, name, email, metadata_plan, metadata_country, metadata_location, created_at, updated_at
+RETURNING id, project_environment_id, customer_id, name, email, metadata_plan, metadata_country, metadata_location, created_at, updated_at, search_text, search_vector
 `
 
 type UpdateCustomerParams struct {
@@ -199,6 +281,8 @@ func (q *Queries) UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) 
 		&i.MetadataLocation,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SearchText,
+		&i.SearchVector,
 	)
 	return i, err
 }

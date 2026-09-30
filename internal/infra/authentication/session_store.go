@@ -33,14 +33,14 @@ func NewAuthlierDatabase(
 	logger *slog.Logger,
 ) (*AuthlierDatabase, error) {
 	if database == nil || pool == nil || cache == nil || emailVerifications == nil || logger == nil {
-		return nil, fmt.Errorf("Authlier database, PostgreSQL pool, session cache, email verification store, and logger are required")
+		return nil, fmt.Errorf("database, PostgreSQL pool, session cache, email verification store, and logger are required for Authlier")
 	}
 	if maximumActiveSessions < 1 {
 		return nil, fmt.Errorf("maximum active sessions must be positive")
 	}
 	stores := database.Stores()
 	if stores.Sessions == nil {
-		return nil, fmt.Errorf("Authlier session store is required")
+		return nil, fmt.Errorf("session store is required for Authlier")
 	}
 
 	return &AuthlierDatabase{

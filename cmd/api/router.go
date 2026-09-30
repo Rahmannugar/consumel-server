@@ -7,6 +7,7 @@ import (
 
 	authenticationhandlers "github.com/Rahmannugar/consumel-server/internal/authentication/handlers"
 	"github.com/Rahmannugar/consumel-server/internal/config"
+	consumptionhandlers "github.com/Rahmannugar/consumel-server/internal/core/consumption/handlers"
 	customerhandlers "github.com/Rahmannugar/consumel-server/internal/customers/handlers"
 	"github.com/Rahmannugar/consumel-server/internal/health"
 	"github.com/Rahmannugar/consumel-server/internal/infra/cors"
@@ -30,6 +31,9 @@ func newRouter(
 	projectService projecthandlers.ProjectService,
 	customerService customerhandlers.CustomerService,
 	meterService meterhandlers.MeterService,
+	balanceService consumptionhandlers.BalanceService,
+	consumeService consumptionhandlers.ConsumeService,
+	operationService consumptionhandlers.OperationService,
 	limiter *ratelimit.RedisLimiter,
 	logger *slog.Logger,
 ) (*gin.Engine, error) {
@@ -76,6 +80,22 @@ func newRouter(
 		projectService,
 		meterService,
 		logger,
+	)
+	consumptionhandlers.RegisterBalanceRoutes(
+		router,
+		apiKeyAuthenticator,
+		tenantResolver,
+		projectService,
+		balanceService,
+		logger,
+	)
+	consumptionhandlers.RegisterConsumeRoutes(router, apiKeyAuthenticator, consumeService, logger)
+	operationStreamObserver, err := runtime.NewSSEObserver("operations.stream")
+	if err != nil {
+		return nil, fmt.Errorf("configure operation stream telemetry: %w", err)
+	}
+	consumptionhandlers.RegisterOperationRoutes(
+		router, tenantResolver, projectService, operationService, operationStreamObserver, logger,
 	)
 	return router, nil
 }

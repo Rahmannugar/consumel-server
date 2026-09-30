@@ -7,8 +7,9 @@ import (
 )
 
 const (
-	allowedHeaders = "Content-Type"
-	allowedMethods = "GET, POST, DELETE, OPTIONS"
+	allowedHeaders = "Content-Type, Idempotency-Key"
+	allowedMethods = "GET, POST, PUT, DELETE, OPTIONS"
+	exposedHeaders = "Idempotency-Replayed"
 )
 
 // Middleware allows credentialed browser requests only from configured
@@ -28,6 +29,7 @@ func Middleware(allowedOrigins []string) gin.HandlerFunc {
 			context.Header("Access-Control-Allow-Credentials", "true")
 			context.Header("Access-Control-Allow-Headers", allowedHeaders)
 			context.Header("Access-Control-Allow-Methods", allowedMethods)
+			context.Header("Access-Control-Expose-Headers", exposedHeaders)
 			context.Header("Vary", "Origin")
 		}
 

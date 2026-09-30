@@ -47,7 +47,7 @@ func TestAPIKeyMiddlewareEstablishesProjectEnvironmentContext(t *testing.T) {
 	})
 
 	response := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/v1/customers", nil)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/customers", nil)
 	request.Header.Set("Authorization", "Bearer active-key")
 	router.ServeHTTP(response, request)
 	if response.Code != http.StatusNoContent {
@@ -66,7 +66,7 @@ func TestAPIKeyMiddlewareReturnsBoundedUnauthorizedResponse(t *testing.T) {
 	})
 
 	response := httptest.NewRecorder()
-	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/v1/customers", nil))
+	router.ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/customers", nil))
 	if response.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
 	}

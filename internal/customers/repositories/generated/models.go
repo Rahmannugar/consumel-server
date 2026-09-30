@@ -20,4 +20,6 @@ type Customer struct {
 	MetadataLocation     *string
 	CreatedAt            pgtype.Timestamptz
 	UpdatedAt            pgtype.Timestamptz
+	SearchText           *string
+	SearchVector         interface{}
 }

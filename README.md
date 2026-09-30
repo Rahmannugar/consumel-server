@@ -89,11 +89,14 @@ The current endpoint map is documented in [API.md](API.md).
 
 ## Validation
 
-Run formatting, tests, vet, and build checks:
+Run generation, formatting, tests, lint, and build checks:
 
 ```bash
 task check
 ```
+
+`task check` requires the `golangci-lint` version pinned in
+`.golangci-lint-version`. Run `task lint` to execute that check independently.
 
 Run the PostgreSQL integration tests with Docker available:
 

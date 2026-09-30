@@ -14,6 +14,7 @@ const (
 	MaximumMeterKeyLength         = 120
 	MaximumMeterNameLength        = 120
 	MaximumMeterDescriptionLength = 500
+	MaximumMeterSearchLength      = 120
 )
 
 var (
@@ -22,8 +23,10 @@ var (
 	ErrMeterDescriptionInvalid = errors.New("meter description is invalid")
 	ErrMeterTypeInvalid        = errors.New("meter type is invalid")
 	ErrMeterExists             = errors.New("meter already exists")
+	ErrMeterDefinitionConflict = errors.New("meter definition conflicts with the project meter")
 	ErrMeterNotFound           = errors.New("meter not found")
 	ErrCursorInvalid           = errors.New("meter cursor is invalid")
+	ErrMeterSearchInvalid      = errors.New("meter search is invalid")
 	meterKeyPattern            = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 )
 
@@ -63,9 +66,7 @@ func (request CreateMeterRequest) Validate() (CreateMeterRequest, error) {
 	request.MeterKey = strings.TrimSpace(request.MeterKey)
 	request.Name = strings.TrimSpace(request.Name)
 	switch {
-	case request.MeterKey == "",
-		utf8.RuneCountInString(request.MeterKey) > MaximumMeterKeyLength,
-		!meterKeyPattern.MatchString(request.MeterKey):
+	case !ValidMeterKey(request.MeterKey):
 		return CreateMeterRequest{}, ErrMeterKeyInvalid
 	case request.Name == "" || utf8.RuneCountInString(request.Name) > MaximumMeterNameLength:
 		return CreateMeterRequest{}, ErrMeterNameInvalid
@@ -83,6 +84,12 @@ func (request CreateMeterRequest) Validate() (CreateMeterRequest, error) {
 		}
 	}
 	return request, nil
+}
+
+func ValidMeterKey(value string) bool {
+	return value != "" &&
+		utf8.RuneCountInString(value) <= MaximumMeterKeyLength &&
+		meterKeyPattern.MatchString(value)
 }
 
 func CreateMeterRequestOpenAPISchema() map[string]any {

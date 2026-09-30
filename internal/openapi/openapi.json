@@ -16,6 +16,298 @@
         },
         "description": "The JSON body or one of its fields is invalid."
       },
+      "BalanceConflict": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "balance_limit_exceeded": {
+                "value": {
+                  "error": {
+                    "code": "balance_limit_exceeded"
+                  }
+                }
+              },
+              "idempotency_key_conflict": {
+                "value": {
+                  "error": {
+                    "code": "idempotency_key_conflict"
+                  }
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The balance addition conflicts with prior state."
+      },
+      "BalanceEnvironmentConflict": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "environment_inactive",
+                "message": "Activate Live before managing its balances."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The selected project environment is not active."
+      },
+      "BalanceFailed": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "balance_operation_failed",
+                "message": "Consumel could not complete the balance request. Try again shortly."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The balance request could not be completed."
+      },
+      "BalanceInvalid": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "invalid_balance": {
+                "value": {
+                  "error": {
+                    "code": "invalid_balance"
+                  }
+                }
+              },
+              "invalid_request": {
+                "value": {
+                  "error": {
+                    "code": "invalid_request"
+                  }
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The balance request, resource key, or idempotency key is invalid."
+      },
+      "BalanceNotFound": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "balance_not_found": {
+                "value": {
+                  "error": {
+                    "code": "balance_not_found"
+                  }
+                }
+              },
+              "balance_subject_not_found": {
+                "value": {
+                  "error": {
+                    "code": "balance_subject_not_found"
+                  }
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The customer, active meter, or balance is unavailable."
+      },
+      "BalanceOrEnvironmentConflict": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "balance_limit_exceeded": {
+                "value": {
+                  "error": {
+                    "code": "balance_limit_exceeded"
+                  }
+                }
+              },
+              "environment_inactive": {
+                "value": {
+                  "error": {
+                    "code": "environment_inactive"
+                  }
+                }
+              },
+              "idempotency_key_conflict": {
+                "value": {
+                  "error": {
+                    "code": "idempotency_key_conflict"
+                  }
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The balance addition conflicts with prior state or the selected environment is inactive."
+      },
+      "BalanceOrEnvironmentNotFound": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "balance_not_found": {
+                "value": {
+                  "error": {
+                    "code": "balance_not_found"
+                  }
+                }
+              },
+              "balance_subject_not_found": {
+                "value": {
+                  "error": {
+                    "code": "balance_subject_not_found"
+                  }
+                }
+              },
+              "project_environment_not_found": {
+                "value": {
+                  "error": {
+                    "code": "project_environment_not_found"
+                  }
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The customer, active meter, balance, or selected environment is unavailable."
+      },
+      "BalanceSubjectNotFound": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "balance_subject_not_found",
+                "message": "The customer or active meter does not exist in this environment."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The customer or active meter is unavailable."
+      },
+      "BalanceSubjectOrEnvironmentNotFound": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "balance_subject_not_found": {
+                "value": {
+                  "error": {
+                    "code": "balance_subject_not_found"
+                  }
+                }
+              },
+              "project_environment_not_found": {
+                "value": {
+                  "error": {
+                    "code": "project_environment_not_found"
+                  }
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The customer, active meter, or selected project environment is unavailable."
+      },
+      "ConsumeConflict": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "idempotency_key_conflict": {
+                "value": {
+                  "error": {
+                    "code": "idempotency_key_conflict"
+                  }
+                }
+              },
+              "insufficient_balance": {
+                "value": {
+                  "error": {
+                    "code": "insufficient_balance"
+                  }
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The consume operation conflicts with the current balance or prior idempotent request."
+      },
+      "ConsumeFailed": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "consume_failed",
+                "message": "Consumel could not process this usage. Try again shortly."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The consume operation could not be completed."
+      },
+      "ConsumeInvalid": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "invalid_consume",
+                "message": "Check the customer ID, meter key, quantity, and idempotency key."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The consume request or idempotency key is invalid."
+      },
+      "ConsumeMeterNotFound": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "meter_not_found",
+                "message": "The active meter does not exist in this environment."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The active meter is unavailable."
+      },
       "CustomerConflict": {
         "content": {
           "application/json": {
@@ -149,6 +441,13 @@
                     "code": "invalid_request"
                   }
                 }
+              },
+              "invalid_search": {
+                "value": {
+                  "error": {
+                    "code": "invalid_search"
+                  }
+                }
               }
             },
             "schema": {
@@ -156,7 +455,7 @@
             }
           }
         },
-        "description": "The pagination input is invalid."
+        "description": "The list pagination or search input is invalid."
       },
       "CustomerNotFound": {
         "content": {
@@ -290,10 +589,20 @@
       "MeterConflict": {
         "content": {
           "application/json": {
-            "example": {
-              "error": {
-                "code": "meter_already_exists",
-                "message": "This meter key already exists in the selected environment."
+            "examples": {
+              "meter_already_exists": {
+                "value": {
+                  "error": {
+                    "code": "meter_already_exists"
+                  }
+                }
+              },
+              "meter_definition_conflict": {
+                "value": {
+                  "error": {
+                    "code": "meter_definition_conflict"
+                  }
+                }
               }
             },
             "schema": {
@@ -301,7 +610,7 @@
             }
           }
         },
-        "description": "The meter key already exists in the selected environment."
+        "description": "The meter cannot be created in the API key's environment."
       },
       "MeterCreateConflict": {
         "content": {
@@ -318,6 +627,13 @@
                 "value": {
                   "error": {
                     "code": "meter_already_exists"
+                  }
+                }
+              },
+              "meter_definition_conflict": {
+                "value": {
+                  "error": {
+                    "code": "meter_definition_conflict"
                   }
                 }
               }
@@ -420,6 +736,13 @@
                     "code": "invalid_request"
                   }
                 }
+              },
+              "invalid_search": {
+                "value": {
+                  "error": {
+                    "code": "invalid_search"
+                  }
+                }
               }
             },
             "schema": {
@@ -427,7 +750,7 @@
             }
           }
         },
-        "description": "The pagination input is invalid."
+        "description": "The list pagination or search input is invalid."
       },
       "MeterNotFound": {
         "content": {
@@ -533,6 +856,87 @@
           }
         },
         "description": "The organization name or project name is invalid."
+      },
+      "OperationEnvironmentConflict": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "environment_inactive",
+                "message": "Activate Live before viewing its events."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The selected project environment is not active."
+      },
+      "OperationEnvironmentNotFound": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "project_environment_not_found",
+                "message": "This project environment is not available."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The selected project environment is unavailable."
+      },
+      "OperationListFailed": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "operation_list_failed",
+                "message": "Consumel could not load events. Try again shortly."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The event list could not be loaded."
+      },
+      "OperationListInvalid": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "invalid_cursor": {
+                "value": {
+                  "error": {
+                    "code": "invalid_cursor"
+                  }
+                }
+              },
+              "invalid_filter": {
+                "value": {
+                  "error": {
+                    "code": "invalid_filter"
+                  }
+                }
+              },
+              "invalid_request": {
+                "value": {
+                  "error": {
+                    "code": "invalid_request"
+                  }
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The event list filter or pagination input is invalid."
       },
       "PasswordResetFailed": {
         "content": {
@@ -946,6 +1350,35 @@
         ],
         "type": "object"
       },
+      "AddBalanceRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "customerId": {
+            "example": "user_123",
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          },
+          "meterKey": {
+            "example": "api_calls",
+            "maxLength": 120,
+            "minLength": 1,
+            "type": "string"
+          },
+          "quantity": {
+            "example": 10000,
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "customerId",
+          "meterKey",
+          "quantity"
+        ],
+        "type": "object"
+      },
       "AuthorizationURL": {
         "additionalProperties": false,
         "properties": {
@@ -956,6 +1389,61 @@
         },
         "required": [
           "url"
+        ],
+        "type": "object"
+      },
+      "Balance": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "customerId": {
+            "maxLength": 255,
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "meterKey": {
+            "maxLength": 120,
+            "pattern": "^[a-z][a-z0-9_-]*$",
+            "type": "string"
+          },
+          "quantity": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "customerId",
+          "meterKey",
+          "quantity",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "Balances": {
+        "additionalProperties": false,
+        "properties": {
+          "balances": {
+            "items": {
+              "$ref": "#/components/schemas/Balance"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "balances"
         ],
         "type": "object"
       },
@@ -979,6 +1467,36 @@
         "required": [
           "currentPassword",
           "newPassword"
+        ],
+        "type": "object"
+      },
+      "ConsumeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "customerId": {
+            "example": "customer_123",
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          },
+          "meterKey": {
+            "example": "api_calls",
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9_-]*$",
+            "type": "string"
+          },
+          "quantity": {
+            "example": 500,
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "customerId",
+          "meterKey",
+          "quantity"
         ],
         "type": "object"
       },
@@ -1726,6 +2244,21 @@
         ],
         "type": "object"
       },
+      "SetBalanceRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "quantity": {
+            "example": 10000,
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "quantity"
+        ],
+        "type": "object"
+      },
       "SetPasswordRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1792,6 +2325,180 @@
             ]
           }
         },
+        "type": "object"
+      },
+      "UsageEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "balanceDebited": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "billable": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "customerId": {
+            "maxLength": 255,
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "meterKey": {
+            "maxLength": 120,
+            "pattern": "^[a-z][a-z0-9_-]*$",
+            "type": "string"
+          },
+          "meterType": {
+            "enum": [
+              "prepaid",
+              "postpaid",
+              "hybrid"
+            ],
+            "type": "string"
+          },
+          "quantity": {
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "remainingBalance": {
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "customerId",
+          "meterKey",
+          "quantity",
+          "meterType",
+          "balanceDebited",
+          "remainingBalance",
+          "billable",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "UsageOperation": {
+        "additionalProperties": false,
+        "properties": {
+          "balanceDebited": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "billable": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "customerId": {
+            "type": "string"
+          },
+          "denialReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "lastReplayedAt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "meterKey": {
+            "type": "string"
+          },
+          "meterType": {
+            "enum": [
+              "prepaid",
+              "postpaid",
+              "hybrid"
+            ],
+            "type": "string"
+          },
+          "quantity": {
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "remainingBalance": {
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "replayCount": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "accepted",
+              "denied"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "customerId",
+          "meterKey",
+          "quantity",
+          "meterType",
+          "status",
+          "denialReason",
+          "balanceDebited",
+          "remainingBalance",
+          "billable",
+          "replayCount",
+          "lastReplayedAt",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "UsageOperations": {
+        "additionalProperties": false,
+        "properties": {
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "operations": {
+            "items": {
+              "$ref": "#/components/schemas/UsageOperation"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "operations",
+          "nextCursor"
+        ],
         "type": "object"
       },
       "User": {
@@ -2939,9 +3646,284 @@
         ]
       }
     },
+    "/v1/balances": {
+      "post": {
+        "parameters": [
+          {
+            "description": "A UUID v7 that identifies this logical balance addition. Reuse it only when retrying the same request.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "customerId": "user_123",
+                "meterKey": "api_calls",
+                "quantity": 10000
+              },
+              "schema": {
+                "$ref": "#/components/schemas/AddBalanceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "createdAt": "2026-09-28T12:00:00Z",
+                  "customerId": "user_123",
+                  "id": "0199aa81-ce8c-73bf-a880-8e84654b9a6c",
+                  "meterKey": "api_calls",
+                  "quantity": 10000,
+                  "updatedAt": "2026-09-28T12:00:00Z"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Balance"
+                }
+              }
+            },
+            "description": "Completed successfully.",
+            "headers": {
+              "Idempotency-Replayed": {
+                "description": "Present with the value true when Consumel returns the original result of a committed retry.",
+                "schema": {
+                  "enum": [
+                    "true"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BalanceInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidAPIKey"
+          },
+          "404": {
+            "$ref": "#/components/responses/BalanceSubjectNotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/BalanceConflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/BalanceFailed"
+          }
+        },
+        "security": [
+          {
+            "projectAPIKey": []
+          }
+        ],
+        "summary": "Add an idempotent quantity to a customer and meter balance.",
+        "tags": [
+          "Balances"
+        ]
+      }
+    },
+    "/v1/balances/{customerId}/{meterKey}": {
+      "put": {
+        "parameters": [
+          {
+            "description": "The customer identifier supplied by the integrating application.",
+            "in": "path",
+            "name": "customerId",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "type": "string"
+            }
+          },
+          {
+            "description": "The stable meter key supplied when the meter was created.",
+            "in": "path",
+            "name": "meterKey",
+            "required": true,
+            "schema": {
+              "maxLength": 120,
+              "pattern": "^[a-z][a-z0-9_-]*$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "quantity": 10000
+              },
+              "schema": {
+                "$ref": "#/components/schemas/SetBalanceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "createdAt": "2026-09-28T12:00:00Z",
+                  "customerId": "user_123",
+                  "id": "0199aa81-ce8c-73bf-a880-8e84654b9a6c",
+                  "meterKey": "api_calls",
+                  "quantity": 10000,
+                  "updatedAt": "2026-09-28T12:00:00Z"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Balance"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "400": {
+            "$ref": "#/components/responses/BalanceInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidAPIKey"
+          },
+          "404": {
+            "$ref": "#/components/responses/BalanceSubjectNotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/BalanceFailed"
+          }
+        },
+        "security": [
+          {
+            "projectAPIKey": []
+          }
+        ],
+        "summary": "Set a customer and meter balance to an exact quantity.",
+        "tags": [
+          "Balances"
+        ]
+      }
+    },
+    "/v1/consume": {
+      "post": {
+        "parameters": [
+          {
+            "description": "A UUID v7 that identifies this logical consume operation. Reuse it only when retrying the same request.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "customerId": "customer_123",
+                "meterKey": "api_calls",
+                "quantity": 500
+              },
+              "schema": {
+                "$ref": "#/components/schemas/ConsumeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "balanceDebited": 500,
+                  "billable": true,
+                  "createdAt": "2026-09-29T12:00:00Z",
+                  "customerId": "customer_123",
+                  "id": "0199aad1-f00d-7ae0-935f-cde0bd9f3ba5",
+                  "meterKey": "api_calls",
+                  "meterType": "prepaid",
+                  "quantity": 500,
+                  "remainingBalance": 9500
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/UsageEvent"
+                }
+              }
+            },
+            "description": "Completed successfully.",
+            "headers": {
+              "Idempotency-Replayed": {
+                "description": "Present with the value true when Consumel returns the original result of a committed retry.",
+                "schema": {
+                  "enum": [
+                    "true"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ConsumeInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidAPIKey"
+          },
+          "404": {
+            "$ref": "#/components/responses/ConsumeMeterNotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConsumeConflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ConsumeFailed"
+          }
+        },
+        "security": [
+          {
+            "projectAPIKey": []
+          }
+        ],
+        "summary": "Atomically record usage and apply the active meter's balance behavior.",
+        "tags": [
+          "Consumption"
+        ]
+      }
+    },
     "/v1/customers": {
       "get": {
         "parameters": [
+          {
+            "description": "A case-insensitive customer ID, name, or email search.",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "maxLength": 120,
+              "type": "string"
+            }
+          },
           {
             "description": "The opaque next cursor from the previous page.",
             "in": "query",
@@ -3219,9 +4201,148 @@
         ]
       }
     },
+    "/v1/customers/{customerId}/balances": {
+      "get": {
+        "parameters": [
+          {
+            "description": "The customer identifier supplied by the integrating application.",
+            "in": "path",
+            "name": "customerId",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "balances": [
+                    {
+                      "createdAt": "2026-09-28T12:00:00Z",
+                      "customerId": "user_123",
+                      "id": "0199aa81-ce8c-73bf-a880-8e84654b9a6c",
+                      "meterKey": "api_calls",
+                      "quantity": 10000,
+                      "updatedAt": "2026-09-28T12:00:00Z"
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Balances"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "400": {
+            "$ref": "#/components/responses/BalanceInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidAPIKey"
+          },
+          "404": {
+            "$ref": "#/components/responses/BalanceNotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/BalanceFailed"
+          }
+        },
+        "security": [
+          {
+            "projectAPIKey": []
+          }
+        ],
+        "summary": "List a customer's active meter balances in the API key's project environment.",
+        "tags": [
+          "Balances"
+        ]
+      }
+    },
+    "/v1/customers/{customerId}/balances/{meterKey}": {
+      "get": {
+        "parameters": [
+          {
+            "description": "The customer identifier supplied by the integrating application.",
+            "in": "path",
+            "name": "customerId",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "type": "string"
+            }
+          },
+          {
+            "description": "The stable meter key supplied when the meter was created.",
+            "in": "path",
+            "name": "meterKey",
+            "required": true,
+            "schema": {
+              "maxLength": 120,
+              "pattern": "^[a-z][a-z0-9_-]*$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "createdAt": "2026-09-28T12:00:00Z",
+                  "customerId": "user_123",
+                  "id": "0199aa81-ce8c-73bf-a880-8e84654b9a6c",
+                  "meterKey": "api_calls",
+                  "quantity": 10000,
+                  "updatedAt": "2026-09-28T12:00:00Z"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Balance"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "400": {
+            "$ref": "#/components/responses/BalanceInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidAPIKey"
+          },
+          "404": {
+            "$ref": "#/components/responses/BalanceNotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/BalanceFailed"
+          }
+        },
+        "security": [
+          {
+            "projectAPIKey": []
+          }
+        ],
+        "summary": "Return one customer and meter balance from the API key's project environment.",
+        "tags": [
+          "Balances"
+        ]
+      }
+    },
     "/v1/meters": {
       "get": {
         "parameters": [
+          {
+            "description": "A case-insensitive meter key or name search.",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "maxLength": 120,
+              "type": "string"
+            }
+          },
           {
             "description": "The opaque next cursor from the previous page.",
             "in": "query",
@@ -3895,6 +5016,228 @@
         ]
       }
     },
+    "/v1/projects/{projectId}/environments/{environment}/balances": {
+      "post": {
+        "parameters": [
+          {
+            "description": "The immutable ID of the project selected in the dashboard.",
+            "in": "path",
+            "name": "projectId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The selected isolated project environment.",
+            "in": "path",
+            "name": "environment",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "A UUID v7 that identifies this logical balance addition. Reuse it only when retrying the same request.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "customerId": "user_123",
+                "meterKey": "api_calls",
+                "quantity": 10000
+              },
+              "schema": {
+                "$ref": "#/components/schemas/AddBalanceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "createdAt": "2026-09-28T12:00:00Z",
+                  "customerId": "user_123",
+                  "id": "0199aa81-ce8c-73bf-a880-8e84654b9a6c",
+                  "meterKey": "api_calls",
+                  "quantity": 10000,
+                  "updatedAt": "2026-09-28T12:00:00Z"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Balance"
+                }
+              }
+            },
+            "description": "Completed successfully.",
+            "headers": {
+              "Idempotency-Replayed": {
+                "description": "Present with the value true when Consumel returns the original result of a committed retry.",
+                "schema": {
+                  "enum": [
+                    "true"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BalanceInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/BalanceSubjectOrEnvironmentNotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/BalanceOrEnvironmentConflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/BalanceFailed"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "Add an idempotent quantity to a customer and meter balance from the signed-in project workspace.",
+        "tags": [
+          "Dashboard Balances"
+        ]
+      }
+    },
+    "/v1/projects/{projectId}/environments/{environment}/balances/{customerId}/{meterKey}": {
+      "put": {
+        "parameters": [
+          {
+            "description": "The immutable ID of the project selected in the dashboard.",
+            "in": "path",
+            "name": "projectId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The selected isolated project environment.",
+            "in": "path",
+            "name": "environment",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "The customer identifier supplied by the integrating application.",
+            "in": "path",
+            "name": "customerId",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "type": "string"
+            }
+          },
+          {
+            "description": "The stable meter key supplied when the meter was created.",
+            "in": "path",
+            "name": "meterKey",
+            "required": true,
+            "schema": {
+              "maxLength": 120,
+              "pattern": "^[a-z][a-z0-9_-]*$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "quantity": 10000
+              },
+              "schema": {
+                "$ref": "#/components/schemas/SetBalanceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "createdAt": "2026-09-28T12:00:00Z",
+                  "customerId": "user_123",
+                  "id": "0199aa81-ce8c-73bf-a880-8e84654b9a6c",
+                  "meterKey": "api_calls",
+                  "quantity": 10000,
+                  "updatedAt": "2026-09-28T12:00:00Z"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Balance"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "400": {
+            "$ref": "#/components/responses/BalanceInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/BalanceSubjectOrEnvironmentNotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/BalanceEnvironmentConflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/BalanceFailed"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "Set a customer and meter balance to an exact quantity from the signed-in project workspace.",
+        "tags": [
+          "Dashboard Balances"
+        ]
+      }
+    },
     "/v1/projects/{projectId}/environments/{environment}/customers": {
       "get": {
         "parameters": [
@@ -3918,6 +5261,16 @@
                 "sandbox",
                 "live"
               ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "A case-insensitive customer ID, name, or email search.",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "maxLength": 120,
               "type": "string"
             }
           },
@@ -4296,6 +5649,413 @@
         ]
       }
     },
+    "/v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances": {
+      "get": {
+        "parameters": [
+          {
+            "description": "The immutable ID of the project selected in the dashboard.",
+            "in": "path",
+            "name": "projectId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The selected isolated project environment.",
+            "in": "path",
+            "name": "environment",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "The customer identifier supplied by the integrating application.",
+            "in": "path",
+            "name": "customerId",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "balances": [
+                    {
+                      "createdAt": "2026-09-28T12:00:00Z",
+                      "customerId": "user_123",
+                      "id": "0199aa81-ce8c-73bf-a880-8e84654b9a6c",
+                      "meterKey": "api_calls",
+                      "quantity": 10000,
+                      "updatedAt": "2026-09-28T12:00:00Z"
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Balances"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "400": {
+            "$ref": "#/components/responses/BalanceInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/BalanceOrEnvironmentNotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/BalanceEnvironmentConflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/BalanceFailed"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "List a customer's active meter balances from the signed-in project workspace.",
+        "tags": [
+          "Dashboard Balances"
+        ]
+      }
+    },
+    "/v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances/{meterKey}": {
+      "get": {
+        "parameters": [
+          {
+            "description": "The immutable ID of the project selected in the dashboard.",
+            "in": "path",
+            "name": "projectId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The selected isolated project environment.",
+            "in": "path",
+            "name": "environment",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "The customer identifier supplied by the integrating application.",
+            "in": "path",
+            "name": "customerId",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "type": "string"
+            }
+          },
+          {
+            "description": "The stable meter key supplied when the meter was created.",
+            "in": "path",
+            "name": "meterKey",
+            "required": true,
+            "schema": {
+              "maxLength": 120,
+              "pattern": "^[a-z][a-z0-9_-]*$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "createdAt": "2026-09-28T12:00:00Z",
+                  "customerId": "user_123",
+                  "id": "0199aa81-ce8c-73bf-a880-8e84654b9a6c",
+                  "meterKey": "api_calls",
+                  "quantity": 10000,
+                  "updatedAt": "2026-09-28T12:00:00Z"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Balance"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "400": {
+            "$ref": "#/components/responses/BalanceInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/BalanceOrEnvironmentNotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/BalanceEnvironmentConflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/BalanceFailed"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "Return one customer and meter balance from the signed-in project workspace.",
+        "tags": [
+          "Dashboard Balances"
+        ]
+      }
+    },
+    "/v1/projects/{projectId}/environments/{environment}/events": {
+      "get": {
+        "parameters": [
+          {
+            "description": "The immutable ID of the project selected in the dashboard.",
+            "in": "path",
+            "name": "projectId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The selected isolated project environment.",
+            "in": "path",
+            "name": "environment",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter by the persisted operation outcome.",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "enum": [
+                "accepted",
+                "denied"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Inclusive RFC 3339 start time. Supply from and to together; the range may span at most one year.",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Exclusive RFC 3339 end time. Supply from and to together.",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The opaque next cursor from the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "The number of events to return.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "nextCursor": null,
+                  "operations": [
+                    {
+                      "balanceDebited": 500,
+                      "billable": true,
+                      "createdAt": "2026-09-29T12:00:00Z",
+                      "customerId": "customer_123",
+                      "denialReason": null,
+                      "id": "0199aad1-f00d-7ae0-935f-cde0bd9f3ba5",
+                      "lastReplayedAt": "2026-09-29T12:01:00Z",
+                      "meterKey": "api_calls",
+                      "meterType": "prepaid",
+                      "quantity": 500,
+                      "remainingBalance": 9500,
+                      "replayCount": 1,
+                      "status": "accepted"
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/UsageOperations"
+                }
+              }
+            },
+            "description": "Completed successfully."
+          },
+          "400": {
+            "$ref": "#/components/responses/OperationListInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/OperationEnvironmentNotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/OperationEnvironmentConflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/OperationListFailed"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "List accepted and denied usage operations in the signed-in project workspace.",
+        "tags": [
+          "Dashboard Events"
+        ]
+      }
+    },
+    "/v1/projects/{projectId}/environments/{environment}/events/stream": {
+      "get": {
+        "parameters": [
+          {
+            "description": "The immutable ID of the project selected in the dashboard.",
+            "in": "path",
+            "name": "projectId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The selected isolated project environment.",
+            "in": "path",
+            "name": "environment",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "The last Redis stream cursor received by the client. Browsers normally reconnect through Last-Event-ID automatically.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "pattern": "^[0-9]+-[0-9]+$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "A server-sent event stream. Each usage.operation event contains a UsageOperation JSON payload and a Redis stream cursor used for reconnection."
+          },
+          "400": {
+            "$ref": "#/components/responses/OperationListInvalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/NotAuthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/OperationEnvironmentNotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/OperationEnvironmentConflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/OperationListFailed"
+          }
+        },
+        "security": [
+          {
+            "productionCookieSession": []
+          },
+          {
+            "localCookieSession": []
+          }
+        ],
+        "summary": "Stream newly persisted usage operations to the signed-in project workspace.",
+        "tags": [
+          "Dashboard Events"
+        ]
+      }
+    },
     "/v1/projects/{projectId}/environments/{environment}/meters": {
       "get": {
         "parameters": [
@@ -4319,6 +6079,16 @@
                 "sandbox",
                 "live"
               ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "A case-insensitive meter key or name search.",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "maxLength": 120,
               "type": "string"
             }
           },

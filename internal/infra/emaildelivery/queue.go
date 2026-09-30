@@ -85,7 +85,7 @@ func (queue *Queue) Enqueue(ctx context.Context, templateName string, payload Pa
 	if err != nil {
 		return fmt.Errorf("begin email delivery transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := queue.EnqueueTx(ctx, tx, templateName, payload); err != nil {
 		return err
 	}

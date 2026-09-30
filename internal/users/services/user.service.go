@@ -10,7 +10,7 @@ import (
 	"github.com/Rahmannugar/consumel-server/internal/users/models"
 )
 
-var ErrAuthlierSubjectIDRequired = errors.New("Authlier subject ID is required")
+var ErrAuthlierSubjectIDRequired = errors.New("authentication subject ID is required")
 
 type UserRepository interface {
 	ResolveUserByAuthlierSubjectID(context.Context, models.User) (models.User, error)

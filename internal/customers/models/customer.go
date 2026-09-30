@@ -11,10 +11,11 @@ import (
 )
 
 const (
-	MaximumCustomerIDLength    = 255
-	MaximumCustomerNameLength  = 200
-	MaximumCustomerEmailLength = 320
-	MaximumMetadataValueLength = 120
+	MaximumCustomerIDLength     = 255
+	MaximumCustomerNameLength   = 200
+	MaximumCustomerEmailLength  = 320
+	MaximumMetadataValueLength  = 120
+	MaximumCustomerSearchLength = 120
 )
 
 var (
@@ -26,6 +27,7 @@ var (
 	ErrCustomerExists          = errors.New("customer already exists")
 	ErrCustomerNotFound        = errors.New("customer not found")
 	ErrCursorInvalid           = errors.New("customer cursor is invalid")
+	ErrCustomerSearchInvalid   = errors.New("customer search is invalid")
 )
 
 type Metadata struct {

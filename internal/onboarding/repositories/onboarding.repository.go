@@ -46,7 +46,7 @@ func (repository *Repository) SetupFirstProject(
 	if err != nil {
 		return onboardingmodels.Setup{}, fmt.Errorf("begin onboarding transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	// Locking the local user serializes retries for one account while allowing
 	// unrelated accounts to onboard concurrently.

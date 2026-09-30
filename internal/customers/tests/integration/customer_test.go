@@ -67,26 +67,59 @@ func TestCustomerListUsesStableCursorPagination(t *testing.T) {
 	sandbox := environmentID(t, project, projectmodels.ProjectEnvironmentSandbox)
 	service := customerservices.NewCustomerService(customerrepositories.NewCustomerRepository(pool))
 	for index := range 3 {
-		_, err := service.Create(t.Context(), sandbox, customermodels.CreateCustomerRequest{
+		request := customermodels.CreateCustomerRequest{
 			CustomerID: fmt.Sprintf("customer_%d", index),
-		})
+		}
+		if index == 1 {
+			request.Name = text("CX Northwind Labs")
+			request.Email = text("billing@northwind.example")
+		}
+		_, err := service.Create(t.Context(), sandbox, request)
 		if err != nil {
 			t.Fatalf("create customer %d: %v", index, err)
 		}
 	}
-	first, cursor, err := service.List(t.Context(), sandbox, nil, 2)
+	first, cursor, err := service.List(t.Context(), sandbox, nil, 2, "")
 	if err != nil {
 		t.Fatalf("list first page: %v", err)
 	}
 	if len(first) != 2 || cursor == nil {
 		t.Fatalf("first page has %d customers and cursor %v", len(first), cursor)
 	}
-	second, next, err := service.List(t.Context(), sandbox, cursor, 2)
+	second, next, err := service.List(t.Context(), sandbox, cursor, 2, "")
 	if err != nil {
 		t.Fatalf("list second page: %v", err)
 	}
 	if len(second) != 1 || next != nil {
 		t.Fatalf("second page has %d customers and cursor %v", len(second), next)
+	}
+	byName, _, err := service.List(t.Context(), sandbox, nil, 10, "northwind")
+	if err != nil {
+		t.Fatalf("search customers by name: %v", err)
+	}
+	if len(byName) != 1 || byName[0].CustomerID != "customer_1" {
+		t.Fatalf("name search returned %#v", byName)
+	}
+	byShortTerm, _, err := service.List(t.Context(), sandbox, nil, 10, "CX")
+	if err != nil {
+		t.Fatalf("search customers by short full-text term: %v", err)
+	}
+	if len(byShortTerm) != 1 || byShortTerm[0].CustomerID != "customer_1" {
+		t.Fatalf("short full-text search returned %#v", byShortTerm)
+	}
+	byPartialTerm, _, err := service.List(t.Context(), sandbox, nil, 10, "orthw")
+	if err != nil {
+		t.Fatalf("search customers by partial term: %v", err)
+	}
+	if len(byPartialTerm) != 1 || byPartialTerm[0].CustomerID != "customer_1" {
+		t.Fatalf("partial trigram search returned %#v", byPartialTerm)
+	}
+	byEmail, _, err := service.List(t.Context(), sandbox, nil, 10, "BILLING@NORTHWIND")
+	if err != nil {
+		t.Fatalf("search customers by email: %v", err)
+	}
+	if len(byEmail) != 1 || byEmail[0].CustomerID != "customer_1" {
+		t.Fatalf("email search returned %#v", byEmail)
 	}
 }
 

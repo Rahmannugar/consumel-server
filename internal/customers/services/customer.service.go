@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/Rahmannugar/consumel-server/internal/common/ids"
 	customermodels "github.com/Rahmannugar/consumel-server/internal/customers/models"
@@ -18,7 +19,7 @@ const (
 type CustomerRepository interface {
 	Create(context.Context, customermodels.Customer) (customermodels.Customer, error)
 	Get(context.Context, uuid.UUID, string) (customermodels.Customer, error)
-	List(context.Context, uuid.UUID, *customermodels.ListCursor, int) ([]customermodels.Customer, *customermodels.ListCursor, error)
+	List(context.Context, uuid.UUID, *customermodels.ListCursor, int, string) ([]customermodels.Customer, *customermodels.ListCursor, error)
 	Update(context.Context, uuid.UUID, string, customermodels.UpdateCustomerRequest) (customermodels.Customer, error)
 }
 
@@ -66,6 +67,7 @@ func (service *CustomerService) List(
 	projectEnvironmentID uuid.UUID,
 	cursor *customermodels.ListCursor,
 	limit int,
+	search string,
 ) ([]customermodels.Customer, *customermodels.ListCursor, error) {
 	if limit <= 0 {
 		limit = DefaultPageSize
@@ -73,7 +75,11 @@ func (service *CustomerService) List(
 	if limit > MaximumPageSize {
 		limit = MaximumPageSize
 	}
-	return service.repository.List(ctx, projectEnvironmentID, cursor, limit)
+	search = strings.TrimSpace(search)
+	if utf8.RuneCountInString(search) > customermodels.MaximumCustomerSearchLength {
+		return nil, nil, customermodels.ErrCustomerSearchInvalid
+	}
+	return service.repository.List(ctx, projectEnvironmentID, cursor, limit, search)
 }
 
 func (service *CustomerService) Update(

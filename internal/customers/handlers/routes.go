@@ -26,7 +26,7 @@ const maximumCustomerRequestBytes = 16 << 10
 type CustomerService interface {
 	Create(context.Context, uuid.UUID, customermodels.CreateCustomerRequest) (customermodels.Customer, error)
 	Get(context.Context, uuid.UUID, string) (customermodels.Customer, error)
-	List(context.Context, uuid.UUID, *customermodels.ListCursor, int) ([]customermodels.Customer, *customermodels.ListCursor, error)
+	List(context.Context, uuid.UUID, *customermodels.ListCursor, int, string) ([]customermodels.Customer, *customermodels.ListCursor, error)
 	Update(context.Context, uuid.UUID, string, customermodels.UpdateCustomerRequest) (customermodels.Customer, error)
 }
 
@@ -105,8 +105,14 @@ func (handler *Handler) List(response http.ResponseWriter, request *http.Request
 		_ = httpresponse.WriteError(response, http.StatusBadRequest, "invalid_request", "Limit must be a number between 1 and 100.")
 		return
 	}
-	customers, next, err := handler.service.List(request.Context(), environmentID, cursor, limit)
+	customers, next, err := handler.service.List(
+		request.Context(), environmentID, cursor, limit, request.URL.Query().Get("q"),
+	)
 	if err != nil {
+		if errors.Is(err, customermodels.ErrCustomerSearchInvalid) {
+			_ = httpresponse.WriteError(response, http.StatusBadRequest, "invalid_search", "Search must be 120 characters or fewer.")
+			return
+		}
 		handler.fail(response, request, err)
 		return
 	}

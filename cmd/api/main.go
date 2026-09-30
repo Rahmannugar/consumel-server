@@ -18,12 +18,15 @@ import (
 	authenticationrepositories "github.com/Rahmannugar/consumel-server/internal/authentication/repositories"
 	authenticationservices "github.com/Rahmannugar/consumel-server/internal/authentication/services"
 	"github.com/Rahmannugar/consumel-server/internal/config"
+	consumptionrepositories "github.com/Rahmannugar/consumel-server/internal/core/consumption/repositories"
+	consumptionservices "github.com/Rahmannugar/consumel-server/internal/core/consumption/services"
 	customerrepositories "github.com/Rahmannugar/consumel-server/internal/customers/repositories"
 	customerservices "github.com/Rahmannugar/consumel-server/internal/customers/services"
 	infraauthentication "github.com/Rahmannugar/consumel-server/internal/infra/authentication"
 	"github.com/Rahmannugar/consumel-server/internal/infra/cache"
 	"github.com/Rahmannugar/consumel-server/internal/infra/database"
 	"github.com/Rahmannugar/consumel-server/internal/infra/emaildelivery"
+	"github.com/Rahmannugar/consumel-server/internal/infra/events"
 	"github.com/Rahmannugar/consumel-server/internal/infra/ratelimit"
 	"github.com/Rahmannugar/consumel-server/internal/infra/telemetry"
 	meterrepositories "github.com/Rahmannugar/consumel-server/internal/meters/repositories"
@@ -243,6 +246,16 @@ func run() (runError error) {
 	meterService := meterservices.NewMeterService(
 		meterrepositories.NewMeterRepository(databasePool),
 	)
+	balanceService := consumptionservices.NewBalanceService(
+		consumptionrepositories.NewBalanceRepository(databasePool),
+	)
+	consumeService := consumptionservices.NewConsumeService(
+		consumptionrepositories.NewConsumeRepository(databasePool),
+	)
+	operationService := consumptionservices.NewOperationService(
+		consumptionrepositories.NewOperationRepository(databasePool),
+		events.NewOperationSource(redisClient),
+	)
 	router, err := newRouter(
 		cfg,
 		telemetryRuntime,
@@ -254,6 +267,9 @@ func run() (runError error) {
 		projectService,
 		customerService,
 		meterService,
+		balanceService,
+		consumeService,
+		operationService,
 		distributedLimiter,
 		logger,
 	)

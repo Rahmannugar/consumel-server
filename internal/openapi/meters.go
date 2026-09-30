@@ -9,6 +9,7 @@ func meterOperations() []operation {
 		Schema: map[string]any{"type": "string", "maxLength": metermodels.MaximumMeterKeyLength, "pattern": `^[a-z][a-z0-9_-]*$`},
 	}
 	listParameters := []parameter{
+		{Name: "q", Description: "A case-insensitive meter key or name search.", In: "query", Schema: map[string]any{"type": "string", "maxLength": metermodels.MaximumMeterSearchLength}},
 		{Name: "cursor", Description: "The opaque next cursor from the previous page.", In: "query", Schema: map[string]any{"type": "string"}},
 		{Name: "limit", Description: "The number of meters to return.", In: "query", Schema: map[string]any{"type": "integer", "minimum": 1, "maximum": 100, "default": 25}},
 	}
@@ -43,13 +44,13 @@ func meterSchemas() map[string]any {
 
 func meterErrorResponses() map[string]any {
 	return map[string]any{
-		"MeterConflict":              errorResponseWithMessage("The meter key already exists in the selected environment.", "meter_already_exists", "This meter key already exists in the selected environment."),
-		"MeterCreateConflict":        errorResponseExamples("The meter cannot be created in the selected environment.", "meter_already_exists", "environment_inactive"),
+		"MeterConflict":              errorResponseExamples("The meter cannot be created in the API key's environment.", "meter_already_exists", "meter_definition_conflict"),
+		"MeterCreateConflict":        errorResponseExamples("The meter cannot be created in the selected environment.", "meter_already_exists", "meter_definition_conflict", "environment_inactive"),
 		"MeterEnvironmentConflict":   errorResponseWithMessage("The selected project environment is not active.", "environment_inactive", "Activate Live before managing its meters."),
 		"MeterEnvironmentNotFound":   errorResponseWithMessage("The selected project environment is unavailable.", "project_environment_not_found", "This project environment is not available."),
 		"MeterFailed":                errorResponseWithMessage("The meter request could not be completed.", "meter_operation_failed", "Consumel could not complete the meter request. Try again shortly."),
 		"MeterInvalid":               errorResponseExamples("The meter request or key is invalid.", "invalid_request", "invalid_meter"),
-		"MeterListInvalid":           errorResponseExamples("The pagination input is invalid.", "invalid_request", "invalid_cursor"),
+		"MeterListInvalid":           errorResponseExamples("The list pagination or search input is invalid.", "invalid_request", "invalid_cursor", "invalid_search"),
 		"MeterNotFound":              errorResponseWithMessage("The meter is not present in the authenticated environment.", "meter_not_found", "This meter does not exist in the selected environment."),
 		"MeterOrEnvironmentNotFound": errorResponseExamples("The meter or selected project environment is unavailable.", "meter_not_found", "project_environment_not_found"),
 	}

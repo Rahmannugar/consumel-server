@@ -83,6 +83,12 @@ func (runtime *Runtime) HTTPMiddleware() (gin.HandlerFunc, error) {
 			route = "unmatched"
 		}
 		healthRequest := strings.HasPrefix(route, "/health/")
+		if strings.HasSuffix(route, "/events/stream") {
+			requestContext := contextWithRequestID(ginContext.Request.Context(), requestID)
+			ginContext.Request = ginContext.Request.WithContext(requestContext)
+			ginContext.Next()
+			return
+		}
 		operation := "http.request"
 		if healthRequest {
 			operation = healthOperation(route)

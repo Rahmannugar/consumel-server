@@ -9,6 +9,7 @@ func customerOperations() []operation {
 		Schema: map[string]any{"type": "string", "maxLength": customermodels.MaximumCustomerIDLength},
 	}
 	listParameters := []parameter{
+		{Name: "q", Description: "A case-insensitive customer ID, name, or email search.", In: "query", Schema: map[string]any{"type": "string", "maxLength": customermodels.MaximumCustomerSearchLength}},
 		{Name: "cursor", Description: "The opaque next cursor from the previous page.", In: "query", Schema: map[string]any{"type": "string"}},
 		{Name: "limit", Description: "The number of customers to return.", In: "query", Schema: map[string]any{"type": "integer", "minimum": 1, "maximum": 100, "default": 25}},
 	}
@@ -64,7 +65,7 @@ func customerErrorResponses() map[string]any {
 		"CustomerEnvironmentNotFound":   errorResponseWithMessage("The selected project environment is unavailable.", "project_environment_not_found", "This project environment is not available."),
 		"CustomerFailed":                errorResponseWithMessage("The customer request could not be completed.", "customer_operation_failed", "Consumel could not complete the customer request. Try again shortly."),
 		"CustomerInvalid":               errorResponseExamples("The customer request or identifier is invalid.", "invalid_request", "invalid_customer"),
-		"CustomerListInvalid":           errorResponseExamples("The pagination input is invalid.", "invalid_request", "invalid_cursor"),
+		"CustomerListInvalid":           errorResponseExamples("The list pagination or search input is invalid.", "invalid_request", "invalid_cursor", "invalid_search"),
 		"CustomerNotFound":              errorResponseWithMessage("The customer is not present in the authenticated environment.", "customer_not_found", "This customer does not exist in the selected environment."),
 		"CustomerOrEnvironmentNotFound": errorResponseExamples("The customer or selected project environment is unavailable.", "customer_not_found", "project_environment_not_found"),
 	}

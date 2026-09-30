@@ -51,7 +51,7 @@ func (service *AuthenticatedTenantService) Resolve(
 ) (authenticationmodels.AuthenticatedTenant, error) {
 	session, err := service.sessions.ResolveSession(request)
 	if err != nil {
-		return authenticationmodels.AuthenticatedTenant{}, fmt.Errorf("%w: %v", ErrUnauthenticated, err)
+		return authenticationmodels.AuthenticatedTenant{}, fmt.Errorf("%w: %w", ErrUnauthenticated, err)
 	}
 
 	user, access, found, err := service.accounts.AccountContextByAuthlierSubjectID(

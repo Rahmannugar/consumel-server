@@ -35,7 +35,7 @@ func TestHTTPMiddlewareLogsCorrelatedCompletion(t *testing.T) {
 		context.Status(http.StatusOK)
 	})
 
-	request := httptest.NewRequest(http.MethodGet, "/account?ignored=secret", nil)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/account?ignored=secret", nil)
 	request.Header.Set(requestIDHeader, "request-123")
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
@@ -92,7 +92,7 @@ func TestHTTPMiddlewareSuppressesSuccessfulHealthAndRecordsReadinessFailure(t *t
 		context.Status(http.StatusOK)
 	})
 
-	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/health/ready", nil))
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health/ready", nil))
 	if output.Len() != 0 {
 		t.Fatalf("successful readiness log = %s, want none", output.String())
 	}
@@ -101,7 +101,7 @@ func TestHTTPMiddlewareSuppressesSuccessfulHealthAndRecordsReadinessFailure(t *t
 	}
 
 	ready = false
-	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/health/ready", nil))
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health/ready", nil))
 	entry := decodeOnlyLogEntry(t, output)
 	assertLogField(t, entry, "event", "health.readiness.failed")
 	assertLogField(t, entry, "operation", "health.readiness.check")

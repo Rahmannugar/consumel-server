@@ -76,7 +76,7 @@ func (repository *ProjectRepository) writeAPIKey(
 	if err != nil {
 		return models.APIKey{}, fmt.Errorf("begin API key transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	queries := repository.queries.WithTx(tx)
 	projectEnvironment, err := lockProjectEnvironment(
@@ -134,7 +134,7 @@ func (repository *ProjectRepository) RevokeAPIKey(
 	if err != nil {
 		return fmt.Errorf("begin API key revocation: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	queries := repository.queries.WithTx(tx)
 	projectEnvironment, err := lockProjectEnvironment(

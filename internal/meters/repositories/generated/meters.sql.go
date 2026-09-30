@@ -18,37 +18,36 @@ WITH selected_environment AS MATERIALIZED (
     FROM project_environments
     WHERE project_environments.id = $1
 ), resolved_meter AS (
-    INSERT INTO meters (id, project_id, meter_key)
-    SELECT $2, project_id, $3
-    FROM selected_environment
-    ON CONFLICT (project_id, meter_key) DO UPDATE
-    SET meter_key = EXCLUDED.meter_key
-    RETURNING meters.id, meters.project_id, meters.meter_key
-), configuration AS (
-    INSERT INTO project_environment_meters (
-        project_environment_id,
-        meter_id,
-        name,
-        description,
-        meter_type
-    )
+    INSERT INTO meters (id, project_id, meter_key, name, description, meter_type)
     SELECT
-        $1,
-        resolved_meter.id,
+        $2,
+        project_id,
+        $3,
         $4,
         $5,
         $6
+    FROM selected_environment
+    ON CONFLICT (project_id, meter_key) DO UPDATE
+    SET meter_key = EXCLUDED.meter_key
+    WHERE meters.name = EXCLUDED.name
+      AND meters.description IS NOT DISTINCT FROM EXCLUDED.description
+      AND meters.meter_type = EXCLUDED.meter_type
+    RETURNING meters.id, meters.project_id, meters.meter_key, meters.name,
+        meters.description, meters.meter_type
+), configuration AS (
+    INSERT INTO project_environment_meters (project_environment_id, meter_id)
+    SELECT $1, resolved_meter.id
     FROM resolved_meter
-    RETURNING project_environment_id, meter_id, name, description, meter_type, created_at, updated_at, archived_at
+    RETURNING project_environment_id, meter_id, created_at, updated_at, archived_at
 )
 SELECT
     resolved_meter.id,
     resolved_meter.project_id,
     configuration.project_environment_id,
     resolved_meter.meter_key,
-    configuration.name,
-    configuration.description,
-    configuration.meter_type,
+    resolved_meter.name,
+    resolved_meter.description,
+    resolved_meter.meter_type,
     configuration.created_at,
     configuration.updated_at
 FROM resolved_meter
@@ -106,9 +105,9 @@ SELECT
     meters.project_id,
     project_environment_meters.project_environment_id,
     meters.meter_key,
-    project_environment_meters.name,
-    project_environment_meters.description,
-    project_environment_meters.meter_type,
+    meters.name,
+    meters.description,
+    meters.meter_type,
     project_environment_meters.created_at,
     project_environment_meters.updated_at
 FROM project_environment_meters
@@ -186,9 +185,9 @@ SELECT
     meters.project_id,
     project_environment_meters.project_environment_id,
     meters.meter_key,
-    project_environment_meters.name,
-    project_environment_meters.description,
-    project_environment_meters.meter_type,
+    meters.name,
+    meters.description,
+    meters.meter_type,
     project_environment_meters.created_at,
     project_environment_meters.updated_at
 FROM project_environment_meters
@@ -230,4 +229,105 @@ func (q *Queries) MeterByPublicKey(ctx context.Context, arg MeterByPublicKeyPara
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const searchMeters = `-- name: SearchMeters :many
+WITH search_scope AS (
+    SELECT project_id
+    FROM project_environments
+    WHERE id = $1
+), matching_meter_ids AS (
+    SELECT meters.id
+    FROM meters
+    WHERE meters.project_id = (SELECT project_id FROM search_scope)
+      AND meters.search_vector @@ websearch_to_tsquery('simple', $5)
+
+    UNION
+
+    SELECT meters.id
+    FROM meters
+    WHERE meters.project_id = (SELECT project_id FROM search_scope)
+      AND char_length($5) >= 3
+      AND meters.search_text LIKE '%' || lower($5) || '%'
+)
+SELECT
+    meters.id,
+    meters.project_id,
+    project_environment_meters.project_environment_id,
+    meters.meter_key,
+    meters.name,
+    meters.description,
+    meters.meter_type,
+    project_environment_meters.created_at,
+    project_environment_meters.updated_at
+FROM project_environment_meters
+JOIN meters ON meters.id = project_environment_meters.meter_id
+JOIN matching_meter_ids ON matching_meter_ids.id = meters.id
+WHERE project_environment_meters.project_environment_id = $1
+  AND project_environment_meters.archived_at IS NULL
+  AND (
+      $2::timestamptz IS NULL
+      OR (project_environment_meters.created_at, meters.id) < (
+          $2::timestamptz,
+          $3::uuid
+      )
+  )
+ORDER BY project_environment_meters.created_at DESC, meters.id DESC
+LIMIT $4
+`
+
+type SearchMetersParams struct {
+	ProjectEnvironmentID uuid.UUID
+	CursorCreatedAt      pgtype.Timestamptz
+	CursorID             pgtype.UUID
+	PageSize             int32
+	SearchQuery          string
+}
+
+type SearchMetersRow struct {
+	ID                   uuid.UUID
+	ProjectID            uuid.UUID
+	ProjectEnvironmentID uuid.UUID
+	MeterKey             string
+	Name                 string
+	Description          *string
+	MeterType            string
+	CreatedAt            pgtype.Timestamptz
+	UpdatedAt            pgtype.Timestamptz
+}
+
+func (q *Queries) SearchMeters(ctx context.Context, arg SearchMetersParams) ([]SearchMetersRow, error) {
+	rows, err := q.db.Query(ctx, searchMeters,
+		arg.ProjectEnvironmentID,
+		arg.CursorCreatedAt,
+		arg.CursorID,
+		arg.PageSize,
+		arg.SearchQuery,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchMetersRow
+	for rows.Next() {
+		var i SearchMetersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.ProjectEnvironmentID,
+			&i.MeterKey,
+			&i.Name,
+			&i.Description,
+			&i.MeterType,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

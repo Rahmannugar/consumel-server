@@ -71,7 +71,7 @@ func (repository *ProjectRepository) CreateProjectWithEnvironments(
 	if err != nil {
 		return models.Project{}, fmt.Errorf("begin transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	queries := repository.queries.WithTx(tx)
 	createdProject, err := queries.CreateProject(ctx, projectdb.CreateProjectParams{
