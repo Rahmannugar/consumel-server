@@ -31,21 +31,21 @@ var (
 )
 
 type Metadata struct {
-	Plan     *string `json:"plan,omitempty"`
-	Country  *string `json:"country,omitempty"`
-	Location *string `json:"location,omitempty"`
+	Plan     *string `json:"plan,omitempty" validate:"min=1,max=120" example:"growth"`
+	Country  *string `json:"country,omitempty" pattern:"^[A-Za-z]{2}$" example:"US"`
+	Location *string `json:"location,omitempty" validate:"min=1,max=120" example:"New York, NY"`
 }
 
 type CreateCustomerRequest struct {
-	CustomerID string   `json:"customerId"`
-	Name       *string  `json:"name,omitempty"`
-	Email      *string  `json:"email,omitempty"`
+	CustomerID string   `json:"customerId" validate:"required,min=1,max=255" example:"user_123"`
+	Name       *string  `json:"name,omitempty" validate:"min=1,max=200" example:"Jordan Lee"`
+	Email      *string  `json:"email,omitempty" validate:"max=320" format:"email" example:"jordan@example.com"`
 	Metadata   Metadata `json:"metadata"`
 }
 
 type UpdateCustomerRequest struct {
-	Name     *string  `json:"name,omitempty"`
-	Email    *string  `json:"email,omitempty"`
+	Name     *string  `json:"name,omitempty" validate:"min=1,max=200" example:"Jordan Lee"`
+	Email    *string  `json:"email,omitempty" validate:"max=320" format:"email" example:"jordan@example.com"`
 	Metadata Metadata `json:"metadata"`
 }
 
@@ -128,40 +128,4 @@ func optionalText(value *string, maximum int, invalid error) (*string, error) {
 		return nil, invalid
 	}
 	return &trimmed, nil
-}
-
-func CreateCustomerRequestOpenAPISchema() map[string]any {
-	properties := customerFieldSchemas()
-	properties["customerId"] = map[string]any{
-		"type": "string", "minLength": 1, "maxLength": MaximumCustomerIDLength,
-		"example": "user_123",
-	}
-	return objectSchema([]string{"customerId"}, properties)
-}
-
-func UpdateCustomerRequestOpenAPISchema() map[string]any {
-	return objectSchema(nil, customerFieldSchemas())
-}
-
-func customerFieldSchemas() map[string]any {
-	optionalString := func(maximum int) map[string]any {
-		return map[string]any{"type": []string{"string", "null"}, "minLength": 1, "maxLength": maximum}
-	}
-	return map[string]any{
-		"name":  optionalString(MaximumCustomerNameLength),
-		"email": map[string]any{"type": []string{"string", "null"}, "format": "email", "maxLength": MaximumCustomerEmailLength},
-		"metadata": objectSchema(nil, map[string]any{
-			"plan":     optionalString(MaximumMetadataValueLength),
-			"country":  map[string]any{"type": []string{"string", "null"}, "pattern": `^[A-Za-z]{2}$`, "example": "US"},
-			"location": optionalString(MaximumMetadataValueLength),
-		}),
-	}
-}
-
-func objectSchema(required []string, properties map[string]any) map[string]any {
-	result := map[string]any{"type": "object", "additionalProperties": false, "properties": properties}
-	if len(required) > 0 {
-		result["required"] = required
-	}
-	return result
 }

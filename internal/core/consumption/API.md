@@ -6,6 +6,12 @@ Returns the active meter balances for one customer in the project environment au
 GET /v1/customers/{customerId}/balances/{meterKey}
 Returns one active customer and meter balance from the project environment authenticated by the API key.
 
+GET /v1/customers/{customerId}/balances/{meterKey}/grants
+Returns cursor-paginated entitlement grants that compose one customer and meter balance in the project environment authenticated by the API key.
+
+GET /v1/customers/{customerId}/balances/{meterKey}/history
+Returns cursor-paginated adjustments, usage debits, and expirations for one customer and meter balance in the project environment authenticated by the API key.
+
 POST /v1/balances
 Adds an idempotent, optionally expiring quantity to a customer and meter balance in the project environment authenticated by the API key.
 
@@ -23,6 +29,12 @@ Returns the active meter balances for one customer from the signed-in project wo
 GET /v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances/{meterKey}
 Returns one active customer and meter balance from the signed-in project workspace.
 
+GET /v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances/{meterKey}/grants
+Returns cursor-paginated entitlement grants that compose one customer and meter balance from the signed-in project workspace.
+
+GET /v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances/{meterKey}/history
+Returns cursor-paginated adjustments, usage debits, and expirations for one customer and meter balance from the signed-in project workspace.
+
 POST /v1/projects/{projectId}/environments/{environment}/balances
 Adds an idempotent, optionally expiring quantity to a customer and meter balance from the signed-in project workspace.
 
@@ -30,7 +42,7 @@ PUT /v1/projects/{projectId}/environments/{environment}/balances/{customerId}/{m
 Sets one customer and meter balance to an exact quantity from the signed-in project workspace.
 
 GET /v1/projects/{projectId}/environments/{environment}/events
-Returns cursor-paginated accepted and denied usage operations for dashboard inspection.
+Returns cursor-paginated accepted and denied usage operations for dashboard inspection, optionally scoped to one customer or meter.
 
 GET /v1/projects/{projectId}/environments/{environment}/events/stream
 Streams newly persisted usage operations to the signed-in project workspace with reconnect cursors.

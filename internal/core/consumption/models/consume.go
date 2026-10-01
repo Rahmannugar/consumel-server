@@ -20,9 +20,9 @@ var (
 )
 
 type ConsumeRequest struct {
-	CustomerID string `json:"customerId"`
-	MeterKey   string `json:"meterKey"`
-	Quantity   int64  `json:"quantity"`
+	CustomerID string `json:"customerId" validate:"required,min=1,max=255" example:"customer_123"`
+	MeterKey   string `json:"meterKey" validate:"required,min=1,max=120" pattern:"^[a-z][a-z0-9_-]*$" example:"api_calls"`
+	Quantity   int64  `json:"quantity" validate:"required,min=1" format:"int64" example:"500"`
 }
 
 type UsageEvent struct {
@@ -51,12 +51,4 @@ func (request ConsumeRequest) Validate() (ConsumeRequest, error) {
 	default:
 		return request, nil
 	}
-}
-
-func ConsumeRequestOpenAPISchema() map[string]any {
-	return objectSchema([]string{"customerId", "meterKey", "quantity"}, map[string]any{
-		"customerId": map[string]any{"type": "string", "minLength": 1, "maxLength": customermodels.MaximumCustomerIDLength, "example": "customer_123"},
-		"meterKey":   map[string]any{"type": "string", "minLength": 1, "maxLength": metermodels.MaximumMeterKeyLength, "pattern": `^[a-z][a-z0-9_-]*$`, "example": "api_calls"},
-		"quantity":   map[string]any{"type": "integer", "format": "int64", "minimum": 1, "example": 500},
-	})
 }

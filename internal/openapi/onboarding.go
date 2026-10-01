@@ -1,48 +1,52 @@
 package openapi
 
-import onboardingmodels "github.com/Rahmannugar/consumel-server/internal/onboarding/models"
+// @Summary Create the signed-in owner's organization and first project.
+// @Tags Onboarding
+// @Param body body models.SetupRequest true "Organization and project names."
+// @Success 200 {object} OnboardingSetup "A repeated request returned the existing first project without creating duplicates or queueing another welcome email."
+// @Success 201 {object} OnboardingSetup "The organization, owner access, first project, Sandbox, and Live environment were created, and the welcome email was queued."
+// @Failure 400 {object} OnboardingInvalid "The organization name or project name is invalid."
+// @Failure 401 {object} NotAuthenticated "Authentication is required."
+// @Failure 409 {object} OnboardingConflict "The account already has organization access that cannot be changed by onboarding."
+// @Failure 500 {object} OnboardingFailed "The onboarding transaction could not be completed."
+// @Security productionCookieSession
+// @Security localCookieSession
+// @Router /onboarding [post]
+func PostOnboarding() {}
 
-func onboardingOperations() []operation {
-	return []operation{{
-		Method: "post", Path: "/onboarding", Summary: "Create the signed-in owner's organization and first project.",
-		Request: "OnboardingSetupRequest", SuccessCode: "201", Success: "OnboardingSetup",
-		SuccessDescription: "The organization, owner access, first project, Sandbox, and Live environment were created, and the welcome email was queued.",
-		AlternateSuccess:   map[string]string{"200": "A repeated request returned the existing first project without creating duplicates or queueing another welcome email."},
-		Protected:          true, Errors: map[string]string{"400": "OnboardingInvalid", "409": "OnboardingConflict", "500": "OnboardingFailed"},
-	}}
+type OnboardingOrganization struct {
+	ID   string `json:"id" validate:"required" example:"0199a416-d2c8-75ea-bdb4-1d13c627169b"`
+	Name string `json:"name" validate:"required" example:"Acme"`
 }
 
-func onboardingSchemas() map[string]any {
-	return map[string]any{
-		"OnboardingSetupRequest": onboardingmodels.SetupRequestOpenAPISchema(),
-		"OnboardingSetup": object([]string{"organization", "project"}, map[string]any{
-			"organization": schemaReference("OnboardingOrganization"), "project": schemaReference("Project"),
-		}),
-		"OnboardingOrganization": object([]string{"id", "name"}, map[string]any{
-			"id": map[string]any{"type": "string"}, "name": map[string]any{"type": "string"},
-		}),
-	}
+type OnboardingSetup struct {
+	Organization OnboardingOrganization `json:"organization" validate:"required"`
+	Project      Project                `json:"project" validate:"required"`
 }
 
-func onboardingErrorResponses() map[string]any {
-	return map[string]any{
-		"OnboardingConflict": errorResponseWithMessage("The account already has organization access that cannot be changed by onboarding.", "organization_already_exists", "This account already belongs to an organization that needs attention."),
-		"OnboardingFailed":   errorResponseWithMessage("The onboarding transaction could not be completed.", "onboarding_failed", "Consumel could not create your project. Try again shortly."),
-		"OnboardingInvalid":  errorResponseWithMessage("The organization name or project name is invalid.", "invalid_request", "Enter an organization name and project name between 1 and 120 characters."),
-	}
+type OnboardingConflict struct {
+	Error OnboardingConflictError `json:"error" validate:"required"`
 }
 
-func onboardingExample(name string) (map[string]any, bool) {
-	switch name {
-	case "OnboardingSetupRequest":
-		return map[string]any{"organizationName": "Acme", "projectName": "Acme API"}, true
-	case "OnboardingSetup":
-		project := projectExample()
-		return map[string]any{
-			"organization": map[string]any{"id": project["organizationId"], "name": "Acme"},
-			"project":      project,
-		}, true
-	default:
-		return nil, false
-	}
+type OnboardingConflictError struct {
+	Code    string `json:"code" validate:"required" example:"organization_already_exists"`
+	Message string `json:"message,omitempty" example:"This account already belongs to an organization that needs attention."`
+}
+
+type OnboardingFailed struct {
+	Error OnboardingFailedError `json:"error" validate:"required"`
+}
+
+type OnboardingFailedError struct {
+	Code    string `json:"code" validate:"required" example:"onboarding_failed"`
+	Message string `json:"message,omitempty" example:"Consumel could not create your project. Try again shortly."`
+}
+
+type OnboardingInvalid struct {
+	Error OnboardingInvalidError `json:"error" validate:"required"`
+}
+
+type OnboardingInvalidError struct {
+	Code    string `json:"code" validate:"required" example:"invalid_request"`
+	Message string `json:"message,omitempty" example:"Enter an organization name and project name between 1 and 120 characters."`
 }

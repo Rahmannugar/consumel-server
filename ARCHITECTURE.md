@@ -57,6 +57,13 @@ that PostgreSQL is reachable before reporting the API instance as ready.
 PostgreSQL is the durable source of truth. Tern owns ordered schema migrations,
 and sqlc generates pgx-backed query code from domain-owned SQL.
 
+Application pools are client-side caps sized to each process's concurrency:
+the API uses 20 connections and the worker 30 to match its 10 email and 20
+outbox execution slots, each adjustable through
+CONSUMEL_DATABASE_API_POOL_MAX and CONSUMEL_DATABASE_WORKER_POOL_MAX. Deployment bounds real PostgreSQL connections per
+application user through PgBouncer, so API instance count never multiplies
+server-side connections.
+
 Consumel uses internal UUIDv7 identifiers for users, organizations, projects,
 and project environments. The users domain owns tenant-user records and stores
 the stable Authlier subject ID as the unique external identity. Email is not an

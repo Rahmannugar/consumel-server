@@ -4,12 +4,12 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"time"
 
 	authenticationmodels "github.com/Rahmannugar/consumel-server/internal/authentication/models"
 	authenticationservices "github.com/Rahmannugar/consumel-server/internal/authentication/services"
 	"github.com/Rahmannugar/consumel-server/internal/common/httpresponse"
 	"github.com/Rahmannugar/consumel-server/internal/infra/telemetry"
+	"github.com/Rahmannugar/consumel-server/internal/openapi"
 )
 
 type TenantResolver interface {
@@ -19,32 +19,6 @@ type TenantResolver interface {
 type AccountHandler struct {
 	resolver TenantResolver
 	logger   *slog.Logger
-}
-
-type accountResponse struct {
-	Session       sessionResponse              `json:"session"`
-	User          userResponse                 `json:"user"`
-	Organizations []organizationAccessResponse `json:"organizations"`
-}
-
-type sessionResponse struct {
-	ID        string    `json:"id"`
-	CreatedAt time.Time `json:"createdAt"`
-	ExpiresAt time.Time `json:"expiresAt"`
-}
-
-type userResponse struct {
-	ID    string `json:"id"`
-	Email string `json:"email"`
-}
-
-type organizationAccessResponse struct {
-	ID            string  `json:"id"`
-	Name          string  `json:"name"`
-	Owner         bool    `json:"owner"`
-	RoleID        string  `json:"roleId"`
-	RoleName      string  `json:"roleName"`
-	RoleSystemKey *string `json:"roleSystemKey"`
 }
 
 func NewAccountHandler(resolver TenantResolver, logger *slog.Logger) *AccountHandler {
@@ -78,7 +52,7 @@ func (handler *AccountHandler) Get(response http.ResponseWriter, request *http.R
 		return
 	}
 
-	organizations := make([]organizationAccessResponse, 0, len(tenant.OrganizationAccess))
+	organizations := make([]openapi.OrganizationAccess, 0, len(tenant.OrganizationAccess))
 	telemetry.AddRequestLogAttributes(request.Context(),
 		slog.String("user_id", tenant.User.ID.String()),
 		slog.Int("organization_count", len(tenant.OrganizationAccess)),
@@ -89,7 +63,7 @@ func (handler *AccountHandler) Get(response http.ResponseWriter, request *http.R
 			value := string(*access.RoleSystemKey)
 			systemKey = &value
 		}
-		organizations = append(organizations, organizationAccessResponse{
+		organizations = append(organizations, openapi.OrganizationAccess{
 			ID:            access.OrganizationID.String(),
 			Name:          access.OrganizationName,
 			Owner:         access.Owner,
@@ -99,13 +73,13 @@ func (handler *AccountHandler) Get(response http.ResponseWriter, request *http.R
 		})
 	}
 
-	if err := httpresponse.WriteJSON(response, http.StatusOK, accountResponse{
-		Session: sessionResponse{
+	if err := httpresponse.WriteJSON(response, http.StatusOK, openapi.Account{
+		Session: openapi.AccountSession{
 			ID:        tenant.Session.ID,
 			CreatedAt: tenant.Session.CreatedAt,
 			ExpiresAt: tenant.Session.ExpiresAt,
 		},
-		User:          userResponse{ID: tenant.User.ID.String(), Email: tenant.User.Email},
+		User:          openapi.AccountUser{ID: tenant.User.ID.String(), Email: tenant.User.Email},
 		Organizations: organizations,
 	}); err != nil {
 		handler.logger.ErrorContext(request.Context(), "Could not send user account response",

@@ -36,6 +36,9 @@ type BalanceOperation struct {
 	CreatedAt              pgtype.Timestamptz
 	RequestedExpiresAt     pgtype.Timestamptz
 	ResultingNextExpiresAt pgtype.Timestamptz
+	SourceType             string
+	SourceUserID           pgtype.UUID
+	SourceApiKeyID         pgtype.UUID
 }
 
 type ConsumptionOperation struct {
@@ -57,6 +60,7 @@ type ConsumptionOperation struct {
 	CreatedAt            pgtype.Timestamptz
 	ReplayCount          int64
 	LastReplayedAt       pgtype.Timestamptz
+	SourceApiKeyID       pgtype.UUID
 }
 
 type EntitlementGrant struct {

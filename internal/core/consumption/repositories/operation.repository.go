@@ -33,6 +33,8 @@ func (repository *OperationRepository) List(
 		FromTime:             pgtype.Timestamptz{Time: filter.From, Valid: true},
 		ToTime:               pgtype.Timestamptz{Time: filter.To, Valid: true},
 		StatusFilter:         string(filter.Status),
+		CustomerFilter:       filter.CustomerID,
+		MeterFilter:          filter.MeterKey,
 		PageSize:             int32(limit + 1),
 	}
 	if cursor != nil {

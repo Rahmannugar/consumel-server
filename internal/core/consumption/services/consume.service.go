@@ -20,6 +20,7 @@ type ConsumeRepository interface {
 		uuid.UUID,
 		uuid.UUID,
 		uuid.UUID,
+		uuid.UUID,
 	) (consumptionmodels.UsageEvent, bool, error)
 }
 
@@ -34,6 +35,7 @@ func NewConsumeService(repository ConsumeRepository) *ConsumeService {
 func (service *ConsumeService) Consume(
 	ctx context.Context,
 	projectEnvironmentID uuid.UUID,
+	sourceAPIKeyID uuid.UUID,
 	idempotencyKey string,
 	request consumptionmodels.ConsumeRequest,
 ) (consumptionmodels.UsageEvent, bool, error) {
@@ -50,7 +52,7 @@ func (service *ConsumeService) Consume(
 		return consumptionmodels.UsageEvent{}, false, err
 	}
 	return service.repository.Consume(
-		ctx, projectEnvironmentID, request, key, operationID, customerID, balanceID, outboxID,
+		ctx, projectEnvironmentID, request, sourceAPIKeyID, key, operationID, customerID, balanceID, outboxID,
 	)
 }
 

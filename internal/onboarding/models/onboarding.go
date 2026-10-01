@@ -21,8 +21,8 @@ var (
 )
 
 type SetupRequest struct {
-	OrganizationName string `json:"organizationName"`
-	ProjectName      string `json:"projectName"`
+	OrganizationName string `json:"organizationName" validate:"required,min=1,max=120" example:"Acme"`
+	ProjectName      string `json:"projectName" validate:"required,min=1,max=120" example:"Acme API"`
 }
 
 func (request SetupRequest) Validate() (SetupRequest, error) {
@@ -39,21 +39,6 @@ func (request SetupRequest) Validate() (SetupRequest, error) {
 		return SetupRequest{}, ErrProjectNameTooLong
 	default:
 		return request, nil
-	}
-}
-
-func SetupRequestOpenAPISchema() map[string]any {
-	name := func() map[string]any {
-		return map[string]any{"type": "string", "minLength": 1, "maxLength": MaximumNameLength}
-	}
-	return map[string]any{
-		"type":                 "object",
-		"additionalProperties": false,
-		"required":             []string{"organizationName", "projectName"},
-		"properties": map[string]any{
-			"organizationName": name(),
-			"projectName":      name(),
-		},
 	}
 }
 

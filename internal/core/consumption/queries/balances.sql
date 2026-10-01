@@ -35,9 +35,12 @@ INSERT INTO balance_operations (
     requested_quantity,
     requested_expires_at,
     customer_id,
-    meter_id
+    meter_id,
+    source_type,
+    source_user_id,
+    source_api_key_id
 )
-VALUES ($1, $2, $3, 'add', $4, $5, $6, $7, $8, $9)
+VALUES ($1, $2, $3, 'add', $4, $5, $6, $7, $8, $9, $10, $11, $12)
 ON CONFLICT (project_environment_id, idempotency_key)
     WHERE idempotency_key IS NOT NULL
     DO NOTHING
@@ -125,9 +128,12 @@ INSERT INTO balance_operations (
     request_meter_key,
     requested_quantity,
     customer_id,
-    meter_id
+    meter_id,
+    source_type,
+    source_user_id,
+    source_api_key_id
 )
-VALUES ($1, $2, 'set', $3, $4, $5, $6, $7)
+VALUES ($1, $2, 'set', $3, $4, $5, $6, $7, $8, $9, $10)
 RETURNING *;
 
 -- name: ActiveEntitlementSummary :one
@@ -227,3 +233,114 @@ LEFT JOIN LATERAL (
 WHERE b.project_environment_id = $1
   AND c.customer_id = $2
 ORDER BY m.meter_key;
+
+-- name: ListEntitlementGrants :many
+SELECT g.*
+FROM entitlement_grants g
+JOIN balances b ON b.id = g.balance_id
+JOIN customers c
+    ON c.project_environment_id = b.project_environment_id
+   AND c.id = b.customer_id
+JOIN meters m ON m.id = b.meter_id
+JOIN project_environment_meters pem
+    ON pem.project_environment_id = b.project_environment_id
+   AND pem.meter_id = b.meter_id
+   AND pem.archived_at IS NULL
+WHERE b.project_environment_id = sqlc.arg(project_environment_id)
+  AND c.customer_id = sqlc.arg(customer_id)
+  AND m.meter_key = sqlc.arg(meter_key)
+  AND (
+      sqlc.narg(cursor_created_at)::timestamptz IS NULL
+      OR (g.created_at, g.id) < (
+          sqlc.narg(cursor_created_at)::timestamptz,
+          sqlc.narg(cursor_id)::uuid
+      )
+  )
+ORDER BY g.created_at DESC, g.id DESC
+LIMIT sqlc.arg(page_size);
+
+-- name: ListBalanceActivity :many
+WITH target_balance AS (
+    SELECT b.id
+    FROM balances b
+    JOIN customers c
+        ON c.project_environment_id = b.project_environment_id
+       AND c.id = b.customer_id
+    JOIN meters m ON m.id = b.meter_id
+    JOIN project_environment_meters pem
+        ON pem.project_environment_id = b.project_environment_id
+       AND pem.meter_id = b.meter_id
+       AND pem.archived_at IS NULL
+    WHERE b.project_environment_id = sqlc.arg(project_environment_id)
+      AND c.customer_id = sqlc.arg(customer_id)
+      AND m.meter_key = sqlc.arg(meter_key)
+), activity AS (
+    SELECT
+        bo.id,
+        bo.created_at AS occurred_at,
+        bo.operation_type AS kind,
+        CASE
+            WHEN bo.operation_type = 'add' THEN bo.requested_quantity
+            ELSE COALESCE(added.quantity, 0) - COALESCE(removed.quantity, 0)
+        END::bigint AS quantity_change,
+        bo.resulting_quantity,
+        bo.requested_expires_at AS expires_at,
+        bo.source_type,
+        COALESCE(bo.source_user_id, bo.source_api_key_id) AS source_id
+    FROM balance_operations bo
+    LEFT JOIN LATERAL (
+        SELECT SUM(g.granted_quantity)::bigint AS quantity
+        FROM entitlement_grants g
+        WHERE g.created_by_balance_operation_id = bo.id
+    ) added ON true
+    LEFT JOIN LATERAL (
+        SELECT SUM(a.quantity)::bigint AS quantity
+        FROM balance_operation_grant_allocations a
+        WHERE a.balance_operation_id = bo.id
+    ) removed ON true
+    WHERE bo.balance_id = (SELECT id FROM target_balance)
+      AND bo.resulting_quantity IS NOT NULL
+
+    UNION ALL
+
+    SELECT
+        co.id,
+        co.created_at AS occurred_at,
+        'usage'::text AS kind,
+        -co.balance_debited AS quantity_change,
+        co.resulting_balance AS resulting_quantity,
+        NULL::timestamptz AS expires_at,
+        CASE WHEN co.source_api_key_id IS NULL THEN 'legacy_api_usage' ELSE 'api_key' END::text AS source_type,
+        co.source_api_key_id AS source_id
+    FROM consumption_operations co
+    WHERE co.balance_id = (SELECT id FROM target_balance)
+      AND co.status = 'accepted'
+      AND co.balance_debited > 0
+
+    UNION ALL
+
+    SELECT
+        g.id,
+        g.expires_at AS occurred_at,
+        'expiration'::text AS kind,
+        -g.remaining_quantity AS quantity_change,
+        NULL::bigint AS resulting_quantity,
+        g.expires_at,
+        'system'::text AS source_type,
+        NULL::uuid AS source_id
+    FROM entitlement_grants g
+    WHERE g.balance_id = (SELECT id FROM target_balance)
+      AND g.expires_at <= now()
+      AND g.remaining_quantity > 0
+)
+SELECT *
+FROM activity
+WHERE (
+    sqlc.narg(cursor_created_at)::timestamptz IS NULL
+    OR (occurred_at, id) < (
+        sqlc.narg(cursor_created_at)::timestamptz,
+        sqlc.narg(cursor_id)::uuid
+    )
+)
+ORDER BY occurred_at DESC, id DESC
+LIMIT sqlc.arg(page_size);

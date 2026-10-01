@@ -24,15 +24,26 @@ var (
 )
 
 type AddBalanceRequest struct {
-	CustomerID string     `json:"customerId"`
-	MeterKey   string     `json:"meterKey"`
-	Quantity   int64      `json:"quantity"`
-	ExpiresAt  *time.Time `json:"expiresAt"`
+	CustomerID string `json:"customerId" validate:"required,min=1,max=255" example:"user_123"`
+	MeterKey   string `json:"meterKey" validate:"required,min=1,max=120" example:"api_calls"`
+	Quantity   int64  `json:"quantity" validate:"required,min=1" format:"int64" example:"10000"`
+	// Optional instant when the added entitlement stops being available.
+	ExpiresAt *time.Time `json:"expiresAt" format:"date-time" example:"2026-10-31T00:00:00Z"`
 }
 
 type SetBalanceRequest struct {
-	Quantity int64 `json:"quantity"`
+	Quantity int64 `json:"quantity" validate:"required,min=0" format:"int64" example:"10000"`
 }
+
+type BalanceMutationSource struct {
+	Type    string
+	ActorID uuid.UUID
+}
+
+const (
+	BalanceSourceAPIKey        = "api_key"
+	BalanceSourceDashboardUser = "dashboard_user"
+)
 
 type Balance struct {
 	ID                   uuid.UUID
@@ -43,6 +54,34 @@ type Balance struct {
 	NextExpiresAt        *time.Time
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
+}
+
+type EntitlementGrantStatus string
+
+const (
+	EntitlementGrantActive    EntitlementGrantStatus = "active"
+	EntitlementGrantExhausted EntitlementGrantStatus = "exhausted"
+	EntitlementGrantExpired   EntitlementGrantStatus = "expired"
+)
+
+type EntitlementGrant struct {
+	ID                uuid.UUID
+	GrantedQuantity   int64
+	RemainingQuantity int64
+	Status            EntitlementGrantStatus
+	ExpiresAt         *time.Time
+	CreatedAt         time.Time
+}
+
+type BalanceActivity struct {
+	ID                uuid.UUID
+	Kind              string
+	QuantityChange    int64
+	ResultingQuantity *int64
+	ExpiresAt         *time.Time
+	SourceType        string
+	SourceID          *uuid.UUID
+	OccurredAt        time.Time
 }
 
 type Subject struct {
@@ -80,23 +119,4 @@ func (request SetBalanceRequest) Validate() (SetBalanceRequest, error) {
 		return SetBalanceRequest{}, ErrBalanceQuantityInvalid
 	}
 	return request, nil
-}
-
-func AddBalanceRequestOpenAPISchema() map[string]any {
-	return objectSchema([]string{"customerId", "meterKey", "quantity"}, map[string]any{
-		"customerId": map[string]any{"type": "string", "minLength": 1, "maxLength": customermodels.MaximumCustomerIDLength, "example": "user_123"},
-		"meterKey":   map[string]any{"type": "string", "minLength": 1, "maxLength": metermodels.MaximumMeterKeyLength, "example": "api_calls"},
-		"quantity":   map[string]any{"type": "integer", "format": "int64", "minimum": 1, "example": 10000},
-		"expiresAt":  map[string]any{"type": []string{"string", "null"}, "format": "date-time", "description": "Optional instant when the added entitlement stops being available."},
-	})
-}
-
-func SetBalanceRequestOpenAPISchema() map[string]any {
-	return objectSchema([]string{"quantity"}, map[string]any{
-		"quantity": map[string]any{"type": "integer", "format": "int64", "minimum": 0, "example": 10000},
-	})
-}
-
-func objectSchema(required []string, properties map[string]any) map[string]any {
-	return map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": properties}
 }

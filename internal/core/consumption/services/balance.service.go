@@ -14,11 +14,18 @@ import (
 )
 
 type BalanceRepository interface {
-	Add(context.Context, uuid.UUID, consumptionmodels.AddBalanceRequest, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID) (consumptionmodels.Balance, bool, error)
-	Set(context.Context, uuid.UUID, string, string, int64, uuid.UUID, uuid.UUID, uuid.UUID) (consumptionmodels.Balance, error)
+	Add(context.Context, uuid.UUID, consumptionmodels.BalanceMutationSource, consumptionmodels.AddBalanceRequest, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID) (consumptionmodels.Balance, bool, error)
+	Set(context.Context, uuid.UUID, consumptionmodels.BalanceMutationSource, string, string, int64, uuid.UUID, uuid.UUID, uuid.UUID) (consumptionmodels.Balance, error)
 	Get(context.Context, uuid.UUID, string, string) (consumptionmodels.Balance, error)
 	List(context.Context, uuid.UUID, string) ([]consumptionmodels.Balance, error)
+	ListGrants(context.Context, uuid.UUID, string, string, *consumptionmodels.OperationListCursor, int) ([]consumptionmodels.EntitlementGrant, *consumptionmodels.OperationListCursor, error)
+	ListActivity(context.Context, uuid.UUID, string, string, *consumptionmodels.OperationListCursor, int) ([]consumptionmodels.BalanceActivity, *consumptionmodels.OperationListCursor, error)
 }
+
+const (
+	DefaultBalanceDetailPageSize = 25
+	MaximumBalanceDetailPageSize = 100
+)
 
 type BalanceService struct {
 	repository BalanceRepository
@@ -31,6 +38,7 @@ func NewBalanceService(repository BalanceRepository) *BalanceService {
 func (service *BalanceService) Add(
 	ctx context.Context,
 	projectEnvironmentID uuid.UUID,
+	source consumptionmodels.BalanceMutationSource,
 	idempotencyKey string,
 	request consumptionmodels.AddBalanceRequest,
 ) (consumptionmodels.Balance, bool, error) {
@@ -46,12 +54,13 @@ func (service *BalanceService) Add(
 	if err != nil {
 		return consumptionmodels.Balance{}, false, err
 	}
-	return service.repository.Add(ctx, projectEnvironmentID, request, key, operationID, balanceID, grantID)
+	return service.repository.Add(ctx, projectEnvironmentID, source, request, key, operationID, balanceID, grantID)
 }
 
 func (service *BalanceService) Set(
 	ctx context.Context,
 	projectEnvironmentID uuid.UUID,
+	source consumptionmodels.BalanceMutationSource,
 	customerID, meterKey string,
 	request consumptionmodels.SetBalanceRequest,
 ) (consumptionmodels.Balance, error) {
@@ -67,7 +76,7 @@ func (service *BalanceService) Set(
 	if err != nil {
 		return consumptionmodels.Balance{}, err
 	}
-	return service.repository.Set(ctx, projectEnvironmentID, customerID, meterKey, request.Quantity, operationID, balanceID, grantID)
+	return service.repository.Set(ctx, projectEnvironmentID, source, customerID, meterKey, request.Quantity, operationID, balanceID, grantID)
 }
 
 func (service *BalanceService) Get(
@@ -92,6 +101,46 @@ func (service *BalanceService) List(
 		return nil, consumptionmodels.ErrBalanceCustomerInvalid
 	}
 	return service.repository.List(ctx, projectEnvironmentID, customerID)
+}
+
+func (service *BalanceService) ListGrants(
+	ctx context.Context,
+	projectEnvironmentID uuid.UUID,
+	customerID, meterKey string,
+	cursor *consumptionmodels.OperationListCursor,
+	limit int,
+) ([]consumptionmodels.EntitlementGrant, *consumptionmodels.OperationListCursor, error) {
+	customerID, meterKey, err := validateSubjectKeys(customerID, meterKey)
+	if err != nil {
+		return nil, nil, err
+	}
+	if limit <= 0 {
+		limit = DefaultBalanceDetailPageSize
+	}
+	if limit > MaximumBalanceDetailPageSize {
+		limit = MaximumBalanceDetailPageSize
+	}
+	return service.repository.ListGrants(ctx, projectEnvironmentID, customerID, meterKey, cursor, limit)
+}
+
+func (service *BalanceService) ListActivity(
+	ctx context.Context,
+	projectEnvironmentID uuid.UUID,
+	customerID, meterKey string,
+	cursor *consumptionmodels.OperationListCursor,
+	limit int,
+) ([]consumptionmodels.BalanceActivity, *consumptionmodels.OperationListCursor, error) {
+	customerID, meterKey, err := validateSubjectKeys(customerID, meterKey)
+	if err != nil {
+		return nil, nil, err
+	}
+	if limit <= 0 {
+		limit = DefaultBalanceDetailPageSize
+	}
+	if limit > MaximumBalanceDetailPageSize {
+		limit = MaximumBalanceDetailPageSize
+	}
+	return service.repository.ListActivity(ctx, projectEnvironmentID, customerID, meterKey, cursor, limit)
 }
 
 func validateSubjectKeys(customerID, meterKey string) (string, string, error) {

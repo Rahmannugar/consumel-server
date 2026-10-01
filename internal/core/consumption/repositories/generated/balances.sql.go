@@ -139,7 +139,7 @@ func (q *Queries) BalanceForUpdate(ctx context.Context, id uuid.UUID) (Balance, 
 }
 
 const balanceOperationByIdempotencyKey = `-- name: BalanceOperationByIdempotencyKey :one
-SELECT id, project_environment_id, idempotency_key, operation_type, request_customer_id, request_meter_key, requested_quantity, customer_id, meter_id, balance_id, resulting_quantity, resulting_created_at, resulting_updated_at, created_at, requested_expires_at, resulting_next_expires_at
+SELECT id, project_environment_id, idempotency_key, operation_type, request_customer_id, request_meter_key, requested_quantity, customer_id, meter_id, balance_id, resulting_quantity, resulting_created_at, resulting_updated_at, created_at, requested_expires_at, resulting_next_expires_at, source_type, source_user_id, source_api_key_id
 FROM balance_operations
 WHERE project_environment_id = $1
   AND idempotency_key = $2
@@ -170,6 +170,9 @@ func (q *Queries) BalanceOperationByIdempotencyKey(ctx context.Context, arg Bala
 		&i.CreatedAt,
 		&i.RequestedExpiresAt,
 		&i.ResultingNextExpiresAt,
+		&i.SourceType,
+		&i.SourceUserID,
+		&i.SourceApiKeyID,
 	)
 	return i, err
 }
@@ -218,13 +221,16 @@ INSERT INTO balance_operations (
     requested_quantity,
     requested_expires_at,
     customer_id,
-    meter_id
+    meter_id,
+    source_type,
+    source_user_id,
+    source_api_key_id
 )
-VALUES ($1, $2, $3, 'add', $4, $5, $6, $7, $8, $9)
+VALUES ($1, $2, $3, 'add', $4, $5, $6, $7, $8, $9, $10, $11, $12)
 ON CONFLICT (project_environment_id, idempotency_key)
     WHERE idempotency_key IS NOT NULL
     DO NOTHING
-RETURNING id, project_environment_id, idempotency_key, operation_type, request_customer_id, request_meter_key, requested_quantity, customer_id, meter_id, balance_id, resulting_quantity, resulting_created_at, resulting_updated_at, created_at, requested_expires_at, resulting_next_expires_at
+RETURNING id, project_environment_id, idempotency_key, operation_type, request_customer_id, request_meter_key, requested_quantity, customer_id, meter_id, balance_id, resulting_quantity, resulting_created_at, resulting_updated_at, created_at, requested_expires_at, resulting_next_expires_at, source_type, source_user_id, source_api_key_id
 `
 
 type ClaimBalanceAdditionParams struct {
@@ -237,6 +243,9 @@ type ClaimBalanceAdditionParams struct {
 	RequestedExpiresAt   pgtype.Timestamptz
 	CustomerID           uuid.UUID
 	MeterID              uuid.UUID
+	SourceType           string
+	SourceUserID         pgtype.UUID
+	SourceApiKeyID       pgtype.UUID
 }
 
 func (q *Queries) ClaimBalanceAddition(ctx context.Context, arg ClaimBalanceAdditionParams) (BalanceOperation, error) {
@@ -250,6 +259,9 @@ func (q *Queries) ClaimBalanceAddition(ctx context.Context, arg ClaimBalanceAddi
 		arg.RequestedExpiresAt,
 		arg.CustomerID,
 		arg.MeterID,
+		arg.SourceType,
+		arg.SourceUserID,
+		arg.SourceApiKeyID,
 	)
 	var i BalanceOperation
 	err := row.Scan(
@@ -269,6 +281,9 @@ func (q *Queries) ClaimBalanceAddition(ctx context.Context, arg ClaimBalanceAddi
 		&i.CreatedAt,
 		&i.RequestedExpiresAt,
 		&i.ResultingNextExpiresAt,
+		&i.SourceType,
+		&i.SourceUserID,
+		&i.SourceApiKeyID,
 	)
 	return i, err
 }
@@ -336,7 +351,7 @@ SET
     resulting_created_at = $5,
     resulting_updated_at = $6
 WHERE id = $1
-RETURNING id, project_environment_id, idempotency_key, operation_type, request_customer_id, request_meter_key, requested_quantity, customer_id, meter_id, balance_id, resulting_quantity, resulting_created_at, resulting_updated_at, created_at, requested_expires_at, resulting_next_expires_at
+RETURNING id, project_environment_id, idempotency_key, operation_type, request_customer_id, request_meter_key, requested_quantity, customer_id, meter_id, balance_id, resulting_quantity, resulting_created_at, resulting_updated_at, created_at, requested_expires_at, resulting_next_expires_at, source_type, source_user_id, source_api_key_id
 `
 
 type FinalizeBalanceOperationParams struct {
@@ -375,6 +390,9 @@ func (q *Queries) FinalizeBalanceOperation(ctx context.Context, arg FinalizeBala
 		&i.CreatedAt,
 		&i.RequestedExpiresAt,
 		&i.ResultingNextExpiresAt,
+		&i.SourceType,
+		&i.SourceUserID,
+		&i.SourceApiKeyID,
 	)
 	return i, err
 }
@@ -422,6 +440,149 @@ func (q *Queries) InsertEntitlementGrant(ctx context.Context, arg InsertEntitlem
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const listBalanceActivity = `-- name: ListBalanceActivity :many
+WITH target_balance AS (
+    SELECT b.id
+    FROM balances b
+    JOIN customers c
+        ON c.project_environment_id = b.project_environment_id
+       AND c.id = b.customer_id
+    JOIN meters m ON m.id = b.meter_id
+    JOIN project_environment_meters pem
+        ON pem.project_environment_id = b.project_environment_id
+       AND pem.meter_id = b.meter_id
+       AND pem.archived_at IS NULL
+    WHERE b.project_environment_id = $4
+      AND c.customer_id = $5
+      AND m.meter_key = $6
+), activity AS (
+    SELECT
+        bo.id,
+        bo.created_at AS occurred_at,
+        bo.operation_type AS kind,
+        CASE
+            WHEN bo.operation_type = 'add' THEN bo.requested_quantity
+            ELSE COALESCE(added.quantity, 0) - COALESCE(removed.quantity, 0)
+        END::bigint AS quantity_change,
+        bo.resulting_quantity,
+        bo.requested_expires_at AS expires_at,
+        bo.source_type,
+        COALESCE(bo.source_user_id, bo.source_api_key_id) AS source_id
+    FROM balance_operations bo
+    LEFT JOIN LATERAL (
+        SELECT SUM(g.granted_quantity)::bigint AS quantity
+        FROM entitlement_grants g
+        WHERE g.created_by_balance_operation_id = bo.id
+    ) added ON true
+    LEFT JOIN LATERAL (
+        SELECT SUM(a.quantity)::bigint AS quantity
+        FROM balance_operation_grant_allocations a
+        WHERE a.balance_operation_id = bo.id
+    ) removed ON true
+    WHERE bo.balance_id = (SELECT id FROM target_balance)
+      AND bo.resulting_quantity IS NOT NULL
+
+    UNION ALL
+
+    SELECT
+        co.id,
+        co.created_at AS occurred_at,
+        'usage'::text AS kind,
+        -co.balance_debited AS quantity_change,
+        co.resulting_balance AS resulting_quantity,
+        NULL::timestamptz AS expires_at,
+        CASE WHEN co.source_api_key_id IS NULL THEN 'legacy_api_usage' ELSE 'api_key' END::text AS source_type,
+        co.source_api_key_id AS source_id
+    FROM consumption_operations co
+    WHERE co.balance_id = (SELECT id FROM target_balance)
+      AND co.status = 'accepted'
+      AND co.balance_debited > 0
+
+    UNION ALL
+
+    SELECT
+        g.id,
+        g.expires_at AS occurred_at,
+        'expiration'::text AS kind,
+        -g.remaining_quantity AS quantity_change,
+        NULL::bigint AS resulting_quantity,
+        g.expires_at,
+        'system'::text AS source_type,
+        NULL::uuid AS source_id
+    FROM entitlement_grants g
+    WHERE g.balance_id = (SELECT id FROM target_balance)
+      AND g.expires_at <= now()
+      AND g.remaining_quantity > 0
+)
+SELECT id, occurred_at, kind, quantity_change, resulting_quantity, expires_at, source_type, source_id
+FROM activity
+WHERE (
+    $1::timestamptz IS NULL
+    OR (occurred_at, id) < (
+        $1::timestamptz,
+        $2::uuid
+    )
+)
+ORDER BY occurred_at DESC, id DESC
+LIMIT $3
+`
+
+type ListBalanceActivityParams struct {
+	CursorCreatedAt      pgtype.Timestamptz
+	CursorID             pgtype.UUID
+	PageSize             int32
+	ProjectEnvironmentID uuid.UUID
+	CustomerID           string
+	MeterKey             string
+}
+
+type ListBalanceActivityRow struct {
+	ID                uuid.UUID
+	OccurredAt        pgtype.Timestamptz
+	Kind              string
+	QuantityChange    int64
+	ResultingQuantity *int64
+	ExpiresAt         pgtype.Timestamptz
+	SourceType        string
+	SourceID          pgtype.UUID
+}
+
+func (q *Queries) ListBalanceActivity(ctx context.Context, arg ListBalanceActivityParams) ([]ListBalanceActivityRow, error) {
+	rows, err := q.db.Query(ctx, listBalanceActivity,
+		arg.CursorCreatedAt,
+		arg.CursorID,
+		arg.PageSize,
+		arg.ProjectEnvironmentID,
+		arg.CustomerID,
+		arg.MeterKey,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListBalanceActivityRow
+	for rows.Next() {
+		var i ListBalanceActivityRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OccurredAt,
+			&i.Kind,
+			&i.QuantityChange,
+			&i.ResultingQuantity,
+			&i.ExpiresAt,
+			&i.SourceType,
+			&i.SourceID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listCustomerBalances = `-- name: ListCustomerBalances :many
@@ -510,6 +671,78 @@ func (q *Queries) ListCustomerBalances(ctx context.Context, arg ListCustomerBala
 	return items, nil
 }
 
+const listEntitlementGrants = `-- name: ListEntitlementGrants :many
+SELECT g.id, g.balance_id, g.source_type, g.granted_quantity, g.remaining_quantity, g.expires_at, g.created_by_balance_operation_id, g.created_at, g.updated_at
+FROM entitlement_grants g
+JOIN balances b ON b.id = g.balance_id
+JOIN customers c
+    ON c.project_environment_id = b.project_environment_id
+   AND c.id = b.customer_id
+JOIN meters m ON m.id = b.meter_id
+JOIN project_environment_meters pem
+    ON pem.project_environment_id = b.project_environment_id
+   AND pem.meter_id = b.meter_id
+   AND pem.archived_at IS NULL
+WHERE b.project_environment_id = $1
+  AND c.customer_id = $2
+  AND m.meter_key = $3
+  AND (
+      $4::timestamptz IS NULL
+      OR (g.created_at, g.id) < (
+          $4::timestamptz,
+          $5::uuid
+      )
+  )
+ORDER BY g.created_at DESC, g.id DESC
+LIMIT $6
+`
+
+type ListEntitlementGrantsParams struct {
+	ProjectEnvironmentID uuid.UUID
+	CustomerID           string
+	MeterKey             string
+	CursorCreatedAt      pgtype.Timestamptz
+	CursorID             pgtype.UUID
+	PageSize             int32
+}
+
+func (q *Queries) ListEntitlementGrants(ctx context.Context, arg ListEntitlementGrantsParams) ([]EntitlementGrant, error) {
+	rows, err := q.db.Query(ctx, listEntitlementGrants,
+		arg.ProjectEnvironmentID,
+		arg.CustomerID,
+		arg.MeterKey,
+		arg.CursorCreatedAt,
+		arg.CursorID,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []EntitlementGrant
+	for rows.Next() {
+		var i EntitlementGrant
+		if err := rows.Scan(
+			&i.ID,
+			&i.BalanceID,
+			&i.SourceType,
+			&i.GrantedQuantity,
+			&i.RemainingQuantity,
+			&i.ExpiresAt,
+			&i.CreatedByBalanceOperationID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const recordBalanceGrantAllocation = `-- name: RecordBalanceGrantAllocation :exec
 INSERT INTO balance_operation_grant_allocations (
     balance_operation_id,
@@ -539,10 +772,13 @@ INSERT INTO balance_operations (
     request_meter_key,
     requested_quantity,
     customer_id,
-    meter_id
+    meter_id,
+    source_type,
+    source_user_id,
+    source_api_key_id
 )
-VALUES ($1, $2, 'set', $3, $4, $5, $6, $7)
-RETURNING id, project_environment_id, idempotency_key, operation_type, request_customer_id, request_meter_key, requested_quantity, customer_id, meter_id, balance_id, resulting_quantity, resulting_created_at, resulting_updated_at, created_at, requested_expires_at, resulting_next_expires_at
+VALUES ($1, $2, 'set', $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING id, project_environment_id, idempotency_key, operation_type, request_customer_id, request_meter_key, requested_quantity, customer_id, meter_id, balance_id, resulting_quantity, resulting_created_at, resulting_updated_at, created_at, requested_expires_at, resulting_next_expires_at, source_type, source_user_id, source_api_key_id
 `
 
 type RecordBalanceSetParams struct {
@@ -553,6 +789,9 @@ type RecordBalanceSetParams struct {
 	RequestedQuantity    int64
 	CustomerID           uuid.UUID
 	MeterID              uuid.UUID
+	SourceType           string
+	SourceUserID         pgtype.UUID
+	SourceApiKeyID       pgtype.UUID
 }
 
 func (q *Queries) RecordBalanceSet(ctx context.Context, arg RecordBalanceSetParams) (BalanceOperation, error) {
@@ -564,6 +803,9 @@ func (q *Queries) RecordBalanceSet(ctx context.Context, arg RecordBalanceSetPara
 		arg.RequestedQuantity,
 		arg.CustomerID,
 		arg.MeterID,
+		arg.SourceType,
+		arg.SourceUserID,
+		arg.SourceApiKeyID,
 	)
 	var i BalanceOperation
 	err := row.Scan(
@@ -583,6 +825,9 @@ func (q *Queries) RecordBalanceSet(ctx context.Context, arg RecordBalanceSetPara
 		&i.CreatedAt,
 		&i.RequestedExpiresAt,
 		&i.ResultingNextExpiresAt,
+		&i.SourceType,
+		&i.SourceUserID,
+		&i.SourceApiKeyID,
 	)
 	return i, err
 }

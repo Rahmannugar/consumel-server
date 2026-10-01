@@ -25,12 +25,15 @@ const (
 	redisTimeout    = 5 * time.Second
 	resendTimeout   = 10 * time.Second
 	shutdownTimeout = 15 * time.Second
-	// Email calls are slow external I/O; eight slots keep one V1 worker busy
+	// Email calls are slow external I/O; ten slots keep one V1 worker busy
 	// while the Resend client independently enforces provider request pacing.
-	emailConcurrency = 8
+	emailConcurrency = 10
 	// Redis publication is shorter I/O and can safely use a wider pool than
 	// provider delivery without increasing the PostgreSQL claim batch.
-	outboxConcurrency = 16
+	outboxConcurrency = 20
+	// databasePoolDefault matches the execution slots so no slot waits on a
+	// pooled connection.
+	databasePoolDefault int32 = 30
 )
 
 type workerResult struct {
@@ -69,7 +72,7 @@ func run() (runError error) {
 	}()
 
 	databaseContext, cancelDatabase := context.WithTimeout(context.Background(), databaseTimeout)
-	databasePool, err := database.Open(databaseContext, cfg.Database.ConnectionString())
+	databasePool, err := database.Open(databaseContext, cfg.Database.ConnectionString(), cfg.Database.WorkerPoolOr(databasePoolDefault))
 	cancelDatabase()
 	if err != nil {
 		return fmt.Errorf("connect database: %w", err)

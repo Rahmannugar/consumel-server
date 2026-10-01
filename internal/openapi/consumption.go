@@ -1,160 +1,490 @@
 package openapi
 
 import (
-	consumptionmodels "github.com/Rahmannugar/consumel-server/internal/core/consumption/models"
-	customermodels "github.com/Rahmannugar/consumel-server/internal/customers/models"
-	metermodels "github.com/Rahmannugar/consumel-server/internal/meters/models"
+	"github.com/google/uuid"
+	"time"
 )
 
-func consumptionOperations() []operation {
-	customerID := parameter{
-		Name: "customerId", Description: "The customer identifier supplied by the integrating application.",
-		In: "path", Required: true, Schema: map[string]any{"type": "string", "maxLength": customermodels.MaximumCustomerIDLength},
-	}
-	meterKey := parameter{
-		Name: "meterKey", Description: "The stable meter key supplied when the meter was created.",
-		In: "path", Required: true,
-		Schema: map[string]any{"type": "string", "maxLength": metermodels.MaximumMeterKeyLength, "pattern": `^[a-z][a-z0-9_-]*$`},
-	}
-	idempotencyKey := parameter{
-		Name: "Idempotency-Key", Description: "A UUID v7 that identifies this logical balance addition. Reuse it only when retrying the same request.",
-		In: "header", Required: true, Schema: map[string]any{"type": "string", "format": "uuid"},
-	}
-	consumeIdempotencyKey := parameter{
-		Name: "Idempotency-Key", Description: "A UUID v7 that identifies this logical consume operation. Reuse it only when retrying the same request.",
-		In: "header", Required: true, Schema: map[string]any{"type": "string", "format": "uuid"},
-	}
-	replayHeader := map[string]any{
-		"Idempotency-Replayed": map[string]any{
-			"description": "Present with the value true when Consumel returns the original result of a committed retry.",
-			"schema":      map[string]any{"type": "string", "enum": []string{"true"}},
-		},
-	}
-	publicReadErrors := map[string]string{"400": "BalanceInvalid", "404": "BalanceNotFound", "500": "BalanceFailed"}
-	dashboardReadErrors := map[string]string{"400": "BalanceInvalid", "404": "BalanceOrEnvironmentNotFound", "409": "BalanceEnvironmentConflict", "500": "BalanceFailed"}
-	publicAddErrors := map[string]string{"400": "BalanceInvalid", "404": "BalanceSubjectNotFound", "409": "BalanceConflict", "500": "BalanceFailed"}
-	dashboardAddErrors := map[string]string{"400": "BalanceInvalid", "404": "BalanceSubjectOrEnvironmentNotFound", "409": "BalanceOrEnvironmentConflict", "500": "BalanceFailed"}
-	publicSetErrors := map[string]string{"400": "BalanceInvalid", "404": "BalanceSubjectNotFound", "500": "BalanceFailed"}
-	dashboardSetErrors := map[string]string{"400": "BalanceInvalid", "404": "BalanceSubjectOrEnvironmentNotFound", "409": "BalanceEnvironmentConflict", "500": "BalanceFailed"}
-	return []operation{
-		{Method: "post", Path: "/v1/consume", Summary: "Atomically record usage and apply the active meter's balance behavior.", Tag: "Consumption", Request: "ConsumeRequest", SuccessCode: "200", Success: "UsageEvent", SuccessHeaders: replayHeader, APIKeyProtected: true, Parameters: []parameter{consumeIdempotencyKey}, Errors: map[string]string{"400": "ConsumeInvalid", "404": "ConsumeMeterNotFound", "409": "ConsumeConflict", "500": "ConsumeFailed"}},
-		{Method: "get", Path: "/v1/projects/{projectId}/environments/{environment}/events", Summary: "List accepted and denied usage operations in the signed-in project workspace.", Tag: "Dashboard Events", SuccessCode: "200", Success: "UsageOperations", Protected: true, Parameters: dashboardParameters(
-			parameter{Name: "status", Description: "Filter by the persisted operation outcome.", In: "query", Schema: map[string]any{"type": "string", "enum": []string{"accepted", "denied"}}},
-			parameter{Name: "from", Description: "Inclusive RFC 3339 start time. Supply from and to together; the range may span at most one year.", In: "query", Schema: map[string]any{"type": "string", "format": "date-time"}},
-			parameter{Name: "to", Description: "Exclusive RFC 3339 end time. Supply from and to together.", In: "query", Schema: map[string]any{"type": "string", "format": "date-time"}},
-			parameter{Name: "cursor", Description: "The opaque next cursor from the previous page.", In: "query", Schema: map[string]any{"type": "string"}},
-			parameter{Name: "limit", Description: "The number of events to return.", In: "query", Schema: map[string]any{"type": "integer", "minimum": 1, "maximum": 100, "default": 50}},
-		), Errors: map[string]string{"400": "OperationListInvalid", "404": "OperationEnvironmentNotFound", "409": "OperationEnvironmentConflict", "500": "OperationListFailed"}},
-		{Method: "get", Path: "/v1/projects/{projectId}/environments/{environment}/events/stream", Summary: "Stream newly persisted usage operations to the signed-in project workspace.", Tag: "Dashboard Events", SuccessCode: "200", SuccessDescription: "A server-sent event stream. Each usage.operation event contains a UsageOperation JSON payload and a Redis stream cursor used for reconnection.", SuccessMediaType: "text/event-stream", Protected: true, Parameters: dashboardParameters(
-			parameter{Name: "cursor", Description: "The last Redis stream cursor received by the client. Browsers normally reconnect through Last-Event-ID automatically.", In: "query", Schema: map[string]any{"type": "string", "pattern": `^[0-9]+-[0-9]+$`}},
-		), Errors: map[string]string{"400": "OperationListInvalid", "404": "OperationEnvironmentNotFound", "409": "OperationEnvironmentConflict", "500": "OperationListFailed"}},
-		{Method: "get", Path: "/v1/customers/{customerId}/balances", Summary: "List a customer's active meter balances in the API key's project environment.", Tag: "Balances", SuccessCode: "200", Success: "Balances", APIKeyProtected: true, Parameters: []parameter{customerID}, Errors: publicReadErrors},
-		{Method: "get", Path: "/v1/customers/{customerId}/balances/{meterKey}", Summary: "Return one customer and meter balance from the API key's project environment.", Tag: "Balances", SuccessCode: "200", Success: "Balance", APIKeyProtected: true, Parameters: []parameter{customerID, meterKey}, Errors: publicReadErrors},
-		{Method: "post", Path: "/v1/balances", Summary: "Add an optionally expiring, idempotent quantity to a customer and meter balance.", Tag: "Balances", Request: "AddBalanceRequest", SuccessCode: "200", Success: "Balance", SuccessHeaders: replayHeader, APIKeyProtected: true, Parameters: []parameter{idempotencyKey}, Errors: publicAddErrors},
-		{Method: "put", Path: "/v1/balances/{customerId}/{meterKey}", Summary: "Set a customer and meter balance to an exact quantity.", Tag: "Balances", Request: "SetBalanceRequest", SuccessCode: "200", Success: "Balance", APIKeyProtected: true, Parameters: []parameter{customerID, meterKey}, Errors: publicSetErrors},
-		{Method: "get", Path: "/v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances", Summary: "List a customer's active meter balances from the signed-in project workspace.", Tag: "Dashboard Balances", SuccessCode: "200", Success: "Balances", Protected: true, Parameters: dashboardParameters(customerID), Errors: dashboardReadErrors},
-		{Method: "get", Path: "/v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances/{meterKey}", Summary: "Return one customer and meter balance from the signed-in project workspace.", Tag: "Dashboard Balances", SuccessCode: "200", Success: "Balance", Protected: true, Parameters: dashboardParameters(customerID, meterKey), Errors: dashboardReadErrors},
-		{Method: "post", Path: "/v1/projects/{projectId}/environments/{environment}/balances", Summary: "Add an optionally expiring, idempotent quantity to a customer and meter balance from the signed-in project workspace.", Tag: "Dashboard Balances", Request: "AddBalanceRequest", SuccessCode: "200", Success: "Balance", SuccessHeaders: replayHeader, Protected: true, Parameters: dashboardParameters(idempotencyKey), Errors: dashboardAddErrors},
-		{Method: "put", Path: "/v1/projects/{projectId}/environments/{environment}/balances/{customerId}/{meterKey}", Summary: "Set a customer and meter balance to an exact quantity from the signed-in project workspace.", Tag: "Dashboard Balances", Request: "SetBalanceRequest", SuccessCode: "200", Success: "Balance", Protected: true, Parameters: dashboardParameters(customerID, meterKey), Errors: dashboardSetErrors},
-	}
+// @Summary Add an optionally expiring, idempotent quantity to a customer and meter balance.
+// @Tags Balances
+// @Param Idempotency-Key header string true "A UUID v7 that identifies this logical balance addition. Reuse it only when retrying the same request." format(uuid)
+// @Param body body models.AddBalanceRequest true "Balance quantity to add."
+// @Success 200 {object} Balance "Completed successfully."
+// @Header 200 {string} Idempotency-Replayed "Present with the value true when Consumel returns the original result of a committed retry."
+// @Failure 400 {object} BalanceInvalid "The balance request, resource key, or idempotency key is invalid."
+// @Failure 401 {object} InvalidAPIKey "The project API key is missing, malformed, revoked, replaced, or inactive."
+// @Failure 404 {object} BalanceSubjectNotFound "The customer or active meter is unavailable."
+// @Failure 409 {object} BalanceConflict "The balance addition conflicts with prior state."
+// @Failure 429 {object} RateLimited "Too many attempts were made."
+// @Failure 500 {object} BalanceFailed "The balance request could not be completed."
+// @Security projectAPIKey
+// @Router /v1/balances [post]
+func PostV1Balances() {}
+
+// @Summary Set a customer and meter balance to an exact quantity.
+// @Tags Balances
+// @Param customerId path string true "The customer identifier supplied by the integrating application." maxLength(255)
+// @Param meterKey path string true "The stable meter key supplied when the meter was created. Must match `^[a-z][a-z0-9_-]*$`." maxLength(120)
+// @Param body body models.SetBalanceRequest true "Exact balance quantity to set."
+// @Success 200 {object} Balance "Completed successfully."
+// @Failure 400 {object} BalanceInvalid "The balance request, resource key, or idempotency key is invalid."
+// @Failure 401 {object} InvalidAPIKey "The project API key is missing, malformed, revoked, replaced, or inactive."
+// @Failure 404 {object} BalanceSubjectNotFound "The customer or active meter is unavailable."
+// @Failure 429 {object} RateLimited "Too many attempts were made."
+// @Failure 500 {object} BalanceFailed "The balance request could not be completed."
+// @Security projectAPIKey
+// @Router /v1/balances/{customerId}/{meterKey} [put]
+func PutV1BalancesCustomerIdMeterKey() {}
+
+// @Summary Atomically record usage and apply the active meter's balance behavior.
+// @Tags Consumption
+// @Param Idempotency-Key header string true "A UUID v7 that identifies this logical consume operation. Reuse it only when retrying the same request." format(uuid)
+// @Param body body models.ConsumeRequest true "Usage to record."
+// @Success 200 {object} UsageEvent "Completed successfully."
+// @Header 200 {string} Idempotency-Replayed "Present with the value true when Consumel returns the original result of a committed retry."
+// @Failure 400 {object} ConsumeInvalid "The consume request or idempotency key is invalid."
+// @Failure 401 {object} InvalidAPIKey "The project API key is missing, malformed, revoked, replaced, or inactive."
+// @Failure 404 {object} ConsumeMeterNotFound "The active meter is unavailable."
+// @Failure 409 {object} ConsumeConflict "The consume operation conflicts with the current balance or prior idempotent request."
+// @Failure 429 {object} RateLimited "Too many attempts were made."
+// @Failure 500 {object} ConsumeFailed "The consume operation could not be completed."
+// @Security projectAPIKey
+// @Router /v1/consume [post]
+func PostV1Consume() {}
+
+// @Summary List a customer's active meter balances in the API key's project environment.
+// @Tags Balances
+// @Param customerId path string true "The customer identifier supplied by the integrating application." maxLength(255)
+// @Success 200 {object} Balances "Completed successfully."
+// @Failure 400 {object} BalanceInvalid "The balance request, resource key, or idempotency key is invalid."
+// @Failure 401 {object} InvalidAPIKey "The project API key is missing, malformed, revoked, replaced, or inactive."
+// @Failure 404 {object} BalanceNotFound "The customer, active meter, or balance is unavailable."
+// @Failure 500 {object} BalanceFailed "The balance request could not be completed."
+// @Security projectAPIKey
+// @Router /v1/customers/{customerId}/balances [get]
+func GetV1CustomersCustomerIdBalances() {}
+
+// @Summary Return one customer and meter balance from the API key's project environment.
+// @Tags Balances
+// @Param customerId path string true "The customer identifier supplied by the integrating application." maxLength(255)
+// @Param meterKey path string true "The stable meter key supplied when the meter was created. Must match `^[a-z][a-z0-9_-]*$`." maxLength(120)
+// @Success 200 {object} Balance "Completed successfully."
+// @Failure 400 {object} BalanceInvalid "The balance request, resource key, or idempotency key is invalid."
+// @Failure 401 {object} InvalidAPIKey "The project API key is missing, malformed, revoked, replaced, or inactive."
+// @Failure 404 {object} BalanceNotFound "The customer, active meter, or balance is unavailable."
+// @Failure 500 {object} BalanceFailed "The balance request could not be completed."
+// @Security projectAPIKey
+// @Router /v1/customers/{customerId}/balances/{meterKey} [get]
+func GetV1CustomersCustomerIdBalancesMeterKey() {}
+
+// @Summary List the entitlement grants that compose one customer and meter balance.
+// @Tags Balances
+// @Param customerId path string true "The customer identifier supplied by the integrating application." maxLength(255)
+// @Param meterKey path string true "The stable meter key supplied when the meter was created. Must match `^[a-z][a-z0-9_-]*$`." maxLength(120)
+// @Param cursor query string false "The opaque next cursor from the previous page."
+// @Param limit query int false "The number of records to return." minimum(1) maximum(100) default(25)
+// @Success 200 {object} EntitlementGrants "Completed successfully."
+// @Failure 400 {object} BalanceInvalid "The balance request, resource key, or idempotency key is invalid."
+// @Failure 401 {object} InvalidAPIKey "The project API key is missing, malformed, revoked, replaced, or inactive."
+// @Failure 404 {object} BalanceNotFound "The customer, active meter, or balance is unavailable."
+// @Failure 500 {object} BalanceFailed "The balance request could not be completed."
+// @Security projectAPIKey
+// @Router /v1/customers/{customerId}/balances/{meterKey}/grants [get]
+func GetV1CustomersCustomerIdBalancesMeterKeyGrants() {}
+
+// @Summary List adjustments, usage debits, and expirations for one customer and meter balance.
+// @Tags Balances
+// @Param customerId path string true "The customer identifier supplied by the integrating application." maxLength(255)
+// @Param meterKey path string true "The stable meter key supplied when the meter was created. Must match `^[a-z][a-z0-9_-]*$`." maxLength(120)
+// @Param cursor query string false "The opaque next cursor from the previous page."
+// @Param limit query int false "The number of records to return." minimum(1) maximum(100) default(25)
+// @Success 200 {object} BalanceActivityList "Completed successfully."
+// @Failure 400 {object} BalanceInvalid "The balance request, resource key, or idempotency key is invalid."
+// @Failure 401 {object} InvalidAPIKey "The project API key is missing, malformed, revoked, replaced, or inactive."
+// @Failure 404 {object} BalanceNotFound "The customer, active meter, or balance is unavailable."
+// @Failure 500 {object} BalanceFailed "The balance request could not be completed."
+// @Security projectAPIKey
+// @Router /v1/customers/{customerId}/balances/{meterKey}/history [get]
+func GetV1CustomersCustomerIdBalancesMeterKeyHistory() {}
+
+// @Summary Add an optionally expiring, idempotent quantity to a customer and meter balance from the signed-in project workspace.
+// @Tags Dashboard Balances
+// @Param projectId path string true "The immutable ID of the project selected in the dashboard." format(uuid)
+// @Param environment path string true "The selected isolated project environment." enums(sandbox, live)
+// @Param Idempotency-Key header string true "A UUID v7 that identifies this logical balance addition. Reuse it only when retrying the same request." format(uuid)
+// @Param body body models.AddBalanceRequest true "Balance quantity to add."
+// @Success 200 {object} Balance "Completed successfully."
+// @Header 200 {string} Idempotency-Replayed "Present with the value true when Consumel returns the original result of a committed retry."
+// @Failure 400 {object} BalanceInvalid "The balance request, resource key, or idempotency key is invalid."
+// @Failure 401 {object} NotAuthenticated "Authentication is required."
+// @Failure 404 {object} BalanceSubjectOrEnvironmentNotFound "The customer, active meter, or selected project environment is unavailable."
+// @Failure 409 {object} BalanceOrEnvironmentConflict "The balance addition conflicts with prior state or the selected environment is inactive."
+// @Failure 500 {object} BalanceFailed "The balance request could not be completed."
+// @Security productionCookieSession
+// @Security localCookieSession
+// @Router /v1/projects/{projectId}/environments/{environment}/balances [post]
+func PostV1ProjectsProjectIdEnvironmentsEnvironmentBalances() {}
+
+// @Summary Set a customer and meter balance to an exact quantity from the signed-in project workspace.
+// @Tags Dashboard Balances
+// @Param projectId path string true "The immutable ID of the project selected in the dashboard." format(uuid)
+// @Param environment path string true "The selected isolated project environment." enums(sandbox, live)
+// @Param customerId path string true "The customer identifier supplied by the integrating application." maxLength(255)
+// @Param meterKey path string true "The stable meter key supplied when the meter was created. Must match `^[a-z][a-z0-9_-]*$`." maxLength(120)
+// @Param body body models.SetBalanceRequest true "Exact balance quantity to set."
+// @Success 200 {object} Balance "Completed successfully."
+// @Failure 400 {object} BalanceInvalid "The balance request, resource key, or idempotency key is invalid."
+// @Failure 401 {object} NotAuthenticated "Authentication is required."
+// @Failure 404 {object} BalanceSubjectOrEnvironmentNotFound "The customer, active meter, or selected project environment is unavailable."
+// @Failure 409 {object} BalanceEnvironmentConflict "The selected project environment is not active."
+// @Failure 500 {object} BalanceFailed "The balance request could not be completed."
+// @Security productionCookieSession
+// @Security localCookieSession
+// @Router /v1/projects/{projectId}/environments/{environment}/balances/{customerId}/{meterKey} [put]
+func PutV1ProjectsProjectIdEnvironmentsEnvironmentBalancesCustomerIdMeterKey() {}
+
+// @Summary List a customer's active meter balances from the signed-in project workspace.
+// @Tags Dashboard Balances
+// @Param projectId path string true "The immutable ID of the project selected in the dashboard." format(uuid)
+// @Param environment path string true "The selected isolated project environment." enums(sandbox, live)
+// @Param customerId path string true "The customer identifier supplied by the integrating application." maxLength(255)
+// @Success 200 {object} Balances "Completed successfully."
+// @Failure 400 {object} BalanceInvalid "The balance request, resource key, or idempotency key is invalid."
+// @Failure 401 {object} NotAuthenticated "Authentication is required."
+// @Failure 404 {object} BalanceOrEnvironmentNotFound "The customer, active meter, balance, or selected environment is unavailable."
+// @Failure 409 {object} BalanceEnvironmentConflict "The selected project environment is not active."
+// @Failure 500 {object} BalanceFailed "The balance request could not be completed."
+// @Security productionCookieSession
+// @Security localCookieSession
+// @Router /v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances [get]
+func GetV1ProjectsProjectIdEnvironmentsEnvironmentCustomersCustomerIdBalances() {}
+
+// @Summary Return one customer and meter balance from the signed-in project workspace.
+// @Tags Dashboard Balances
+// @Param projectId path string true "The immutable ID of the project selected in the dashboard." format(uuid)
+// @Param environment path string true "The selected isolated project environment." enums(sandbox, live)
+// @Param customerId path string true "The customer identifier supplied by the integrating application." maxLength(255)
+// @Param meterKey path string true "The stable meter key supplied when the meter was created. Must match `^[a-z][a-z0-9_-]*$`." maxLength(120)
+// @Success 200 {object} Balance "Completed successfully."
+// @Failure 400 {object} BalanceInvalid "The balance request, resource key, or idempotency key is invalid."
+// @Failure 401 {object} NotAuthenticated "Authentication is required."
+// @Failure 404 {object} BalanceOrEnvironmentNotFound "The customer, active meter, balance, or selected environment is unavailable."
+// @Failure 409 {object} BalanceEnvironmentConflict "The selected project environment is not active."
+// @Failure 500 {object} BalanceFailed "The balance request could not be completed."
+// @Security productionCookieSession
+// @Security localCookieSession
+// @Router /v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances/{meterKey} [get]
+func GetV1ProjectsProjectIdEnvironmentsEnvironmentCustomersCustomerIdBalancesMeterKey() {}
+
+// @Summary List the entitlement grants that compose one customer and meter balance in the signed-in project workspace.
+// @Tags Dashboard Balances
+// @Param projectId path string true "The immutable ID of the project selected in the dashboard." format(uuid)
+// @Param environment path string true "The selected isolated project environment." enums(sandbox, live)
+// @Param customerId path string true "The customer identifier supplied by the integrating application." maxLength(255)
+// @Param meterKey path string true "The stable meter key supplied when the meter was created. Must match `^[a-z][a-z0-9_-]*$`." maxLength(120)
+// @Param cursor query string false "The opaque next cursor from the previous page."
+// @Param limit query int false "The number of records to return." minimum(1) maximum(100) default(25)
+// @Success 200 {object} EntitlementGrants "Completed successfully."
+// @Failure 400 {object} BalanceInvalid "The balance request, resource key, or idempotency key is invalid."
+// @Failure 401 {object} NotAuthenticated "Authentication is required."
+// @Failure 404 {object} BalanceOrEnvironmentNotFound "The customer, active meter, balance, or selected environment is unavailable."
+// @Failure 409 {object} BalanceEnvironmentConflict "The selected project environment is not active."
+// @Failure 500 {object} BalanceFailed "The balance request could not be completed."
+// @Security productionCookieSession
+// @Security localCookieSession
+// @Router /v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances/{meterKey}/grants [get]
+func GetV1ProjectsProjectIdEnvironmentsEnvironmentCustomersCustomerIdBalancesMeterKeyGrants() {}
+
+// @Summary List adjustments, usage debits, and expirations for one customer and meter balance in the signed-in project workspace.
+// @Tags Dashboard Balances
+// @Param projectId path string true "The immutable ID of the project selected in the dashboard." format(uuid)
+// @Param environment path string true "The selected isolated project environment." enums(sandbox, live)
+// @Param customerId path string true "The customer identifier supplied by the integrating application." maxLength(255)
+// @Param meterKey path string true "The stable meter key supplied when the meter was created. Must match `^[a-z][a-z0-9_-]*$`." maxLength(120)
+// @Param cursor query string false "The opaque next cursor from the previous page."
+// @Param limit query int false "The number of records to return." minimum(1) maximum(100) default(25)
+// @Success 200 {object} BalanceActivityList "Completed successfully."
+// @Failure 400 {object} BalanceInvalid "The balance request, resource key, or idempotency key is invalid."
+// @Failure 401 {object} NotAuthenticated "Authentication is required."
+// @Failure 404 {object} BalanceOrEnvironmentNotFound "The customer, active meter, balance, or selected environment is unavailable."
+// @Failure 409 {object} BalanceEnvironmentConflict "The selected project environment is not active."
+// @Failure 500 {object} BalanceFailed "The balance request could not be completed."
+// @Security productionCookieSession
+// @Security localCookieSession
+// @Router /v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances/{meterKey}/history [get]
+func GetV1ProjectsProjectIdEnvironmentsEnvironmentCustomersCustomerIdBalancesMeterKeyHistory() {}
+
+// @Summary List accepted and denied usage operations in the signed-in project workspace.
+// @Tags Dashboard Events
+// @Param projectId path string true "The immutable ID of the project selected in the dashboard." format(uuid)
+// @Param environment path string true "The selected isolated project environment." enums(sandbox, live)
+// @Param status query string false "Filter by the persisted operation outcome." enums(accepted, denied)
+// @Param customerId query string false "Return usage operations for this exact customer identifier." maxLength(255)
+// @Param meterKey query string false "Return usage operations for this exact meter key. Must match `^[a-z][a-z0-9_-]*$`." maxLength(120)
+// @Param from query string false "Inclusive RFC 3339 start time. Supply from and to together; the range may span at most one year." format(date-time)
+// @Param to query string false "Exclusive RFC 3339 end time. Supply from and to together." format(date-time)
+// @Param cursor query string false "The opaque next cursor from the previous page."
+// @Param limit query int false "The number of events to return." minimum(1) maximum(100) default(50)
+// @Success 200 {object} UsageOperations "Completed successfully."
+// @Failure 400 {object} OperationListInvalid "The event list filter or pagination input is invalid."
+// @Failure 401 {object} NotAuthenticated "Authentication is required."
+// @Failure 404 {object} OperationEnvironmentNotFound "The selected project environment is unavailable."
+// @Failure 409 {object} OperationEnvironmentConflict "The selected project environment is not active."
+// @Failure 500 {object} OperationListFailed "The event list could not be loaded."
+// @Security productionCookieSession
+// @Security localCookieSession
+// @Router /v1/projects/{projectId}/environments/{environment}/events [get]
+func GetV1ProjectsProjectIdEnvironmentsEnvironmentEvents() {}
+
+// @Summary Stream newly persisted usage operations to the signed-in project workspace.
+// @Tags Dashboard Events
+// @Param projectId path string true "The immutable ID of the project selected in the dashboard." format(uuid)
+// @Param environment path string true "The selected isolated project environment." enums(sandbox, live)
+// @Param cursor query string false "The last Redis stream cursor received by the client. Browsers normally reconnect through Last-Event-ID automatically. Must match `^[0-9]+-[0-9]+$`."
+// @Success 200 {string} string "A server-sent event stream. Each usage.operation event contains a UsageOperation JSON payload and a Redis stream cursor used for reconnection."
+// @Failure 400 {object} OperationListInvalid "The event list filter or pagination input is invalid."
+// @Failure 401 {object} NotAuthenticated "Authentication is required."
+// @Failure 404 {object} OperationEnvironmentNotFound "The selected project environment is unavailable."
+// @Failure 409 {object} OperationEnvironmentConflict "The selected project environment is not active."
+// @Failure 500 {object} OperationListFailed "The event list could not be loaded."
+// @Security productionCookieSession
+// @Security localCookieSession
+// @Router /v1/projects/{projectId}/environments/{environment}/events/stream [get]
+func GetV1ProjectsProjectIdEnvironmentsEnvironmentEventsStream() {}
+
+type Balance struct {
+	CreatedAt     time.Time  `json:"createdAt" validate:"required" example:"2026-09-28T12:00:00Z" format:"date-time"`
+	CustomerID    string     `json:"customerId" validate:"required,max=255" example:"user_123"`
+	ID            uuid.UUID  `json:"id" validate:"required" example:"0199aa81-ce8c-73bf-a880-8e84654b9a6c" format:"uuid"`
+	MeterKey      string     `json:"meterKey" validate:"required,max=120" example:"api_calls" pattern:"^[a-z][a-z0-9_-]*$"`
+	NextExpiresAt *time.Time `json:"nextExpiresAt" validate:"required" example:"2026-10-31T00:00:00Z" format:"date-time"`
+	Quantity      int64      `json:"quantity" validate:"required,min=0" example:"10000" format:"int64"`
+	UpdatedAt     time.Time  `json:"updatedAt" validate:"required" example:"2026-09-28T12:00:00Z" format:"date-time"`
 }
 
-func consumptionSchemas() map[string]any {
-	return map[string]any{
-		"ConsumeRequest":    consumptionmodels.ConsumeRequestOpenAPISchema(),
-		"AddBalanceRequest": consumptionmodels.AddBalanceRequestOpenAPISchema(),
-		"SetBalanceRequest": consumptionmodels.SetBalanceRequestOpenAPISchema(),
-		"Balance": object([]string{"id", "customerId", "meterKey", "quantity", "nextExpiresAt", "createdAt", "updatedAt"}, map[string]any{
-			"id":            map[string]any{"type": "string", "format": "uuid"},
-			"customerId":    map[string]any{"type": "string", "maxLength": customermodels.MaximumCustomerIDLength},
-			"meterKey":      map[string]any{"type": "string", "maxLength": metermodels.MaximumMeterKeyLength, "pattern": `^[a-z][a-z0-9_-]*$`},
-			"quantity":      map[string]any{"type": "integer", "format": "int64", "minimum": 0},
-			"nextExpiresAt": map[string]any{"type": []string{"string", "null"}, "format": "date-time"},
-			"createdAt":     map[string]any{"type": "string", "format": "date-time"},
-			"updatedAt":     map[string]any{"type": "string", "format": "date-time"},
-		}),
-		"Balances": object([]string{"balances"}, map[string]any{
-			"balances": map[string]any{"type": "array", "items": schemaReference("Balance")},
-		}),
-		"UsageEvent": object([]string{"id", "customerId", "meterKey", "quantity", "meterType", "balanceDebited", "remainingBalance", "billable", "createdAt"}, map[string]any{
-			"id":               map[string]any{"type": "string", "format": "uuid"},
-			"customerId":       map[string]any{"type": "string", "maxLength": customermodels.MaximumCustomerIDLength},
-			"meterKey":         map[string]any{"type": "string", "maxLength": metermodels.MaximumMeterKeyLength, "pattern": `^[a-z][a-z0-9_-]*$`},
-			"quantity":         map[string]any{"type": "integer", "format": "int64", "minimum": 1},
-			"meterType":        map[string]any{"type": "string", "enum": []string{"prepaid", "postpaid", "hybrid"}},
-			"balanceDebited":   map[string]any{"type": "integer", "format": "int64", "minimum": 0},
-			"remainingBalance": map[string]any{"type": []string{"integer", "null"}, "format": "int64", "minimum": 0},
-			"billable":         map[string]any{"type": "boolean"},
-			"createdAt":        map[string]any{"type": "string", "format": "date-time"},
-		}),
-		"UsageOperation": object([]string{"id", "customerId", "meterKey", "quantity", "meterType", "status", "denialReason", "balanceDebited", "remainingBalance", "billable", "replayCount", "lastReplayedAt", "createdAt"}, map[string]any{
-			"id": map[string]any{"type": "string", "format": "uuid"}, "customerId": map[string]any{"type": "string"},
-			"meterKey": map[string]any{"type": "string"}, "quantity": map[string]any{"type": "integer", "format": "int64", "minimum": 1},
-			"meterType":    map[string]any{"type": "string", "enum": []string{"prepaid", "postpaid", "hybrid"}},
-			"status":       map[string]any{"type": "string", "enum": []string{"accepted", "denied"}},
-			"denialReason": map[string]any{"type": []string{"string", "null"}}, "balanceDebited": map[string]any{"type": "integer", "format": "int64", "minimum": 0},
-			"remainingBalance": map[string]any{"type": []string{"integer", "null"}, "format": "int64", "minimum": 0},
-			"billable":         map[string]any{"type": "boolean"}, "replayCount": map[string]any{"type": "integer", "format": "int64", "minimum": 0},
-			"lastReplayedAt": map[string]any{"type": []string{"string", "null"}, "format": "date-time"}, "createdAt": map[string]any{"type": "string", "format": "date-time"},
-		}),
-		"UsageOperations": object([]string{"operations", "nextCursor"}, map[string]any{
-			"operations": map[string]any{"type": "array", "items": schemaReference("UsageOperation")},
-			"nextCursor": map[string]any{"type": []string{"string", "null"}},
-		}),
-	}
+type BalanceActivity struct {
+	ExpiresAt         *time.Time `json:"expiresAt" validate:"required" format:"date-time"`
+	ID                uuid.UUID  `json:"id" validate:"required" example:"0199aa81-ce8c-73bf-a880-8e84654b9a71" format:"uuid"`
+	Kind              string     `json:"kind" validate:"required" example:"usage" enums:"add,set,usage,expiration"`
+	OccurredAt        time.Time  `json:"occurredAt" validate:"required" example:"2026-09-29T12:00:00Z" format:"date-time"`
+	QuantityChange    int64      `json:"quantityChange" validate:"required" example:"-500" format:"int64"`
+	ResultingQuantity *int64     `json:"resultingQuantity" validate:"required,min=0" example:"7000" format:"int64"`
+	SourceType        string     `json:"sourceType" validate:"required" example:"api_key"`
 }
 
-func consumptionErrorResponses() map[string]any {
-	return map[string]any{
-		"ConsumeConflict":                     errorResponseExamples("The consume operation conflicts with the current balance or prior idempotent request.", "insufficient_balance", "idempotency_key_conflict"),
-		"ConsumeFailed":                       errorResponseWithMessage("The consume operation could not be completed.", "consume_failed", "Consumel could not process this usage. Try again shortly."),
-		"ConsumeInvalid":                      errorResponseWithMessage("The consume request or idempotency key is invalid.", "invalid_consume", "Check the customer ID, meter key, quantity, and idempotency key."),
-		"ConsumeMeterNotFound":                errorResponseWithMessage("The active meter is unavailable.", "meter_not_found", "The active meter does not exist in this environment."),
-		"OperationEnvironmentConflict":        errorResponseWithMessage("The selected project environment is not active.", "environment_inactive", "Activate Live before viewing its events."),
-		"OperationEnvironmentNotFound":        errorResponseWithMessage("The selected project environment is unavailable.", "project_environment_not_found", "This project environment is not available."),
-		"OperationListFailed":                 errorResponseWithMessage("The event list could not be loaded.", "operation_list_failed", "Consumel could not load events. Try again shortly."),
-		"OperationListInvalid":                errorResponseExamples("The event list filter or pagination input is invalid.", "invalid_request", "invalid_cursor", "invalid_filter"),
-		"BalanceConflict":                     errorResponseExamples("The balance addition conflicts with prior state.", "idempotency_key_conflict", "balance_limit_exceeded"),
-		"BalanceEnvironmentConflict":          errorResponseWithMessage("The selected project environment is not active.", "environment_inactive", "Activate Live before managing its balances."),
-		"BalanceFailed":                       errorResponseWithMessage("The balance request could not be completed.", "balance_operation_failed", "Consumel could not complete the balance request. Try again shortly."),
-		"BalanceInvalid":                      errorResponseExamples("The balance request, resource key, or idempotency key is invalid.", "invalid_request", "invalid_balance"),
-		"BalanceNotFound":                     errorResponseExamples("The customer, active meter, or balance is unavailable.", "balance_subject_not_found", "balance_not_found"),
-		"BalanceOrEnvironmentConflict":        errorResponseExamples("The balance addition conflicts with prior state or the selected environment is inactive.", "idempotency_key_conflict", "balance_limit_exceeded", "environment_inactive"),
-		"BalanceOrEnvironmentNotFound":        errorResponseExamples("The customer, active meter, balance, or selected environment is unavailable.", "balance_subject_not_found", "balance_not_found", "project_environment_not_found"),
-		"BalanceSubjectNotFound":              errorResponseWithMessage("The customer or active meter is unavailable.", "balance_subject_not_found", "The customer or active meter does not exist in this environment."),
-		"BalanceSubjectOrEnvironmentNotFound": errorResponseExamples("The customer, active meter, or selected project environment is unavailable.", "balance_subject_not_found", "project_environment_not_found"),
-	}
+type BalanceActivityList struct {
+	Activity   []BalanceActivity `json:"activity" validate:"required"`
+	NextCursor *string           `json:"nextCursor" validate:"required"`
 }
 
-func consumptionExample(name string) (map[string]any, bool) {
-	balance := map[string]any{
-		"id": "0199aa81-ce8c-73bf-a880-8e84654b9a6c", "customerId": "user_123", "meterKey": "api_calls",
-		"quantity": 10000, "nextExpiresAt": "2026-10-31T00:00:00Z", "createdAt": "2026-09-28T12:00:00Z", "updatedAt": "2026-09-28T12:00:00Z",
-	}
-	switch name {
-	case "ConsumeRequest":
-		return map[string]any{"customerId": "customer_123", "meterKey": "api_calls", "quantity": 500}, true
-	case "AddBalanceRequest":
-		return map[string]any{"customerId": "user_123", "meterKey": "api_calls", "quantity": 10000, "expiresAt": "2026-10-31T00:00:00Z"}, true
-	case "SetBalanceRequest":
-		return map[string]any{"quantity": 10000}, true
-	case "Balance":
-		return balance, true
-	case "Balances":
-		return map[string]any{"balances": []any{balance}}, true
-	case "UsageEvent":
-		return map[string]any{
-			"id": "0199aad1-f00d-7ae0-935f-cde0bd9f3ba5", "customerId": "customer_123",
-			"meterKey": "api_calls", "quantity": 500, "meterType": "prepaid",
-			"balanceDebited": 500, "remainingBalance": 9500, "billable": true,
-			"createdAt": "2026-09-29T12:00:00Z",
-		}, true
-	case "UsageOperation":
-		return map[string]any{"id": "0199aad1-f00d-7ae0-935f-cde0bd9f3ba5", "customerId": "customer_123", "meterKey": "api_calls", "quantity": 500, "meterType": "prepaid", "status": "accepted", "denialReason": nil, "balanceDebited": 500, "remainingBalance": 9500, "billable": true, "replayCount": 1, "lastReplayedAt": "2026-09-29T12:01:00Z", "createdAt": "2026-09-29T12:00:00Z"}, true
-	case "UsageOperations":
-		operation, _ := consumptionExample("UsageOperation")
-		return map[string]any{"operations": []any{operation}, "nextCursor": nil}, true
-	default:
-		return nil, false
-	}
+type Balances struct {
+	Balances []Balance `json:"balances" validate:"required"`
+}
+
+type EntitlementGrant struct {
+	CreatedAt         time.Time  `json:"createdAt" validate:"required" example:"2026-09-28T12:00:00Z" format:"date-time"`
+	ExpiresAt         *time.Time `json:"expiresAt" validate:"required" example:"2026-10-31T00:00:00Z" format:"date-time"`
+	GrantedQuantity   int64      `json:"grantedQuantity" validate:"required,min=1" example:"10000" format:"int64"`
+	ID                uuid.UUID  `json:"id" validate:"required" example:"0199aa81-ce8c-73bf-a880-8e84654b9a70" format:"uuid"`
+	RemainingQuantity int64      `json:"remainingQuantity" validate:"required,min=0" example:"7500" format:"int64"`
+	Status            string     `json:"status" validate:"required" example:"active" enums:"active,exhausted,expired"`
+}
+
+type EntitlementGrants struct {
+	Grants     []EntitlementGrant `json:"grants" validate:"required"`
+	NextCursor *string            `json:"nextCursor" validate:"required"`
+}
+
+type UsageEvent struct {
+	BalanceDebited   int64     `json:"balanceDebited" validate:"required,min=0" example:"500" format:"int64"`
+	Billable         bool      `json:"billable" validate:"required" example:"true"`
+	CreatedAt        time.Time `json:"createdAt" validate:"required" example:"2026-09-29T12:00:00Z" format:"date-time"`
+	CustomerID       string    `json:"customerId" validate:"required,max=255" example:"customer_123"`
+	ID               uuid.UUID `json:"id" validate:"required" example:"0199aad1-f00d-7ae0-935f-cde0bd9f3ba5" format:"uuid"`
+	MeterKey         string    `json:"meterKey" validate:"required,max=120" example:"api_calls" pattern:"^[a-z][a-z0-9_-]*$"`
+	MeterType        string    `json:"meterType" validate:"required" example:"prepaid" enums:"prepaid,postpaid,hybrid"`
+	Quantity         int64     `json:"quantity" validate:"required,min=1" example:"500" format:"int64"`
+	RemainingBalance *int64    `json:"remainingBalance" validate:"required,min=0" example:"9500" format:"int64"`
+}
+
+type UsageOperation struct {
+	BalanceDebited   int64      `json:"balanceDebited" validate:"required,min=0" example:"500" format:"int64"`
+	Billable         bool       `json:"billable" validate:"required" example:"true"`
+	CreatedAt        time.Time  `json:"createdAt" validate:"required" example:"2026-09-29T12:00:00Z" format:"date-time"`
+	CustomerID       string     `json:"customerId" validate:"required" example:"customer_123"`
+	DenialReason     *string    `json:"denialReason" validate:"required"`
+	ID               uuid.UUID  `json:"id" validate:"required" example:"0199aad1-f00d-7ae0-935f-cde0bd9f3ba5" format:"uuid"`
+	LastReplayedAt   *time.Time `json:"lastReplayedAt" validate:"required" example:"2026-09-29T12:01:00Z" format:"date-time"`
+	MeterKey         string     `json:"meterKey" validate:"required" example:"api_calls"`
+	MeterType        string     `json:"meterType" validate:"required" example:"prepaid" enums:"prepaid,postpaid,hybrid"`
+	Quantity         int64      `json:"quantity" validate:"required,min=1" example:"500" format:"int64"`
+	RemainingBalance *int64     `json:"remainingBalance" validate:"required,min=0" example:"9500" format:"int64"`
+	ReplayCount      int64      `json:"replayCount" validate:"required,min=0" example:"1" format:"int64"`
+	Status           string     `json:"status" validate:"required" example:"accepted" enums:"accepted,denied"`
+}
+
+type UsageOperations struct {
+	NextCursor *string          `json:"nextCursor" validate:"required"`
+	Operations []UsageOperation `json:"operations" validate:"required"`
+}
+
+// @description Possible codes: balance_limit_exceeded, idempotency_key_conflict.
+type BalanceConflict struct {
+	Error BalanceConflictError `json:"error" validate:"required"`
+}
+
+type BalanceConflictError struct {
+	Code    string `json:"code" validate:"required" example:"balance_limit_exceeded"`
+	Message string `json:"message,omitempty"`
+}
+
+type BalanceEnvironmentConflict struct {
+	Error BalanceEnvironmentConflictError `json:"error" validate:"required"`
+}
+
+type BalanceEnvironmentConflictError struct {
+	Code    string `json:"code" validate:"required" example:"environment_inactive"`
+	Message string `json:"message,omitempty" example:"Activate Live before managing its balances."`
+}
+
+type BalanceFailed struct {
+	Error BalanceFailedError `json:"error" validate:"required"`
+}
+
+type BalanceFailedError struct {
+	Code    string `json:"code" validate:"required" example:"balance_operation_failed"`
+	Message string `json:"message,omitempty" example:"Consumel could not complete the balance request. Try again shortly."`
+}
+
+// @description Possible codes: invalid_balance, invalid_request.
+type BalanceInvalid struct {
+	Error BalanceInvalidError `json:"error" validate:"required"`
+}
+
+type BalanceInvalidError struct {
+	Code    string `json:"code" validate:"required" example:"invalid_balance"`
+	Message string `json:"message,omitempty"`
+}
+
+// @description Possible codes: balance_not_found, balance_subject_not_found.
+type BalanceNotFound struct {
+	Error BalanceNotFoundError `json:"error" validate:"required"`
+}
+
+type BalanceNotFoundError struct {
+	Code    string `json:"code" validate:"required" example:"balance_not_found"`
+	Message string `json:"message,omitempty"`
+}
+
+// @description Possible codes: balance_limit_exceeded, environment_inactive, idempotency_key_conflict.
+type BalanceOrEnvironmentConflict struct {
+	Error BalanceOrEnvironmentConflictError `json:"error" validate:"required"`
+}
+
+type BalanceOrEnvironmentConflictError struct {
+	Code    string `json:"code" validate:"required" example:"balance_limit_exceeded"`
+	Message string `json:"message,omitempty"`
+}
+
+// @description Possible codes: balance_not_found, balance_subject_not_found, project_environment_not_found.
+type BalanceOrEnvironmentNotFound struct {
+	Error BalanceOrEnvironmentNotFoundError `json:"error" validate:"required"`
+}
+
+type BalanceOrEnvironmentNotFoundError struct {
+	Code    string `json:"code" validate:"required" example:"balance_not_found"`
+	Message string `json:"message,omitempty"`
+}
+
+type BalanceSubjectNotFound struct {
+	Error BalanceSubjectNotFoundError `json:"error" validate:"required"`
+}
+
+type BalanceSubjectNotFoundError struct {
+	Code    string `json:"code" validate:"required" example:"balance_subject_not_found"`
+	Message string `json:"message,omitempty" example:"The customer or active meter does not exist in this environment."`
+}
+
+// @description Possible codes: balance_subject_not_found, project_environment_not_found.
+type BalanceSubjectOrEnvironmentNotFound struct {
+	Error BalanceSubjectOrEnvironmentNotFoundError `json:"error" validate:"required"`
+}
+
+type BalanceSubjectOrEnvironmentNotFoundError struct {
+	Code    string `json:"code" validate:"required" example:"balance_subject_not_found"`
+	Message string `json:"message,omitempty"`
+}
+
+// @description Possible codes: idempotency_key_conflict, insufficient_balance.
+type ConsumeConflict struct {
+	Error ConsumeConflictError `json:"error" validate:"required"`
+}
+
+type ConsumeConflictError struct {
+	Code    string `json:"code" validate:"required" example:"idempotency_key_conflict"`
+	Message string `json:"message,omitempty"`
+}
+
+type ConsumeFailed struct {
+	Error ConsumeFailedError `json:"error" validate:"required"`
+}
+
+type ConsumeFailedError struct {
+	Code    string `json:"code" validate:"required" example:"consume_failed"`
+	Message string `json:"message,omitempty" example:"Consumel could not process this usage. Try again shortly."`
+}
+
+type ConsumeInvalid struct {
+	Error ConsumeInvalidError `json:"error" validate:"required"`
+}
+
+type ConsumeInvalidError struct {
+	Code    string `json:"code" validate:"required" example:"invalid_consume"`
+	Message string `json:"message,omitempty" example:"Check the customer ID, meter key, quantity, and idempotency key."`
+}
+
+type ConsumeMeterNotFound struct {
+	Error ConsumeMeterNotFoundError `json:"error" validate:"required"`
+}
+
+type ConsumeMeterNotFoundError struct {
+	Code    string `json:"code" validate:"required" example:"meter_not_found"`
+	Message string `json:"message,omitempty" example:"The active meter does not exist in this environment."`
+}
+
+type OperationEnvironmentConflict struct {
+	Error OperationEnvironmentConflictError `json:"error" validate:"required"`
+}
+
+type OperationEnvironmentConflictError struct {
+	Code    string `json:"code" validate:"required" example:"environment_inactive"`
+	Message string `json:"message,omitempty" example:"Activate Live before viewing its events."`
+}
+
+type OperationEnvironmentNotFound struct {
+	Error OperationEnvironmentNotFoundError `json:"error" validate:"required"`
+}
+
+type OperationEnvironmentNotFoundError struct {
+	Code    string `json:"code" validate:"required" example:"project_environment_not_found"`
+	Message string `json:"message,omitempty" example:"This project environment is not available."`
+}
+
+type OperationListFailed struct {
+	Error OperationListFailedError `json:"error" validate:"required"`
+}
+
+type OperationListFailedError struct {
+	Code    string `json:"code" validate:"required" example:"operation_list_failed"`
+	Message string `json:"message,omitempty" example:"Consumel could not load events. Try again shortly."`
+}
+
+// @description Possible codes: invalid_cursor, invalid_filter, invalid_request.
+type OperationListInvalid struct {
+	Error OperationListInvalidError `json:"error" validate:"required"`
+}
+
+type OperationListInvalidError struct {
+	Code    string `json:"code" validate:"required" example:"invalid_cursor"`
+	Message string `json:"message,omitempty"`
 }

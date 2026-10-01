@@ -1,75 +1,194 @@
 package openapi
 
-import metermodels "github.com/Rahmannugar/consumel-server/internal/meters/models"
+import (
+	"github.com/google/uuid"
+	"time"
+)
 
-func meterOperations() []operation {
-	meterKey := parameter{
-		Name: "meterKey", Description: "The stable meter key supplied when the meter was created.",
-		In: "path", Required: true,
-		Schema: map[string]any{"type": "string", "maxLength": metermodels.MaximumMeterKeyLength, "pattern": `^[a-z][a-z0-9_-]*$`},
-	}
-	listParameters := []parameter{
-		{Name: "q", Description: "A case-insensitive meter key or name search.", In: "query", Schema: map[string]any{"type": "string", "maxLength": metermodels.MaximumMeterSearchLength}},
-		{Name: "cursor", Description: "The opaque next cursor from the previous page.", In: "query", Schema: map[string]any{"type": "string"}},
-		{Name: "limit", Description: "The number of meters to return.", In: "query", Schema: map[string]any{"type": "integer", "minimum": 1, "maximum": 100, "default": 25}},
-	}
-	return []operation{
-		{Method: "post", Path: "/v1/meters", Summary: "Create a meter in the API key's project environment.", Request: "CreateMeterRequest", SuccessCode: "201", Success: "Meter", APIKeyProtected: true, Errors: map[string]string{"400": "MeterInvalid", "409": "MeterConflict", "500": "MeterFailed"}},
-		{Method: "get", Path: "/v1/meters", Summary: "List meters in the API key's project environment.", SuccessCode: "200", Success: "Meters", APIKeyProtected: true, Parameters: listParameters, Errors: map[string]string{"400": "MeterListInvalid", "500": "MeterFailed"}},
-		{Method: "get", Path: "/v1/meters/{meterKey}", Summary: "Return one meter from the API key's project environment.", SuccessCode: "200", Success: "Meter", APIKeyProtected: true, Parameters: []parameter{meterKey}, Errors: map[string]string{"400": "MeterInvalid", "404": "MeterNotFound", "500": "MeterFailed"}},
-		{Method: "post", Path: "/v1/projects/{projectId}/environments/{environment}/meters", Summary: "Create a meter from the signed-in project workspace.", Tag: "Dashboard Meters", Request: "CreateMeterRequest", SuccessCode: "201", Success: "Meter", Protected: true, Parameters: dashboardParameters(), Errors: map[string]string{"400": "MeterInvalid", "404": "MeterEnvironmentNotFound", "409": "MeterCreateConflict", "500": "MeterFailed"}},
-		{Method: "get", Path: "/v1/projects/{projectId}/environments/{environment}/meters", Summary: "List meters in the signed-in project workspace.", Tag: "Dashboard Meters", SuccessCode: "200", Success: "Meters", Protected: true, Parameters: dashboardParameters(listParameters...), Errors: map[string]string{"400": "MeterListInvalid", "404": "MeterEnvironmentNotFound", "409": "MeterEnvironmentConflict", "500": "MeterFailed"}},
-		{Method: "get", Path: "/v1/projects/{projectId}/environments/{environment}/meters/{meterKey}", Summary: "Return one meter from the signed-in project workspace.", Tag: "Dashboard Meters", SuccessCode: "200", Success: "Meter", Protected: true, Parameters: dashboardParameters(meterKey), Errors: map[string]string{"400": "MeterInvalid", "404": "MeterOrEnvironmentNotFound", "409": "MeterEnvironmentConflict", "500": "MeterFailed"}},
-	}
+// @Summary List meters in the API key's project environment.
+// @Tags Meters
+// @Param q query string false "A case-insensitive meter key or name search." maxLength(120)
+// @Param cursor query string false "The opaque next cursor from the previous page."
+// @Param limit query int false "The number of meters to return." minimum(1) maximum(100) default(25)
+// @Success 200 {object} Meters "Completed successfully."
+// @Failure 400 {object} MeterListInvalid "The list pagination or search input is invalid."
+// @Failure 401 {object} InvalidAPIKey "The project API key is missing, malformed, revoked, replaced, or inactive."
+// @Failure 500 {object} MeterFailed "The meter request could not be completed."
+// @Security projectAPIKey
+// @Router /v1/meters [get]
+func GetV1Meters() {}
+
+// @Summary Create a meter in the API key's project environment.
+// @Tags Meters
+// @Param body body models.CreateMeterRequest true "Meter definition."
+// @Success 201 {object} Meter "Created."
+// @Failure 400 {object} MeterInvalid "The meter request or key is invalid."
+// @Failure 401 {object} InvalidAPIKey "The project API key is missing, malformed, revoked, replaced, or inactive."
+// @Failure 409 {object} MeterConflict "The meter cannot be created in the API key's environment."
+// @Failure 500 {object} MeterFailed "The meter request could not be completed."
+// @Security projectAPIKey
+// @Router /v1/meters [post]
+func PostV1Meters() {}
+
+// @Summary Return one meter from the API key's project environment.
+// @Tags Meters
+// @Param meterKey path string true "The stable meter key supplied when the meter was created. Must match `^[a-z][a-z0-9_-]*$`." maxLength(120)
+// @Success 200 {object} Meter "Completed successfully."
+// @Failure 400 {object} MeterInvalid "The meter request or key is invalid."
+// @Failure 401 {object} InvalidAPIKey "The project API key is missing, malformed, revoked, replaced, or inactive."
+// @Failure 404 {object} MeterNotFound "The meter is not present in the authenticated environment."
+// @Failure 500 {object} MeterFailed "The meter request could not be completed."
+// @Security projectAPIKey
+// @Router /v1/meters/{meterKey} [get]
+func GetV1MetersMeterKey() {}
+
+// @Summary List meters in the signed-in project workspace.
+// @Tags Dashboard Meters
+// @Param projectId path string true "The immutable ID of the project selected in the dashboard." format(uuid)
+// @Param environment path string true "The selected isolated project environment." enums(sandbox, live)
+// @Param q query string false "A case-insensitive meter key or name search." maxLength(120)
+// @Param cursor query string false "The opaque next cursor from the previous page."
+// @Param limit query int false "The number of meters to return." minimum(1) maximum(100) default(25)
+// @Success 200 {object} Meters "Completed successfully."
+// @Failure 400 {object} MeterListInvalid "The list pagination or search input is invalid."
+// @Failure 401 {object} NotAuthenticated "Authentication is required."
+// @Failure 404 {object} MeterEnvironmentNotFound "The selected project environment is unavailable."
+// @Failure 409 {object} MeterEnvironmentConflict "The selected project environment is not active."
+// @Failure 500 {object} MeterFailed "The meter request could not be completed."
+// @Security productionCookieSession
+// @Security localCookieSession
+// @Router /v1/projects/{projectId}/environments/{environment}/meters [get]
+func GetV1ProjectsProjectIdEnvironmentsEnvironmentMeters() {}
+
+// @Summary Create a meter from the signed-in project workspace.
+// @Tags Dashboard Meters
+// @Param projectId path string true "The immutable ID of the project selected in the dashboard." format(uuid)
+// @Param environment path string true "The selected isolated project environment." enums(sandbox, live)
+// @Param body body models.CreateMeterRequest true "Meter definition."
+// @Success 201 {object} Meter "Created."
+// @Failure 400 {object} MeterInvalid "The meter request or key is invalid."
+// @Failure 401 {object} NotAuthenticated "Authentication is required."
+// @Failure 404 {object} MeterEnvironmentNotFound "The selected project environment is unavailable."
+// @Failure 409 {object} MeterCreateConflict "The meter cannot be created in the selected environment."
+// @Failure 500 {object} MeterFailed "The meter request could not be completed."
+// @Security productionCookieSession
+// @Security localCookieSession
+// @Router /v1/projects/{projectId}/environments/{environment}/meters [post]
+func PostV1ProjectsProjectIdEnvironmentsEnvironmentMeters() {}
+
+// @Summary Return one meter from the signed-in project workspace.
+// @Tags Dashboard Meters
+// @Param projectId path string true "The immutable ID of the project selected in the dashboard." format(uuid)
+// @Param environment path string true "The selected isolated project environment." enums(sandbox, live)
+// @Param meterKey path string true "The stable meter key supplied when the meter was created. Must match `^[a-z][a-z0-9_-]*$`." maxLength(120)
+// @Success 200 {object} Meter "Completed successfully."
+// @Failure 400 {object} MeterInvalid "The meter request or key is invalid."
+// @Failure 401 {object} NotAuthenticated "Authentication is required."
+// @Failure 404 {object} MeterOrEnvironmentNotFound "The meter or selected project environment is unavailable."
+// @Failure 409 {object} MeterEnvironmentConflict "The selected project environment is not active."
+// @Failure 500 {object} MeterFailed "The meter request could not be completed."
+// @Security productionCookieSession
+// @Security localCookieSession
+// @Router /v1/projects/{projectId}/environments/{environment}/meters/{meterKey} [get]
+func GetV1ProjectsProjectIdEnvironmentsEnvironmentMetersMeterKey() {}
+
+type Meter struct {
+	CreatedAt   time.Time `json:"createdAt" validate:"required" example:"2026-09-28T12:00:00Z" format:"date-time"`
+	Description *string   `json:"description" validate:"required,max=500" example:"Requests processed by your API."`
+	ID          uuid.UUID `json:"id" validate:"required" example:"0199a9f8-f0c4-7f10-90f8-6483353e4624" format:"uuid"`
+	MeterKey    string    `json:"meterKey" validate:"required,max=120" example:"api_calls" pattern:"^[a-z][a-z0-9_-]*$"`
+	Name        string    `json:"name" validate:"required,max=120" example:"API calls"`
+	Type        string    `json:"type" validate:"required" example:"postpaid" enums:"prepaid,postpaid,hybrid"`
+	UpdatedAt   time.Time `json:"updatedAt" validate:"required" example:"2026-09-28T12:00:00Z" format:"date-time"`
 }
 
-func meterSchemas() map[string]any {
-	return map[string]any{
-		"CreateMeterRequest": metermodels.CreateMeterRequestOpenAPISchema(),
-		"Meter": object([]string{"id", "meterKey", "name", "description", "type", "createdAt", "updatedAt"}, map[string]any{
-			"id":          map[string]any{"type": "string", "format": "uuid"},
-			"meterKey":    map[string]any{"type": "string", "maxLength": metermodels.MaximumMeterKeyLength, "pattern": `^[a-z][a-z0-9_-]*$`},
-			"name":        map[string]any{"type": "string", "maxLength": metermodels.MaximumMeterNameLength},
-			"description": map[string]any{"type": []string{"string", "null"}, "maxLength": metermodels.MaximumMeterDescriptionLength},
-			"type":        map[string]any{"type": "string", "enum": []string{"prepaid", "postpaid", "hybrid"}},
-			"createdAt":   map[string]any{"type": "string", "format": "date-time"},
-			"updatedAt":   map[string]any{"type": "string", "format": "date-time"},
-		}),
-		"Meters": object([]string{"meters", "nextCursor"}, map[string]any{
-			"meters":     map[string]any{"type": "array", "items": schemaReference("Meter")},
-			"nextCursor": map[string]any{"type": []string{"string", "null"}},
-		}),
-	}
+type Meters struct {
+	Meters     []Meter `json:"meters" validate:"required"`
+	NextCursor *string `json:"nextCursor" validate:"required"`
 }
 
-func meterErrorResponses() map[string]any {
-	return map[string]any{
-		"MeterConflict":              errorResponseExamples("The meter cannot be created in the API key's environment.", "meter_already_exists", "meter_definition_conflict"),
-		"MeterCreateConflict":        errorResponseExamples("The meter cannot be created in the selected environment.", "meter_already_exists", "meter_definition_conflict", "environment_inactive"),
-		"MeterEnvironmentConflict":   errorResponseWithMessage("The selected project environment is not active.", "environment_inactive", "Activate Live before managing its meters."),
-		"MeterEnvironmentNotFound":   errorResponseWithMessage("The selected project environment is unavailable.", "project_environment_not_found", "This project environment is not available."),
-		"MeterFailed":                errorResponseWithMessage("The meter request could not be completed.", "meter_operation_failed", "Consumel could not complete the meter request. Try again shortly."),
-		"MeterInvalid":               errorResponseExamples("The meter request or key is invalid.", "invalid_request", "invalid_meter"),
-		"MeterListInvalid":           errorResponseExamples("The list pagination or search input is invalid.", "invalid_request", "invalid_cursor", "invalid_search"),
-		"MeterNotFound":              errorResponseWithMessage("The meter is not present in the authenticated environment.", "meter_not_found", "This meter does not exist in the selected environment."),
-		"MeterOrEnvironmentNotFound": errorResponseExamples("The meter or selected project environment is unavailable.", "meter_not_found", "project_environment_not_found"),
-	}
+// @description Possible codes: meter_already_exists, meter_definition_conflict.
+type MeterConflict struct {
+	Error MeterConflictError `json:"error" validate:"required"`
 }
 
-func meterExample(name string) (map[string]any, bool) {
-	meter := map[string]any{
-		"id": "0199a9f8-f0c4-7f10-90f8-6483353e4624", "meterKey": "api_calls",
-		"name": "API calls", "description": "Requests processed by your API.", "type": "postpaid",
-		"createdAt": "2026-09-28T12:00:00Z", "updatedAt": "2026-09-28T12:00:00Z",
-	}
-	switch name {
-	case "CreateMeterRequest":
-		return map[string]any{"meterKey": meter["meterKey"], "name": meter["name"], "description": meter["description"], "type": meter["type"]}, true
-	case "Meter":
-		return meter, true
-	case "Meters":
-		return map[string]any{"meters": []any{meter}, "nextCursor": nil}, true
-	default:
-		return nil, false
-	}
+type MeterConflictError struct {
+	Code    string `json:"code" validate:"required" example:"meter_already_exists"`
+	Message string `json:"message,omitempty"`
+}
+
+// @description Possible codes: environment_inactive, meter_already_exists, meter_definition_conflict.
+type MeterCreateConflict struct {
+	Error MeterCreateConflictError `json:"error" validate:"required"`
+}
+
+type MeterCreateConflictError struct {
+	Code    string `json:"code" validate:"required" example:"environment_inactive"`
+	Message string `json:"message,omitempty"`
+}
+
+type MeterEnvironmentConflict struct {
+	Error MeterEnvironmentConflictError `json:"error" validate:"required"`
+}
+
+type MeterEnvironmentConflictError struct {
+	Code    string `json:"code" validate:"required" example:"environment_inactive"`
+	Message string `json:"message,omitempty" example:"Activate Live before managing its meters."`
+}
+
+type MeterEnvironmentNotFound struct {
+	Error MeterEnvironmentNotFoundError `json:"error" validate:"required"`
+}
+
+type MeterEnvironmentNotFoundError struct {
+	Code    string `json:"code" validate:"required" example:"project_environment_not_found"`
+	Message string `json:"message,omitempty" example:"This project environment is not available."`
+}
+
+type MeterFailed struct {
+	Error MeterFailedError `json:"error" validate:"required"`
+}
+
+type MeterFailedError struct {
+	Code    string `json:"code" validate:"required" example:"meter_operation_failed"`
+	Message string `json:"message,omitempty" example:"Consumel could not complete the meter request. Try again shortly."`
+}
+
+// @description Possible codes: invalid_meter, invalid_request.
+type MeterInvalid struct {
+	Error MeterInvalidError `json:"error" validate:"required"`
+}
+
+type MeterInvalidError struct {
+	Code    string `json:"code" validate:"required" example:"invalid_meter"`
+	Message string `json:"message,omitempty"`
+}
+
+// @description Possible codes: invalid_cursor, invalid_request, invalid_search.
+type MeterListInvalid struct {
+	Error MeterListInvalidError `json:"error" validate:"required"`
+}
+
+type MeterListInvalidError struct {
+	Code    string `json:"code" validate:"required" example:"invalid_cursor"`
+	Message string `json:"message,omitempty"`
+}
+
+type MeterNotFound struct {
+	Error MeterNotFoundError `json:"error" validate:"required"`
+}
+
+type MeterNotFoundError struct {
+	Code    string `json:"code" validate:"required" example:"meter_not_found"`
+	Message string `json:"message,omitempty" example:"This meter does not exist in the selected environment."`
+}
+
+// @description Possible codes: meter_not_found, project_environment_not_found.
+type MeterOrEnvironmentNotFound struct {
+	Error MeterOrEnvironmentNotFoundError `json:"error" validate:"required"`
+}
+
+type MeterOrEnvironmentNotFoundError struct {
+	Code    string `json:"code" validate:"required" example:"meter_not_found"`
+	Message string `json:"message,omitempty"`
 }

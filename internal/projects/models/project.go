@@ -17,7 +17,7 @@ var (
 )
 
 type CreateProjectRequest struct {
-	Name string `json:"name"`
+	Name string `json:"name" validate:"required,min=1,max=120" example:"Usage Service"`
 }
 
 func (request CreateProjectRequest) Validate() (CreateProjectRequest, error) {
@@ -29,19 +29,6 @@ func (request CreateProjectRequest) Validate() (CreateProjectRequest, error) {
 		return CreateProjectRequest{}, ErrProjectNameTooLong
 	default:
 		return request, nil
-	}
-}
-
-func CreateProjectRequestOpenAPISchema() map[string]any {
-	return map[string]any{
-		"type":                 "object",
-		"additionalProperties": false,
-		"required":             []string{"name"},
-		"properties": map[string]any{
-			"name": map[string]any{
-				"type": "string", "minLength": 1, "maxLength": MaximumProjectNameLength,
-			},
-		},
 	}
 }
 

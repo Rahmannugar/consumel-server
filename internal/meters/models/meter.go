@@ -39,10 +39,10 @@ const (
 )
 
 type CreateMeterRequest struct {
-	MeterKey    string    `json:"meterKey"`
-	Name        string    `json:"name"`
-	Description *string   `json:"description,omitempty"`
-	Type        MeterType `json:"type"`
+	MeterKey    string    `json:"meterKey" validate:"required,min=1,max=120" pattern:"^[a-z][a-z0-9_-]*$" example:"api_calls"`
+	Name        string    `json:"name" validate:"required,min=1,max=120" example:"API calls"`
+	Description *string   `json:"description,omitempty" validate:"min=1,max=500" example:"Requests processed by your API."`
+	Type        MeterType `json:"type" validate:"required" example:"postpaid"`
 }
 
 type Meter struct {
@@ -90,34 +90,4 @@ func ValidMeterKey(value string) bool {
 	return value != "" &&
 		utf8.RuneCountInString(value) <= MaximumMeterKeyLength &&
 		meterKeyPattern.MatchString(value)
-}
-
-func CreateMeterRequestOpenAPISchema() map[string]any {
-	return objectSchema([]string{"meterKey", "name", "type"}, map[string]any{
-		"meterKey": map[string]any{
-			"type": "string", "minLength": 1, "maxLength": MaximumMeterKeyLength,
-			"pattern": `^[a-z][a-z0-9_-]*$`, "example": "api_calls",
-		},
-		"name": map[string]any{
-			"type": "string", "minLength": 1, "maxLength": MaximumMeterNameLength,
-			"example": "API calls",
-		},
-		"description": map[string]any{
-			"type": []string{"string", "null"}, "minLength": 1,
-			"maxLength": MaximumMeterDescriptionLength,
-			"example":   "Requests processed by your API.",
-		},
-		"type": map[string]any{
-			"type": "string", "enum": []string{"prepaid", "postpaid", "hybrid"},
-			"example": "postpaid",
-		},
-	})
-}
-
-func objectSchema(required []string, properties map[string]any) map[string]any {
-	result := map[string]any{"type": "object", "additionalProperties": false, "properties": properties}
-	if len(required) > 0 {
-		result["required"] = required
-	}
-	return result
 }

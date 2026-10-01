@@ -26,6 +26,7 @@ func NewBalanceRepository(pool *pgxpool.Pool) *BalanceRepository {
 func (repository *BalanceRepository) Add(
 	ctx context.Context,
 	projectEnvironmentID uuid.UUID,
+	source consumptionmodels.BalanceMutationSource,
 	request consumptionmodels.AddBalanceRequest,
 	idempotencyKey, operationID, balanceID, grantID uuid.UUID,
 ) (consumptionmodels.Balance, bool, error) {
@@ -58,6 +59,9 @@ func (repository *BalanceRepository) Add(
 		RequestedExpiresAt: timestamp(request.ExpiresAt),
 		CustomerID:         subject.CustomerID,
 		MeterID:            subject.MeterID,
+		SourceType:         source.Type,
+		SourceUserID:       sourceUserID(source),
+		SourceApiKeyID:     sourceAPIKeyID(source),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		existing, loadErr := operationByIdempotencyKey(ctx, queries, projectEnvironmentID, idempotencyKey)
@@ -108,6 +112,7 @@ func (repository *BalanceRepository) Add(
 func (repository *BalanceRepository) Set(
 	ctx context.Context,
 	projectEnvironmentID uuid.UUID,
+	source consumptionmodels.BalanceMutationSource,
 	customerID, meterKey string,
 	quantity int64,
 	operationID, balanceID, grantID uuid.UUID,
@@ -136,6 +141,7 @@ func (repository *BalanceRepository) Set(
 		ID: operationID, ProjectEnvironmentID: projectEnvironmentID,
 		RequestCustomerID: customerID, RequestMeterKey: meterKey, RequestedQuantity: quantity,
 		CustomerID: subject.CustomerID, MeterID: subject.MeterID,
+		SourceType: source.Type, SourceUserID: sourceUserID(source), SourceApiKeyID: sourceAPIKeyID(source),
 	}); err != nil {
 		return consumptionmodels.Balance{}, fmt.Errorf("record exact balance update: %w", err)
 	}
@@ -165,6 +171,14 @@ func (repository *BalanceRepository) Set(
 		return consumptionmodels.Balance{}, fmt.Errorf("commit exact balance update: %w", err)
 	}
 	return result, nil
+}
+
+func sourceUserID(source consumptionmodels.BalanceMutationSource) pgtype.UUID {
+	return pgtype.UUID{Bytes: source.ActorID, Valid: source.Type == consumptionmodels.BalanceSourceDashboardUser}
+}
+
+func sourceAPIKeyID(source consumptionmodels.BalanceMutationSource) pgtype.UUID {
+	return pgtype.UUID{Bytes: source.ActorID, Valid: source.Type == consumptionmodels.BalanceSourceAPIKey}
 }
 
 func (repository *BalanceRepository) Get(

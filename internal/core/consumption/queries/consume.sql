@@ -39,9 +39,10 @@ INSERT INTO consumption_operations (
     requested_quantity,
     customer_id,
     meter_id,
-    meter_type
+    meter_type,
+    source_api_key_id
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT (project_environment_id, idempotency_key)
 DO NOTHING
 RETURNING *;

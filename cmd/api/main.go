@@ -46,8 +46,28 @@ const (
 	sessionLifetime       = 7 * 24 * time.Hour
 	sessionCacheTTL       = time.Hour
 	maximumActiveSessions = 3
+	// apiPoolDefault caps the API's client-side database pool.
+	apiPoolDefault int32 = 20
 )
 
+// @title Consumel API
+// @version 0.1.0
+// @description Consumel usage-based billing infrastructure API.
+// @servers.url https://api.consumel.com
+// @servers.description Production
+// @servers.url http://localhost:8080
+// @servers.description Local development
+
+// @SecurityDefinitions.apikey localCookieSession
+// @in cookie
+// @name consumel_session
+
+// @SecurityDefinitions.apikey productionCookieSession
+// @in cookie
+// @name __Host-consumel_session
+
+// @SecurityDefinitions.bearerauth projectAPIKey
+// @bearerformat cm_test_… or cm_live_…
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
@@ -82,7 +102,7 @@ func run() (runError error) {
 		}
 	}()
 	databaseContext, cancelDatabase := context.WithTimeout(context.Background(), databaseTimeout)
-	databasePool, err := database.Open(databaseContext, cfg.Database.ConnectionString())
+	databasePool, err := database.Open(databaseContext, cfg.Database.ConnectionString(), cfg.Database.APIPoolOr(apiPoolDefault))
 	cancelDatabase()
 	if err != nil {
 		return fmt.Errorf("connect database: %w", err)

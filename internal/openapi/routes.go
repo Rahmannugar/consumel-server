@@ -11,11 +11,10 @@ import (
 //go:embed assets/favicon.ico
 var favicon []byte
 
+//go:embed swagger.json
+var document []byte
+
 func RegisterRoutes(router gin.IRoutes) error {
-	document, err := Document()
-	if err != nil {
-		return err
-	}
 	router.GET("/favicon.ico", func(context *gin.Context) {
 		context.Data(http.StatusOK, "image/x-icon", favicon)
 	})

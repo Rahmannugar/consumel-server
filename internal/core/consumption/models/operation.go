@@ -42,7 +42,9 @@ type OperationListCursor struct {
 }
 
 type OperationListFilter struct {
-	Status OperationStatus
-	From   time.Time
-	To     time.Time
+	Status     OperationStatus
+	CustomerID string
+	MeterKey   string
+	From       time.Time
+	To         time.Time
 }

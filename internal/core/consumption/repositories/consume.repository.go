@@ -29,7 +29,7 @@ func (repository *ConsumeRepository) Consume(
 	ctx context.Context,
 	projectEnvironmentID uuid.UUID,
 	request consumptionmodels.ConsumeRequest,
-	idempotencyKey, operationID, customerID, balanceID, outboxID uuid.UUID,
+	sourceAPIKeyID, idempotencyKey, operationID, customerID, balanceID, outboxID uuid.UUID,
 ) (consumptionmodels.UsageEvent, bool, error) {
 	tx, err := repository.pool.Begin(ctx)
 	if err != nil {
@@ -67,6 +67,7 @@ func (repository *ConsumeRepository) Consume(
 		RequestCustomerID: request.CustomerID, RequestMeterKey: request.MeterKey,
 		RequestedQuantity: request.Quantity, CustomerID: resolvedCustomerID,
 		MeterID: meter.ID, MeterType: meter.MeterType,
+		SourceApiKeyID: pgtype.UUID{Bytes: sourceAPIKeyID, Valid: sourceAPIKeyID != uuid.Nil},
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		existing, loadErr := consumptionOperation(ctx, queries, projectEnvironmentID, idempotencyKey)

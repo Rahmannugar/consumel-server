@@ -3,9 +3,13 @@ package services
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	consumptionmodels "github.com/Rahmannugar/consumel-server/internal/core/consumption/models"
+	customermodels "github.com/Rahmannugar/consumel-server/internal/customers/models"
+	metermodels "github.com/Rahmannugar/consumel-server/internal/meters/models"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
@@ -73,7 +77,7 @@ func (service *OperationService) List(
 	projectEnvironmentID uuid.UUID,
 	cursor *consumptionmodels.OperationListCursor,
 	limit int,
-	status consumptionmodels.OperationStatus,
+	filter consumptionmodels.OperationListFilter,
 	fromValue string,
 	toValue string,
 ) ([]consumptionmodels.Operation, *consumptionmodels.OperationListCursor, error) {
@@ -83,18 +87,24 @@ func (service *OperationService) List(
 	if limit > MaximumOperationPageSize {
 		limit = MaximumOperationPageSize
 	}
-	if status != "" && status != consumptionmodels.OperationStatusAccepted && status != consumptionmodels.OperationStatusDenied {
+	if filter.Status != "" && filter.Status != consumptionmodels.OperationStatusAccepted && filter.Status != consumptionmodels.OperationStatusDenied {
+		return nil, nil, consumptionmodels.ErrOperationFilterInvalid
+	}
+	filter.CustomerID = strings.TrimSpace(filter.CustomerID)
+	if utf8.RuneCountInString(filter.CustomerID) > customermodels.MaximumCustomerIDLength {
+		return nil, nil, consumptionmodels.ErrOperationFilterInvalid
+	}
+	filter.MeterKey = strings.TrimSpace(filter.MeterKey)
+	if filter.MeterKey != "" && !metermodels.ValidMeterKey(filter.MeterKey) {
 		return nil, nil, consumptionmodels.ErrOperationFilterInvalid
 	}
 	from, to, err := service.operationRange(fromValue, toValue)
 	if err != nil {
 		return nil, nil, consumptionmodels.ErrOperationFilterInvalid
 	}
-	return service.repository.List(ctx, projectEnvironmentID, cursor, limit, consumptionmodels.OperationListFilter{
-		Status: status,
-		From:   from,
-		To:     to,
-	})
+	filter.From = from
+	filter.To = to
+	return service.repository.List(ctx, projectEnvironmentID, cursor, limit, filter)
 }
 
 func (service *OperationService) operationRange(fromValue, toValue string) (time.Time, time.Time, error) {

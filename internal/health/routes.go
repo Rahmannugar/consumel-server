@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Rahmannugar/consumel-server/internal/openapi"
 	"github.com/gin-gonic/gin"
 )
 
@@ -14,17 +15,13 @@ type Database interface {
 	Ping(context.Context) error
 }
 
-type response struct {
-	Status string `json:"status"`
-}
-
 func RegisterRoutes(router gin.IRoutes, database Database) {
 	router.GET("/health/live", live)
 	router.GET("/health/ready", ready(database))
 }
 
 func live(ctx *gin.Context) {
-	ctx.JSON(http.StatusOK, response{Status: "ok"})
+	ctx.JSON(http.StatusOK, openapi.Health{Status: "ok"})
 }
 
 func ready(database Database) gin.HandlerFunc {
@@ -33,10 +30,10 @@ func ready(database Database) gin.HandlerFunc {
 		defer cancel()
 
 		if err := database.Ping(checkContext); err != nil {
-			ctx.JSON(http.StatusServiceUnavailable, response{Status: "unavailable"})
+			ctx.JSON(http.StatusServiceUnavailable, openapi.Health{Status: "unavailable"})
 			return
 		}
 
-		ctx.JSON(http.StatusOK, response{Status: "ok"})
+		ctx.JSON(http.StatusOK, openapi.Health{Status: "ok"})
 	}
 }

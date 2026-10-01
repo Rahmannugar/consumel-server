@@ -49,7 +49,7 @@ func OpenMigratedDatabase(t *testing.T) *pgxpool.Pool {
 		t.Fatalf("get PostgreSQL connection string: %v", err)
 	}
 
-	pool, err := database.Open(ctx, connectionString)
+	pool, err := database.Open(ctx, connectionString, 20)
 	if err != nil {
 		t.Fatalf("open PostgreSQL pool: %v", err)
 	}

@@ -13,7 +13,7 @@ import (
 )
 
 const consumptionOperationByID = `-- name: ConsumptionOperationByID :one
-SELECT id, project_environment_id, idempotency_key, request_customer_id, request_meter_key, requested_quantity, customer_id, meter_id, meter_type, status, denial_reason, balance_id, balance_debited, resulting_balance, billable, created_at, replay_count, last_replayed_at
+SELECT id, project_environment_id, idempotency_key, request_customer_id, request_meter_key, requested_quantity, customer_id, meter_id, meter_type, status, denial_reason, balance_id, balance_debited, resulting_balance, billable, created_at, replay_count, last_replayed_at, source_api_key_id
 FROM consumption_operations
 WHERE project_environment_id = $1
   AND id = $2
@@ -47,12 +47,13 @@ func (q *Queries) ConsumptionOperationByID(ctx context.Context, arg ConsumptionO
 		&i.CreatedAt,
 		&i.ReplayCount,
 		&i.LastReplayedAt,
+		&i.SourceApiKeyID,
 	)
 	return i, err
 }
 
 const listConsumptionOperations = `-- name: ListConsumptionOperations :many
-SELECT id, project_environment_id, idempotency_key, request_customer_id, request_meter_key, requested_quantity, customer_id, meter_id, meter_type, status, denial_reason, balance_id, balance_debited, resulting_balance, billable, created_at, replay_count, last_replayed_at
+SELECT id, project_environment_id, idempotency_key, request_customer_id, request_meter_key, requested_quantity, customer_id, meter_id, meter_type, status, denial_reason, balance_id, balance_debited, resulting_balance, billable, created_at, replay_count, last_replayed_at, source_api_key_id
 FROM consumption_operations
 WHERE project_environment_id = $1
   AND status <> 'pending'
@@ -63,14 +64,22 @@ WHERE project_environment_id = $1
       OR status = $4::text
   )
   AND (
-      $5::timestamptz IS NULL
+      $5::text = ''
+      OR request_customer_id = $5::text
+  )
+  AND (
+      $6::text = ''
+      OR request_meter_key = $6::text
+  )
+  AND (
+      $7::timestamptz IS NULL
       OR (created_at, id) < (
-          $5::timestamptz,
-          $6::uuid
+          $7::timestamptz,
+          $8::uuid
       )
   )
 ORDER BY created_at DESC, id DESC
-LIMIT $7
+LIMIT $9
 `
 
 type ListConsumptionOperationsParams struct {
@@ -78,6 +87,8 @@ type ListConsumptionOperationsParams struct {
 	FromTime             pgtype.Timestamptz
 	ToTime               pgtype.Timestamptz
 	StatusFilter         string
+	CustomerFilter       string
+	MeterFilter          string
 	CursorCreatedAt      pgtype.Timestamptz
 	CursorID             pgtype.UUID
 	PageSize             int32
@@ -89,6 +100,8 @@ func (q *Queries) ListConsumptionOperations(ctx context.Context, arg ListConsump
 		arg.FromTime,
 		arg.ToTime,
 		arg.StatusFilter,
+		arg.CustomerFilter,
+		arg.MeterFilter,
 		arg.CursorCreatedAt,
 		arg.CursorID,
 		arg.PageSize,
@@ -119,6 +132,7 @@ func (q *Queries) ListConsumptionOperations(ctx context.Context, arg ListConsump
 			&i.CreatedAt,
 			&i.ReplayCount,
 			&i.LastReplayedAt,
+			&i.SourceApiKeyID,
 		); err != nil {
 			return nil, err
 		}

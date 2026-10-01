@@ -36,13 +36,13 @@ func TestBalancesPreserveIdempotencyConcurrencyAndEnvironmentIsolation(t *testin
 	ctx := t.Context()
 
 	key := newV7(t)
-	first, replayed, err := service.Add(t.Context(), fixture.sandboxID, key.String(), consumptionmodels.AddBalanceRequest{
+	first, replayed, err := service.Add(t.Context(), fixture.sandboxID, legacyBalanceSource(), key.String(), consumptionmodels.AddBalanceRequest{
 		CustomerID: fixture.customerID, MeterKey: fixture.meterKey, Quantity: 10,
 	})
 	if err != nil || replayed {
 		t.Fatalf("first addition = %#v, replayed %t, error %v", first, replayed, err)
 	}
-	replay, replayed, err := service.Add(t.Context(), fixture.sandboxID, key.String(), consumptionmodels.AddBalanceRequest{
+	replay, replayed, err := service.Add(t.Context(), fixture.sandboxID, legacyBalanceSource(), key.String(), consumptionmodels.AddBalanceRequest{
 		CustomerID: fixture.customerID, MeterKey: fixture.meterKey, Quantity: 10,
 	})
 	if err != nil || !replayed {
@@ -51,13 +51,13 @@ func TestBalancesPreserveIdempotencyConcurrencyAndEnvironmentIsolation(t *testin
 	if replay.ID != first.ID || replay.Quantity != first.Quantity || !replay.UpdatedAt.Equal(first.UpdatedAt) {
 		t.Fatalf("replay = %#v, want original result %#v", replay, first)
 	}
-	if _, _, err := service.Add(t.Context(), fixture.sandboxID, key.String(), consumptionmodels.AddBalanceRequest{
+	if _, _, err := service.Add(t.Context(), fixture.sandboxID, legacyBalanceSource(), key.String(), consumptionmodels.AddBalanceRequest{
 		CustomerID: fixture.customerID, MeterKey: fixture.meterKey, Quantity: 11,
 	}); !errors.Is(err, consumptionmodels.ErrIdempotencyKeyConflict) {
 		t.Fatalf("reused key error = %v, want conflict", err)
 	}
 	expiresAt := time.Now().Add(24 * time.Hour)
-	if _, _, err := service.Add(t.Context(), fixture.sandboxID, key.String(), consumptionmodels.AddBalanceRequest{
+	if _, _, err := service.Add(t.Context(), fixture.sandboxID, legacyBalanceSource(), key.String(), consumptionmodels.AddBalanceRequest{
 		CustomerID: fixture.customerID, MeterKey: fixture.meterKey, Quantity: 10, ExpiresAt: &expiresAt,
 	}); !errors.Is(err, consumptionmodels.ErrIdempotencyKeyConflict) {
 		t.Fatalf("reused key with changed expiration error = %v, want conflict", err)
@@ -72,7 +72,7 @@ func TestBalancesPreserveIdempotencyConcurrencyAndEnvironmentIsolation(t *testin
 		retries.Add(1)
 		go func() {
 			defer retries.Done()
-			_, wasReplayed, addErr := service.Add(ctx, fixture.sandboxID, sameKey.String(), consumptionmodels.AddBalanceRequest{
+			_, wasReplayed, addErr := service.Add(ctx, fixture.sandboxID, legacyBalanceSource(), sameKey.String(), consumptionmodels.AddBalanceRequest{
 				CustomerID: fixture.customerID, MeterKey: fixture.meterKey, Quantity: 2,
 			})
 			sameKeyErrors <- addErr
@@ -108,7 +108,7 @@ func TestBalancesPreserveIdempotencyConcurrencyAndEnvironmentIsolation(t *testin
 		additions.Add(1)
 		go func(additionKey uuid.UUID) {
 			defer additions.Done()
-			_, _, addErr := service.Add(ctx, fixture.sandboxID, additionKey.String(), consumptionmodels.AddBalanceRequest{
+			_, _, addErr := service.Add(ctx, fixture.sandboxID, legacyBalanceSource(), additionKey.String(), consumptionmodels.AddBalanceRequest{
 				CustomerID: fixture.customerID, MeterKey: fixture.meterKey, Quantity: 1,
 			})
 			errorsByAddition <- addErr
@@ -128,17 +128,29 @@ func TestBalancesPreserveIdempotencyConcurrencyAndEnvironmentIsolation(t *testin
 	if loaded.Quantity != 12+concurrentAdditions {
 		t.Fatalf("quantity = %d, want %d", loaded.Quantity, 12+concurrentAdditions)
 	}
+	firstGrantPage, nextGrantCursor, err := service.ListGrants(
+		t.Context(), fixture.sandboxID, fixture.customerID, fixture.meterKey, nil, 2,
+	)
+	if err != nil || len(firstGrantPage) != 2 || nextGrantCursor == nil {
+		t.Fatalf("first grant page = %#v, cursor %#v, error %v", firstGrantPage, nextGrantCursor, err)
+	}
+	secondGrantPage, _, err := service.ListGrants(
+		t.Context(), fixture.sandboxID, fixture.customerID, fixture.meterKey, nextGrantCursor, 2,
+	)
+	if err != nil || len(secondGrantPage) == 0 || secondGrantPage[0].ID == firstGrantPage[1].ID {
+		t.Fatalf("second grant page = %#v, error %v", secondGrantPage, err)
+	}
 
-	set, err := service.Set(t.Context(), fixture.sandboxID, fixture.customerID, fixture.meterKey, consumptionmodels.SetBalanceRequest{Quantity: 3})
+	set, err := service.Set(t.Context(), fixture.sandboxID, legacyBalanceSource(), fixture.customerID, fixture.meterKey, consumptionmodels.SetBalanceRequest{Quantity: 3})
 	if err != nil || set.Quantity != 3 {
 		t.Fatalf("set balance = %#v, error %v", set, err)
 	}
-	setAgain, err := service.Set(t.Context(), fixture.sandboxID, fixture.customerID, fixture.meterKey, consumptionmodels.SetBalanceRequest{Quantity: 3})
+	setAgain, err := service.Set(t.Context(), fixture.sandboxID, legacyBalanceSource(), fixture.customerID, fixture.meterKey, consumptionmodels.SetBalanceRequest{Quantity: 3})
 	if err != nil || setAgain.ID != set.ID || setAgain.Quantity != 3 {
 		t.Fatalf("repeat exact set = %#v, error %v", setAgain, err)
 	}
 
-	live, _, err := service.Add(t.Context(), fixture.liveID, newV7(t).String(), consumptionmodels.AddBalanceRequest{
+	live, _, err := service.Add(t.Context(), fixture.liveID, legacyBalanceSource(), newV7(t).String(), consumptionmodels.AddBalanceRequest{
 		CustomerID: fixture.customerID, MeterKey: fixture.meterKey, Quantity: 7,
 	})
 	if err != nil || live.Quantity != 7 {
@@ -162,7 +174,7 @@ func TestBalancesRequireExistingCustomersAndActiveMeters(t *testing.T) {
 		t.Fatalf("missing customer list error = %v, want subject not found", err)
 	}
 	key := newV7(t)
-	archived, _, err := service.Add(t.Context(), fixture.sandboxID, key.String(), consumptionmodels.AddBalanceRequest{
+	archived, _, err := service.Add(t.Context(), fixture.sandboxID, legacyBalanceSource(), key.String(), consumptionmodels.AddBalanceRequest{
 		CustomerID: fixture.customerID, MeterKey: fixture.archivableMeterKey, Quantity: 4,
 	})
 	if err != nil {
@@ -184,7 +196,7 @@ func TestBalancesRequireExistingCustomersAndActiveMeters(t *testing.T) {
 	if len(balances) != 0 {
 		t.Fatalf("active balances = %#v, want archived meter excluded", balances)
 	}
-	replay, replayed, err := service.Add(t.Context(), fixture.sandboxID, key.String(), consumptionmodels.AddBalanceRequest{
+	replay, replayed, err := service.Add(t.Context(), fixture.sandboxID, legacyBalanceSource(), key.String(), consumptionmodels.AddBalanceRequest{
 		CustomerID: fixture.customerID, MeterKey: fixture.archivableMeterKey, Quantity: 4,
 	})
 	if err != nil || !replayed || replay.ID != archived.ID {
@@ -267,4 +279,8 @@ func newV7(t *testing.T) uuid.UUID {
 		t.Fatalf("generate UUID v7: %v", err)
 	}
 	return value
+}
+
+func legacyBalanceSource() consumptionmodels.BalanceMutationSource {
+	return consumptionmodels.BalanceMutationSource{Type: "legacy"}
 }

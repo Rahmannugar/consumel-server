@@ -21,7 +21,7 @@ import (
 )
 
 type OperationService interface {
-	List(context.Context, uuid.UUID, *consumptionmodels.OperationListCursor, int, consumptionmodels.OperationStatus, string, string) ([]consumptionmodels.Operation, *consumptionmodels.OperationListCursor, error)
+	List(context.Context, uuid.UUID, *consumptionmodels.OperationListCursor, int, consumptionmodels.OperationListFilter, string, string) ([]consumptionmodels.Operation, *consumptionmodels.OperationListCursor, error)
 	Next(context.Context, uuid.UUID, string, time.Duration) (consumptionmodels.Operation, string, bool, error)
 }
 
@@ -166,12 +166,16 @@ func (handler *OperationHandler) List(response http.ResponseWriter, request *htt
 	}
 	operations, next, err := handler.service.List(
 		request.Context(), environmentID, cursor, limit,
-		consumptionmodels.OperationStatus(request.URL.Query().Get("status")),
+		consumptionmodels.OperationListFilter{
+			Status:     consumptionmodels.OperationStatus(request.URL.Query().Get("status")),
+			CustomerID: request.URL.Query().Get("customerId"),
+			MeterKey:   request.URL.Query().Get("meterKey"),
+		},
 		request.URL.Query().Get("from"),
 		request.URL.Query().Get("to"),
 	)
 	if errors.Is(err, consumptionmodels.ErrOperationFilterInvalid) {
-		_ = httpresponse.WriteError(response, http.StatusBadRequest, "invalid_filter", "Choose a valid outcome and a date range no longer than one year.")
+		_ = httpresponse.WriteError(response, http.StatusBadRequest, "invalid_filter", "Choose valid customer, meter, outcome, and date filters with a range no longer than one year.")
 		return
 	}
 	if err != nil {

@@ -36,8 +36,8 @@ jobs:
 
       - name: Verify generated OpenAPI document
         run: |
-          go run ./cmd/openapi
-          git diff --exit-code -- internal/openapi/openapi.json
+          go tool swag init -g main.go -d cmd/api,internal --v3.1 -o internal/openapi --outputTypes json
+          git diff --exit-code -- internal/openapi/swagger.json
 
       - name: Test
         run: go test ./...

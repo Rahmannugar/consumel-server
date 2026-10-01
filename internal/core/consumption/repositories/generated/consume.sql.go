@@ -21,7 +21,7 @@ SET
     resulting_balance = $4,
     billable = $5
 WHERE id = $1
-RETURNING id, project_environment_id, idempotency_key, request_customer_id, request_meter_key, requested_quantity, customer_id, meter_id, meter_type, status, denial_reason, balance_id, balance_debited, resulting_balance, billable, created_at, replay_count, last_replayed_at
+RETURNING id, project_environment_id, idempotency_key, request_customer_id, request_meter_key, requested_quantity, customer_id, meter_id, meter_type, status, denial_reason, balance_id, balance_debited, resulting_balance, billable, created_at, replay_count, last_replayed_at, source_api_key_id
 `
 
 type AcceptConsumptionOperationParams struct {
@@ -60,6 +60,7 @@ func (q *Queries) AcceptConsumptionOperation(ctx context.Context, arg AcceptCons
 		&i.CreatedAt,
 		&i.ReplayCount,
 		&i.LastReplayedAt,
+		&i.SourceApiKeyID,
 	)
 	return i, err
 }
@@ -135,12 +136,13 @@ INSERT INTO consumption_operations (
     requested_quantity,
     customer_id,
     meter_id,
-    meter_type
+    meter_type,
+    source_api_key_id
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT (project_environment_id, idempotency_key)
 DO NOTHING
-RETURNING id, project_environment_id, idempotency_key, request_customer_id, request_meter_key, requested_quantity, customer_id, meter_id, meter_type, status, denial_reason, balance_id, balance_debited, resulting_balance, billable, created_at, replay_count, last_replayed_at
+RETURNING id, project_environment_id, idempotency_key, request_customer_id, request_meter_key, requested_quantity, customer_id, meter_id, meter_type, status, denial_reason, balance_id, balance_debited, resulting_balance, billable, created_at, replay_count, last_replayed_at, source_api_key_id
 `
 
 type ClaimConsumptionOperationParams struct {
@@ -153,6 +155,7 @@ type ClaimConsumptionOperationParams struct {
 	CustomerID           uuid.UUID
 	MeterID              uuid.UUID
 	MeterType            string
+	SourceApiKeyID       pgtype.UUID
 }
 
 func (q *Queries) ClaimConsumptionOperation(ctx context.Context, arg ClaimConsumptionOperationParams) (ConsumptionOperation, error) {
@@ -166,6 +169,7 @@ func (q *Queries) ClaimConsumptionOperation(ctx context.Context, arg ClaimConsum
 		arg.CustomerID,
 		arg.MeterID,
 		arg.MeterType,
+		arg.SourceApiKeyID,
 	)
 	var i ConsumptionOperation
 	err := row.Scan(
@@ -187,12 +191,13 @@ func (q *Queries) ClaimConsumptionOperation(ctx context.Context, arg ClaimConsum
 		&i.CreatedAt,
 		&i.ReplayCount,
 		&i.LastReplayedAt,
+		&i.SourceApiKeyID,
 	)
 	return i, err
 }
 
 const consumptionOperationByIdempotencyKey = `-- name: ConsumptionOperationByIdempotencyKey :one
-SELECT id, project_environment_id, idempotency_key, request_customer_id, request_meter_key, requested_quantity, customer_id, meter_id, meter_type, status, denial_reason, balance_id, balance_debited, resulting_balance, billable, created_at, replay_count, last_replayed_at
+SELECT id, project_environment_id, idempotency_key, request_customer_id, request_meter_key, requested_quantity, customer_id, meter_id, meter_type, status, denial_reason, balance_id, balance_debited, resulting_balance, billable, created_at, replay_count, last_replayed_at, source_api_key_id
 FROM consumption_operations
 WHERE project_environment_id = $1
   AND idempotency_key = $2
@@ -225,6 +230,7 @@ func (q *Queries) ConsumptionOperationByIdempotencyKey(ctx context.Context, arg 
 		&i.CreatedAt,
 		&i.ReplayCount,
 		&i.LastReplayedAt,
+		&i.SourceApiKeyID,
 	)
 	return i, err
 }
@@ -237,7 +243,7 @@ SET
     balance_id = $2,
     resulting_balance = $3
 WHERE id = $1
-RETURNING id, project_environment_id, idempotency_key, request_customer_id, request_meter_key, requested_quantity, customer_id, meter_id, meter_type, status, denial_reason, balance_id, balance_debited, resulting_balance, billable, created_at, replay_count, last_replayed_at
+RETURNING id, project_environment_id, idempotency_key, request_customer_id, request_meter_key, requested_quantity, customer_id, meter_id, meter_type, status, denial_reason, balance_id, balance_debited, resulting_balance, billable, created_at, replay_count, last_replayed_at, source_api_key_id
 `
 
 type DenyConsumptionOperationParams struct {
@@ -268,6 +274,7 @@ func (q *Queries) DenyConsumptionOperation(ctx context.Context, arg DenyConsumpt
 		&i.CreatedAt,
 		&i.ReplayCount,
 		&i.LastReplayedAt,
+		&i.SourceApiKeyID,
 	)
 	return i, err
 }
@@ -341,7 +348,7 @@ const recordConsumptionReplay = `-- name: RecordConsumptionReplay :one
 UPDATE consumption_operations
 SET replay_count = replay_count + 1, last_replayed_at = now()
 WHERE id = $1
-RETURNING id, project_environment_id, idempotency_key, request_customer_id, request_meter_key, requested_quantity, customer_id, meter_id, meter_type, status, denial_reason, balance_id, balance_debited, resulting_balance, billable, created_at, replay_count, last_replayed_at
+RETURNING id, project_environment_id, idempotency_key, request_customer_id, request_meter_key, requested_quantity, customer_id, meter_id, meter_type, status, denial_reason, balance_id, balance_debited, resulting_balance, billable, created_at, replay_count, last_replayed_at, source_api_key_id
 `
 
 func (q *Queries) RecordConsumptionReplay(ctx context.Context, id uuid.UUID) (ConsumptionOperation, error) {
@@ -366,6 +373,7 @@ func (q *Queries) RecordConsumptionReplay(ctx context.Context, id uuid.UUID) (Co
 		&i.CreatedAt,
 		&i.ReplayCount,
 		&i.LastReplayedAt,
+		&i.SourceApiKeyID,
 	)
 	return i, err
 }

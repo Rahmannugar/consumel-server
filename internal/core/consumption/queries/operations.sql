@@ -10,6 +10,14 @@ WHERE project_environment_id = sqlc.arg(project_environment_id)
       OR status = sqlc.arg(status_filter)::text
   )
   AND (
+      sqlc.arg(customer_filter)::text = ''
+      OR request_customer_id = sqlc.arg(customer_filter)::text
+  )
+  AND (
+      sqlc.arg(meter_filter)::text = ''
+      OR request_meter_key = sqlc.arg(meter_filter)::text
+  )
+  AND (
       sqlc.narg(cursor_created_at)::timestamptz IS NULL
       OR (created_at, id) < (
           sqlc.narg(cursor_created_at)::timestamptz,

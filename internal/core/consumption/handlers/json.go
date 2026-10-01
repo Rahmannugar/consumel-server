@@ -1,77 +1,63 @@
 package handlers
 
 import (
-	"time"
-
 	consumptionmodels "github.com/Rahmannugar/consumel-server/internal/core/consumption/models"
+	"github.com/Rahmannugar/consumel-server/internal/openapi"
 )
 
-type balanceResponse struct {
-	ID            string     `json:"id"`
-	CustomerID    string     `json:"customerId"`
-	MeterKey      string     `json:"meterKey"`
-	Quantity      int64      `json:"quantity"`
-	NextExpiresAt *time.Time `json:"nextExpiresAt"`
-	CreatedAt     time.Time  `json:"createdAt"`
-	UpdatedAt     time.Time  `json:"updatedAt"`
-}
-
-type balanceListResponse struct {
-	Balances []balanceResponse `json:"balances"`
-}
-
-type usageEventResponse struct {
-	ID               string    `json:"id"`
-	CustomerID       string    `json:"customerId"`
-	MeterKey         string    `json:"meterKey"`
-	Quantity         int64     `json:"quantity"`
-	MeterType        string    `json:"meterType"`
-	BalanceDebited   int64     `json:"balanceDebited"`
-	RemainingBalance *int64    `json:"remainingBalance"`
-	Billable         bool      `json:"billable"`
-	CreatedAt        time.Time `json:"createdAt"`
-}
-
-type operationResponse struct {
-	ID               string     `json:"id"`
-	CustomerID       string     `json:"customerId"`
-	MeterKey         string     `json:"meterKey"`
-	Quantity         int64      `json:"quantity"`
-	MeterType        string     `json:"meterType"`
-	Status           string     `json:"status"`
-	DenialReason     *string    `json:"denialReason"`
-	BalanceDebited   int64      `json:"balanceDebited"`
-	RemainingBalance *int64     `json:"remainingBalance"`
-	Billable         bool       `json:"billable"`
-	ReplayCount      int64      `json:"replayCount"`
-	LastReplayedAt   *time.Time `json:"lastReplayedAt"`
-	CreatedAt        time.Time  `json:"createdAt"`
-}
-
-type operationListResponse struct {
-	Operations []operationResponse `json:"operations"`
-	NextCursor *string             `json:"nextCursor"`
-}
-
-func balanceJSON(balance consumptionmodels.Balance) balanceResponse {
-	return balanceResponse{
-		ID: balance.ID.String(), CustomerID: balance.CustomerID, MeterKey: balance.MeterKey,
+func balanceJSON(balance consumptionmodels.Balance) openapi.Balance {
+	return openapi.Balance{
+		ID: balance.ID, CustomerID: balance.CustomerID, MeterKey: balance.MeterKey,
 		Quantity: balance.Quantity, NextExpiresAt: balance.NextExpiresAt,
 		CreatedAt: balance.CreatedAt, UpdatedAt: balance.UpdatedAt,
 	}
 }
 
-func balanceListJSON(balances []consumptionmodels.Balance) balanceListResponse {
-	result := make([]balanceResponse, 0, len(balances))
+func balanceListJSON(balances []consumptionmodels.Balance) openapi.Balances {
+	result := make([]openapi.Balance, 0, len(balances))
 	for _, balance := range balances {
 		result = append(result, balanceJSON(balance))
 	}
-	return balanceListResponse{Balances: result}
+	return openapi.Balances{Balances: result}
 }
 
-func usageEventJSON(event consumptionmodels.UsageEvent) usageEventResponse {
-	return usageEventResponse{
-		ID: event.ID.String(), CustomerID: event.CustomerID, MeterKey: event.MeterKey,
+func entitlementGrantListJSON(grants []consumptionmodels.EntitlementGrant, next *consumptionmodels.OperationListCursor) openapi.EntitlementGrants {
+	result := make([]openapi.EntitlementGrant, 0, len(grants))
+	for _, grant := range grants {
+		result = append(result, openapi.EntitlementGrant{
+			ID: grant.ID, GrantedQuantity: grant.GrantedQuantity,
+			RemainingQuantity: grant.RemainingQuantity, Status: string(grant.Status),
+			ExpiresAt: grant.ExpiresAt, CreatedAt: grant.CreatedAt,
+		})
+	}
+	var encoded *string
+	if next != nil {
+		value := consumptionmodels.EncodeOperationCursor(*next)
+		encoded = &value
+	}
+	return openapi.EntitlementGrants{Grants: result, NextCursor: encoded}
+}
+
+func balanceActivityListJSON(activity []consumptionmodels.BalanceActivity, next *consumptionmodels.OperationListCursor) openapi.BalanceActivityList {
+	result := make([]openapi.BalanceActivity, 0, len(activity))
+	for _, item := range activity {
+		result = append(result, openapi.BalanceActivity{
+			ID: item.ID, Kind: item.Kind, QuantityChange: item.QuantityChange,
+			ResultingQuantity: item.ResultingQuantity, ExpiresAt: item.ExpiresAt,
+			SourceType: item.SourceType, OccurredAt: item.OccurredAt,
+		})
+	}
+	var encoded *string
+	if next != nil {
+		value := consumptionmodels.EncodeOperationCursor(*next)
+		encoded = &value
+	}
+	return openapi.BalanceActivityList{Activity: result, NextCursor: encoded}
+}
+
+func usageEventJSON(event consumptionmodels.UsageEvent) openapi.UsageEvent {
+	return openapi.UsageEvent{
+		ID: event.ID, CustomerID: event.CustomerID, MeterKey: event.MeterKey,
 		Quantity: event.Quantity, MeterType: string(event.MeterType),
 		BalanceDebited: event.BalanceDebited, RemainingBalance: event.RemainingBalance,
 		Billable: event.Billable, CreatedAt: event.CreatedAt,
@@ -81,8 +67,8 @@ func usageEventJSON(event consumptionmodels.UsageEvent) usageEventResponse {
 func operationListJSON(
 	operations []consumptionmodels.Operation,
 	next *consumptionmodels.OperationListCursor,
-) operationListResponse {
-	result := make([]operationResponse, 0, len(operations))
+) openapi.UsageOperations {
+	result := make([]openapi.UsageOperation, 0, len(operations))
 	for _, operation := range operations {
 		result = append(result, operationJSON(operation))
 	}
@@ -91,12 +77,12 @@ func operationListJSON(
 		value := consumptionmodels.EncodeOperationCursor(*next)
 		encoded = &value
 	}
-	return operationListResponse{Operations: result, NextCursor: encoded}
+	return openapi.UsageOperations{Operations: result, NextCursor: encoded}
 }
 
-func operationJSON(operation consumptionmodels.Operation) operationResponse {
-	return operationResponse{
-		ID: operation.ID.String(), CustomerID: operation.CustomerID,
+func operationJSON(operation consumptionmodels.Operation) openapi.UsageOperation {
+	return openapi.UsageOperation{
+		ID: operation.ID, CustomerID: operation.CustomerID,
 		MeterKey: operation.MeterKey, Quantity: operation.Quantity,
 		MeterType: string(operation.MeterType), Status: string(operation.Status),
 		DenialReason: operation.DenialReason, BalanceDebited: operation.BalanceDebited,

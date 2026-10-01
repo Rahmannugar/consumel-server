@@ -1,21 +1,20 @@
 package openapi
 
-func healthOperations() []operation {
-	return []operation{
-		{Method: "get", Path: "/health/live", Summary: "Report whether the API process is alive.", SuccessCode: "200", Success: "Health"},
-		{Method: "get", Path: "/health/ready", Summary: "Report whether PostgreSQL is reachable.", SuccessCode: "200", Success: "Health"},
-	}
-}
+// @Summary Report whether the API process is alive.
+// @Tags Health
+// @Success 200 {object} Health "Completed successfully."
+// @Failure 500 {object} ServerError "The request could not be completed."
+// @Router /health/live [get]
+func GetHealthLive() {}
 
-func healthSchemas() map[string]any {
-	return map[string]any{
-		"Health": object([]string{"status"}, map[string]any{"status": map[string]any{"type": "string", "example": "ok"}}),
-	}
-}
+// @Summary Report whether PostgreSQL is reachable.
+// @Tags Health
+// @Success 200 {object} Health "Completed successfully."
+// @Failure 500 {object} ServerError "The request could not be completed."
+// @Failure 503 {object} Health "PostgreSQL is unavailable."
+// @Router /health/ready [get]
+func GetHealthReady() {}
 
-func healthExample(name string) (map[string]any, bool) {
-	if name == "Health" {
-		return map[string]any{"status": "ok"}, true
-	}
-	return nil, false
+type Health struct {
+	Status string `json:"status" validate:"required" example:"ok"`
 }

@@ -15,7 +15,7 @@ import (
 )
 
 type ConsumeService interface {
-	Consume(context.Context, uuid.UUID, string, consumptionmodels.ConsumeRequest) (consumptionmodels.UsageEvent, bool, error)
+	Consume(context.Context, uuid.UUID, uuid.UUID, string, consumptionmodels.ConsumeRequest) (consumptionmodels.UsageEvent, bool, error)
 }
 
 type ConsumeHandler struct {
@@ -51,6 +51,7 @@ func (handler *ConsumeHandler) Consume(response http.ResponseWriter, request *ht
 	result, replayed, err := handler.service.Consume(
 		request.Context(),
 		authenticated.ProjectEnvironmentID,
+		authenticated.APIKeyID,
 		request.Header.Get(idempotencyKeyHeader),
 		input,
 	)

@@ -12,6 +12,7 @@ import (
 	authenticationservices "github.com/Rahmannugar/consumel-server/internal/authentication/services"
 	"github.com/Rahmannugar/consumel-server/internal/common/httpresponse"
 	"github.com/Rahmannugar/consumel-server/internal/infra/telemetry"
+	"github.com/Rahmannugar/consumel-server/internal/openapi"
 	projectmodels "github.com/Rahmannugar/consumel-server/internal/projects/models"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -254,7 +255,7 @@ func (handler *Handler) ActivateEnvironment(response http.ResponseWriter, reques
 		slog.String("project_id", projectID.String()),
 		slog.String("environment", string(environment)),
 	)
-	if err := httpresponse.WriteJSON(response, http.StatusOK, environmentResponse{
+	if err := httpresponse.WriteJSON(response, http.StatusOK, openapi.ProjectEnvironment{
 		ID: activated.ID.String(), Name: string(activated.Name), ActivatedAt: activated.ActivatedAt,
 	}); err != nil {
 		handler.logResponseFailure(request, "activate_environment", err)
