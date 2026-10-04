@@ -41,3 +41,28 @@ func TestCreateMeterRequestRejectsInvalidDomainValues(t *testing.T) {
 		})
 	}
 }
+
+func TestUpdateMeterRequestNormalizesEditableFields(t *testing.T) {
+	description := "  Requests processed by your public API.  "
+	request, err := (metermodels.UpdateMeterRequest{
+		Name: " API requests ", Description: &description,
+	}).Validate()
+	if err != nil {
+		t.Fatalf("validate meter update: %v", err)
+	}
+	if request.Name != "API requests" || request.Description == nil ||
+		*request.Description != "Requests processed by your public API." {
+		t.Fatalf("validated update = %#v", request)
+	}
+
+	emptyDescription := "  "
+	request, err = (metermodels.UpdateMeterRequest{
+		Name: "API requests", Description: &emptyDescription,
+	}).Validate()
+	if err != nil {
+		t.Fatalf("validate empty description: %v", err)
+	}
+	if request.Description != nil {
+		t.Fatalf("empty description = %#v, want nil", request.Description)
+	}
+}

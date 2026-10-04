@@ -96,6 +96,11 @@ func (handler *OperationHandler) Stream(response http.ResponseWriter, request *h
 		)
 		after = cursor
 		if err != nil {
+			// A canceled request is the normal end of an SSE connection, not a
+			// delivery failure that should page operators or inflate error metrics.
+			if request.Context().Err() != nil || errors.Is(err, context.Canceled) {
+				return
+			}
 			handler.stream.DeliveryFailed(request.Context())
 			handler.logger.ErrorContext(request.Context(), "Could not deliver usage event stream",
 				"event", "operations.stream.delivery_failed", "operation", "operations.stream",

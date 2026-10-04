@@ -19,7 +19,7 @@ WITH selected_environment AS MATERIALIZED (
       AND meters.description IS NOT DISTINCT FROM EXCLUDED.description
       AND meters.meter_type = EXCLUDED.meter_type
     RETURNING meters.id, meters.project_id, meters.meter_key, meters.name,
-        meters.description, meters.meter_type
+        meters.description, meters.meter_type, meters.updated_at
 ), configuration AS (
     INSERT INTO project_environment_meters (project_environment_id, meter_id)
     SELECT sqlc.arg(project_environment_id), resolved_meter.id
@@ -35,9 +35,41 @@ SELECT
     resolved_meter.description,
     resolved_meter.meter_type,
     configuration.created_at,
-    configuration.updated_at
+    resolved_meter.updated_at
 FROM resolved_meter
 JOIN configuration ON configuration.meter_id = resolved_meter.id;
+
+-- name: UpdateMeter :one
+WITH target_meter AS (
+    SELECT meters.id
+    FROM project_environment_meters
+    JOIN meters ON meters.id = project_environment_meters.meter_id
+    WHERE project_environment_meters.project_environment_id = sqlc.arg(project_environment_id)
+      AND project_environment_meters.archived_at IS NULL
+      AND meters.meter_key = sqlc.arg(meter_key)
+), updated_meter AS (
+    UPDATE meters
+    SET
+        name = sqlc.arg(name),
+        description = sqlc.narg(description),
+        updated_at = now()
+    WHERE meters.id = (SELECT id FROM target_meter)
+    RETURNING meters.id, meters.project_id, meters.meter_key, meters.name,
+        meters.description, meters.meter_type, meters.updated_at
+)
+SELECT
+    updated_meter.id,
+    updated_meter.project_id,
+    project_environment_meters.project_environment_id,
+    updated_meter.meter_key,
+    updated_meter.name,
+    updated_meter.description,
+    updated_meter.meter_type,
+    project_environment_meters.created_at,
+    updated_meter.updated_at
+FROM updated_meter
+JOIN project_environment_meters ON project_environment_meters.meter_id = updated_meter.id
+WHERE project_environment_meters.project_environment_id = sqlc.arg(project_environment_id);
 
 -- name: MeterByPublicKey :one
 SELECT
@@ -49,7 +81,7 @@ SELECT
     meters.description,
     meters.meter_type,
     project_environment_meters.created_at,
-    project_environment_meters.updated_at
+    meters.updated_at
 FROM project_environment_meters
 JOIN meters ON meters.id = project_environment_meters.meter_id
 WHERE project_environment_meters.project_environment_id = $1
@@ -66,7 +98,7 @@ SELECT
     meters.description,
     meters.meter_type,
     project_environment_meters.created_at,
-    project_environment_meters.updated_at
+    meters.updated_at
 FROM project_environment_meters
 JOIN meters ON meters.id = project_environment_meters.meter_id
 WHERE project_environment_meters.project_environment_id = sqlc.arg(project_environment_id)
@@ -109,7 +141,7 @@ SELECT
     meters.description,
     meters.meter_type,
     project_environment_meters.created_at,
-    project_environment_meters.updated_at
+    meters.updated_at
 FROM project_environment_meters
 JOIN meters ON meters.id = project_environment_meters.meter_id
 JOIN matching_meter_ids ON matching_meter_ids.id = meters.id

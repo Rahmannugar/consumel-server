@@ -4,6 +4,10 @@ The meters domain owns the definitions of what a project measures. A stable
 `meter_key` identifies one meter within a project. The key, name, optional
 description, and prepaid, postpaid, or hybrid type form one project-level
 definition so the meter cannot mean something different in Sandbox and Live.
+The key and type are immutable after creation because they identify the
+integration contract and determine consumption behavior. Name and description
+remain editable, and an edit made through either active environment updates the
+one shared project definition.
 
 PostgreSQL enforces project-level meter-key uniqueness and one activation per
 meter in each environment. Creating a matching definition in another

@@ -230,6 +230,26 @@
                 },
                 "type": "object"
             },
+            "models.UpdateMeterRequest": {
+                "properties": {
+                    "description": {
+                        "example": "Requests processed by your public API.",
+                        "maxLength": 500,
+                        "minLength": 1,
+                        "type": "string"
+                    },
+                    "name": {
+                        "example": "API requests",
+                        "maxLength": 120,
+                        "minLength": 1,
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "name"
+                ],
+                "type": "object"
+            },
             "openapi.Account": {
                 "properties": {
                     "organizations": {
@@ -5710,6 +5730,95 @@
                 "tags": [
                     "Meters"
                 ]
+            },
+            "put": {
+                "description": "Meter key and billing type remain immutable after creation. The project-level name and optional description are shared by Sandbox and Live.",
+                "parameters": [
+                    {
+                        "description": "The stable meter key supplied when the meter was created. Must match `^[a-z][a-z0-9_-]*$`.",
+                        "in": "path",
+                        "name": "meterKey",
+                        "required": true,
+                        "schema": {
+                            "maxLength": 120,
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/models.UpdateMeterRequest",
+                                "summary": "body",
+                                "description": "Editable meter definition."
+                            }
+                        }
+                    },
+                    "description": "Editable meter definition.",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.Meter"
+                                }
+                            }
+                        },
+                        "description": "Updated successfully."
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.MeterInvalid"
+                                }
+                            }
+                        },
+                        "description": "The meter request or key is invalid."
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.InvalidAPIKey"
+                                }
+                            }
+                        },
+                        "description": "The project API key is missing, malformed, revoked, replaced, or inactive."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.MeterNotFound"
+                                }
+                            }
+                        },
+                        "description": "The meter is not present in the authenticated environment."
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.MeterFailed"
+                                }
+                            }
+                        },
+                        "description": "The meter request could not be completed."
+                    }
+                },
+                "security": [
+                    {
+                        "projectAPIKey": []
+                    }
+                ],
+                "summary": "Replace the editable fields of one meter in the API key's project.",
+                "tags": [
+                    "Meters"
+                ]
             }
         },
         "/v1/projects": {
@@ -8219,6 +8328,131 @@
                     }
                 ],
                 "summary": "Return one meter from the signed-in project workspace.",
+                "tags": [
+                    "Dashboard Meters"
+                ]
+            },
+            "put": {
+                "description": "Meter key and billing type remain immutable after creation. The project-level name and optional description are shared by Sandbox and Live.",
+                "parameters": [
+                    {
+                        "description": "The immutable ID of the project selected in the dashboard.",
+                        "in": "path",
+                        "name": "projectId",
+                        "required": true,
+                        "schema": {
+                            "format": "uuid",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "The selected isolated project environment.",
+                        "in": "path",
+                        "name": "environment",
+                        "required": true,
+                        "schema": {
+                            "enum": [
+                                "sandbox",
+                                "live"
+                            ],
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "The stable meter key supplied when the meter was created. Must match `^[a-z][a-z0-9_-]*$`.",
+                        "in": "path",
+                        "name": "meterKey",
+                        "required": true,
+                        "schema": {
+                            "maxLength": 120,
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/models.UpdateMeterRequest",
+                                "summary": "body",
+                                "description": "Editable meter definition."
+                            }
+                        }
+                    },
+                    "description": "Editable meter definition.",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.Meter"
+                                }
+                            }
+                        },
+                        "description": "Updated successfully."
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.MeterInvalid"
+                                }
+                            }
+                        },
+                        "description": "The meter request or key is invalid."
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.NotAuthenticated"
+                                }
+                            }
+                        },
+                        "description": "Authentication is required."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.MeterOrEnvironmentNotFound"
+                                }
+                            }
+                        },
+                        "description": "The meter or selected project environment is unavailable."
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.MeterEnvironmentConflict"
+                                }
+                            }
+                        },
+                        "description": "The selected project environment is not active."
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.MeterFailed"
+                                }
+                            }
+                        },
+                        "description": "The meter request could not be completed."
+                    }
+                },
+                "security": [
+                    {
+                        "productionCookieSession": []
+                    },
+                    {
+                        "localCookieSession": []
+                    }
+                ],
+                "summary": "Replace the editable fields of one meter from the signed-in project workspace.",
                 "tags": [
                     "Dashboard Meters"
                 ]

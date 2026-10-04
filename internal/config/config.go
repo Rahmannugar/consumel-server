@@ -260,7 +260,7 @@ func (cfg Auth) PasswordResetURL() string {
 }
 
 func (cfg Auth) GoogleSuccessURL() string {
-	return strings.TrimRight(cfg.ClientBaseURL, "/") + "/auth/complete"
+	return strings.TrimRight(cfg.ClientBaseURL, "/") + "/dashboard"
 }
 
 func (cfg Auth) GoogleEnabled() bool {

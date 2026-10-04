@@ -42,6 +42,20 @@ func PostV1Meters() {}
 // @Router /v1/meters/{meterKey} [get]
 func GetV1MetersMeterKey() {}
 
+// @Summary Replace the editable fields of one meter in the API key's project.
+// @Description Meter key and billing type remain immutable after creation. The project-level name and optional description are shared by Sandbox and Live.
+// @Tags Meters
+// @Param meterKey path string true "The stable meter key supplied when the meter was created. Must match `^[a-z][a-z0-9_-]*$`." maxLength(120)
+// @Param body body models.UpdateMeterRequest true "Editable meter definition."
+// @Success 200 {object} Meter "Updated successfully."
+// @Failure 400 {object} MeterInvalid "The meter request or key is invalid."
+// @Failure 401 {object} InvalidAPIKey "The project API key is missing, malformed, revoked, replaced, or inactive."
+// @Failure 404 {object} MeterNotFound "The meter is not present in the authenticated environment."
+// @Failure 500 {object} MeterFailed "The meter request could not be completed."
+// @Security projectAPIKey
+// @Router /v1/meters/{meterKey} [put]
+func PutV1MetersMeterKey() {}
+
 // @Summary List meters in the signed-in project workspace.
 // @Tags Dashboard Meters
 // @Param projectId path string true "The immutable ID of the project selected in the dashboard." format(uuid)
@@ -91,6 +105,24 @@ func PostV1ProjectsProjectIdEnvironmentsEnvironmentMeters() {}
 // @Security localCookieSession
 // @Router /v1/projects/{projectId}/environments/{environment}/meters/{meterKey} [get]
 func GetV1ProjectsProjectIdEnvironmentsEnvironmentMetersMeterKey() {}
+
+// @Summary Replace the editable fields of one meter from the signed-in project workspace.
+// @Description Meter key and billing type remain immutable after creation. The project-level name and optional description are shared by Sandbox and Live.
+// @Tags Dashboard Meters
+// @Param projectId path string true "The immutable ID of the project selected in the dashboard." format(uuid)
+// @Param environment path string true "The selected isolated project environment." enums(sandbox, live)
+// @Param meterKey path string true "The stable meter key supplied when the meter was created. Must match `^[a-z][a-z0-9_-]*$`." maxLength(120)
+// @Param body body models.UpdateMeterRequest true "Editable meter definition."
+// @Success 200 {object} Meter "Updated successfully."
+// @Failure 400 {object} MeterInvalid "The meter request or key is invalid."
+// @Failure 401 {object} NotAuthenticated "Authentication is required."
+// @Failure 404 {object} MeterOrEnvironmentNotFound "The meter or selected project environment is unavailable."
+// @Failure 409 {object} MeterEnvironmentConflict "The selected project environment is not active."
+// @Failure 500 {object} MeterFailed "The meter request could not be completed."
+// @Security productionCookieSession
+// @Security localCookieSession
+// @Router /v1/projects/{projectId}/environments/{environment}/meters/{meterKey} [put]
+func PutV1ProjectsProjectIdEnvironmentsEnvironmentMetersMeterKey() {}
 
 type Meter struct {
 	CreatedAt   time.Time `json:"createdAt" validate:"required" example:"2026-09-28T12:00:00Z" format:"date-time"`

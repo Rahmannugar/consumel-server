@@ -52,15 +52,35 @@ func TestMetersShareOneProjectDefinitionAcrossEnvironments(t *testing.T) {
 	if liveMeter.ID != sandboxMeter.ID {
 		t.Fatalf("Live identity = %s, want project identity %s", liveMeter.ID, sandboxMeter.ID)
 	}
+	updatedDescription := "Requests processed by the public API."
+	updated, err := service.Update(
+		t.Context(), sandbox, "api_calls",
+		metermodels.UpdateMeterRequest{Name: "API requests", Description: &updatedDescription},
+	)
+	if err != nil {
+		t.Fatalf("update shared meter definition: %v", err)
+	}
+	if updated.Name != "API requests" || updated.Description == nil ||
+		*updated.Description != updatedDescription || updated.Type != metermodels.MeterTypePostpaid {
+		t.Fatalf("updated meter = %#v", updated)
+	}
+	liveUpdated, err := service.Get(t.Context(), live, "api_calls")
+	if err != nil {
+		t.Fatalf("get updated Live meter: %v", err)
+	}
+	if liveUpdated.Name != updated.Name || liveUpdated.Description == nil ||
+		*liveUpdated.Description != updatedDescription || !liveUpdated.UpdatedAt.Equal(updated.UpdatedAt) {
+		t.Fatalf("Live shared definition = %#v, want update %#v", liveUpdated, updated)
+	}
 	loaded, err := service.Get(t.Context(), sandbox, "api_calls")
 	if err != nil {
 		t.Fatalf("get Sandbox meter: %v", err)
 	}
-	if loaded.Name != "API calls" || loaded.Type != metermodels.MeterTypePostpaid {
+	if loaded.Name != "API requests" || loaded.Type != metermodels.MeterTypePostpaid {
 		t.Fatalf("project meter definition = %#v", loaded)
 	}
 	if _, err := service.Create(t.Context(), live, metermodels.CreateMeterRequest{
-		MeterKey: "api_calls", Name: "API calls", Description: &description,
+		MeterKey: "api_calls", Name: "API requests", Description: &updatedDescription,
 		Type: metermodels.MeterTypePostpaid,
 	}); !errors.Is(err, metermodels.ErrMeterExists) {
 		t.Fatalf("duplicate Live meter error = %v, want environment conflict", err)
@@ -109,6 +129,12 @@ func TestMeterListsUseStableCursorAndExcludeArchivedConfigurations(t *testing.T)
 	}
 	if _, err := service.Get(t.Context(), sandbox, created[0].MeterKey); !errors.Is(err, metermodels.ErrMeterNotFound) {
 		t.Fatalf("archived meter get error = %v, want not found", err)
+	}
+	if _, err := service.Update(
+		t.Context(), sandbox, created[0].MeterKey,
+		metermodels.UpdateMeterRequest{Name: "Archived meter"},
+	); !errors.Is(err, metermodels.ErrMeterNotFound) {
+		t.Fatalf("archived meter update error = %v, want not found", err)
 	}
 	remaining, _, err := service.List(t.Context(), sandbox, nil, 10, "")
 	if err != nil {

@@ -45,6 +45,11 @@ type CreateMeterRequest struct {
 	Type        MeterType `json:"type" validate:"required" example:"postpaid"`
 }
 
+type UpdateMeterRequest struct {
+	Name        string  `json:"name" validate:"required,min=1,max=120" example:"API requests"`
+	Description *string `json:"description" validate:"omitempty,min=1,max=500" example:"Requests processed by your public API."`
+}
+
 type Meter struct {
 	ID                   uuid.UUID
 	ProjectID            uuid.UUID
@@ -79,6 +84,24 @@ func (request CreateMeterRequest) Validate() (CreateMeterRequest, error) {
 			request.Description = nil
 		} else if utf8.RuneCountInString(description) > MaximumMeterDescriptionLength {
 			return CreateMeterRequest{}, ErrMeterDescriptionInvalid
+		} else {
+			request.Description = &description
+		}
+	}
+	return request, nil
+}
+
+func (request UpdateMeterRequest) Validate() (UpdateMeterRequest, error) {
+	request.Name = strings.TrimSpace(request.Name)
+	if request.Name == "" || utf8.RuneCountInString(request.Name) > MaximumMeterNameLength {
+		return UpdateMeterRequest{}, ErrMeterNameInvalid
+	}
+	if request.Description != nil {
+		description := strings.TrimSpace(*request.Description)
+		if description == "" {
+			request.Description = nil
+		} else if utf8.RuneCountInString(description) > MaximumMeterDescriptionLength {
+			return UpdateMeterRequest{}, ErrMeterDescriptionInvalid
 		} else {
 			request.Description = &description
 		}

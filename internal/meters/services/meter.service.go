@@ -18,8 +18,26 @@ const (
 
 type MeterRepository interface {
 	Create(context.Context, metermodels.Meter) (metermodels.Meter, error)
+	Update(context.Context, uuid.UUID, string, metermodels.UpdateMeterRequest) (metermodels.Meter, error)
 	Get(context.Context, uuid.UUID, string) (metermodels.Meter, error)
 	List(context.Context, uuid.UUID, *metermodels.ListCursor, int, string) ([]metermodels.Meter, *metermodels.ListCursor, error)
+}
+
+func (service *MeterService) Update(
+	ctx context.Context,
+	projectEnvironmentID uuid.UUID,
+	meterKey string,
+	request metermodels.UpdateMeterRequest,
+) (metermodels.Meter, error) {
+	meterKey, err := validateMeterKey(meterKey)
+	if err != nil {
+		return metermodels.Meter{}, err
+	}
+	request, err = request.Validate()
+	if err != nil {
+		return metermodels.Meter{}, err
+	}
+	return service.repository.Update(ctx, projectEnvironmentID, meterKey, request)
 }
 
 type MeterService struct {

@@ -25,6 +25,7 @@ const maximumMeterRequestBytes = 16 << 10
 
 type MeterService interface {
 	Create(context.Context, uuid.UUID, metermodels.CreateMeterRequest) (metermodels.Meter, error)
+	Update(context.Context, uuid.UUID, string, metermodels.UpdateMeterRequest) (metermodels.Meter, error)
 	Get(context.Context, uuid.UUID, string) (metermodels.Meter, error)
 	List(context.Context, uuid.UUID, *metermodels.ListCursor, int, string) ([]metermodels.Meter, *metermodels.ListCursor, error)
 }
@@ -63,6 +64,29 @@ func registerMeterRoutes(router *gin.RouterGroup, handler *Handler) {
 	router.POST("", meterTelemetry("meters.create", "meters.created", "Meter created"), gin.WrapF(handler.Create))
 	router.GET("", meterTelemetry("meters.list", "meters.listed", "Meters loaded"), gin.WrapF(handler.List))
 	router.GET("/:meterKey", meterPathParameter(), meterTelemetry("meters.get", "meters.loaded", "Meter loaded"), gin.WrapF(handler.Get))
+	router.PUT("/:meterKey", meterPathParameter(), meterTelemetry("meters.update", "meters.updated", "Meter updated"), gin.WrapF(handler.Update))
+}
+
+func (handler *Handler) Update(response http.ResponseWriter, request *http.Request) {
+	environmentID, ok := handler.environmentID(response, request)
+	if !ok {
+		return
+	}
+	var input metermodels.UpdateMeterRequest
+	if !decodeMeterRequest(response, request, &input) {
+		return
+	}
+	meter, err := handler.service.Update(
+		request.Context(), environmentID, request.PathValue("meterKey"), input,
+	)
+	if err != nil {
+		handler.writeMeterError(response, request, err)
+		return
+	}
+	handler.addLogContext(request, meter)
+	if err := httpresponse.WriteJSON(response, http.StatusOK, meterJSON(meter)); err != nil {
+		handler.logResponseFailure(request, err)
+	}
 }
 
 func (handler *Handler) Create(response http.ResponseWriter, request *http.Request) {

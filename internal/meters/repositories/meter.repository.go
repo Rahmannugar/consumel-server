@@ -51,6 +51,32 @@ func (repository *MeterRepository) Create(
 	}, nil
 }
 
+func (repository *MeterRepository) Update(
+	ctx context.Context,
+	projectEnvironmentID uuid.UUID,
+	meterKey string,
+	request metermodels.UpdateMeterRequest,
+) (metermodels.Meter, error) {
+	row, err := repository.queries.UpdateMeter(ctx, meterdb.UpdateMeterParams{
+		ProjectEnvironmentID: projectEnvironmentID,
+		MeterKey:             meterKey,
+		Name:                 request.Name,
+		Description:          request.Description,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return metermodels.Meter{}, metermodels.ErrMeterNotFound
+	}
+	if err != nil {
+		return metermodels.Meter{}, fmt.Errorf("update meter: %w", err)
+	}
+	return metermodels.Meter{
+		ID: row.ID, ProjectID: row.ProjectID, ProjectEnvironmentID: row.ProjectEnvironmentID,
+		MeterKey: row.MeterKey, Name: row.Name, Description: row.Description,
+		Type: metermodels.MeterType(row.MeterType), CreatedAt: row.CreatedAt.Time,
+		UpdatedAt: row.UpdatedAt.Time,
+	}, nil
+}
+
 func (repository *MeterRepository) Get(
 	ctx context.Context,
 	projectEnvironmentID uuid.UUID,
