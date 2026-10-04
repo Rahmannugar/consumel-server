@@ -91,3 +91,25 @@ func operationJSON(operation consumptionmodels.Operation) openapi.UsageOperation
 		CreatedAt: operation.CreatedAt,
 	}
 }
+
+func analyticsJSON(analytics consumptionmodels.Analytics) openapi.UsageAnalytics {
+	buckets := make([]openapi.UsageAnalyticsBucket, 0, len(analytics.Buckets))
+	for _, bucket := range analytics.Buckets {
+		buckets = append(buckets, openapi.UsageAnalyticsBucket{
+			Start: bucket.Start, AcceptedOperations: bucket.AcceptedOperations,
+			DeniedOperations: bucket.DeniedOperations, AcceptedQuantity: bucket.AcceptedQuantity,
+			DeniedQuantity: bucket.DeniedQuantity, BillableOperations: bucket.BillableOperations,
+		})
+	}
+	return openapi.UsageAnalytics{
+		From: analytics.From, To: analytics.To, Interval: string(analytics.Interval),
+		Summary: openapi.UsageAnalyticsSummary{
+			AcceptedOperations: analytics.Summary.AcceptedOperations,
+			DeniedOperations:   analytics.Summary.DeniedOperations,
+			AcceptedQuantity:   analytics.Summary.AcceptedQuantity,
+			DeniedQuantity:     analytics.Summary.DeniedQuantity,
+			BillableOperations: analytics.Summary.BillableOperations,
+		},
+		Buckets: buckets,
+	}
+}

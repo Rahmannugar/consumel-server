@@ -47,9 +47,17 @@ transport, then reloads each authoritative operation from PostgreSQL before
 delivery. Reconnection invalidates the REST history so Redis retention cannot
 make the dashboard's durable history incomplete.
 
+Bounded analytics reads aggregate finalized operations directly from PostgreSQL.
+They return continuous UTC hourly or daily buckets and may be scoped to one
+customer, one meter, or their intersection. Hourly ranges are limited to 31
+days and daily ranges to one year. The read path is downstream of Consume and
+never adds aggregation work to the atomic write transaction. A durable rollup
+pipeline remains a later scale decision that must preserve this authoritative
+contract and support replay and backfill before replacing raw aggregation.
+
 This domain currently implements the atomic quantity operation and the balance
 behavior associated with prepaid, postpaid, and hybrid meters. It does not
-claim to complete Consumel's broader metering product. Aggregation, recurring
+claim to complete Consumel's broader metering product. Recurring
 allowance policies, scheduled resets, rollover, customer overrides, pricing tiers,
 minimum commitments, billing periods, stable pricing snapshots,
 reconciliation, provider activity, and background-job visibility remain owned

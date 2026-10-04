@@ -5,29 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"os"
 	"time"
 
-	"github.com/Rahmannugar/authlier"
-	"github.com/Rahmannugar/authlier/emailverification"
-	"github.com/Rahmannugar/authlier/googleoauth"
-	authlierpostgres "github.com/Rahmannugar/authlier/storage/postgres"
-	authlierredis "github.com/Rahmannugar/authlier/storage/redis"
-	consumelauthentication "github.com/Rahmannugar/consumel-server/internal/authentication"
-	authenticationrepositories "github.com/Rahmannugar/consumel-server/internal/authentication/repositories"
-	authenticationservices "github.com/Rahmannugar/consumel-server/internal/authentication/services"
 	"github.com/Rahmannugar/consumel-server/internal/config"
 	consumptionrepositories "github.com/Rahmannugar/consumel-server/internal/core/consumption/repositories"
 	consumptionservices "github.com/Rahmannugar/consumel-server/internal/core/consumption/services"
 	customerrepositories "github.com/Rahmannugar/consumel-server/internal/customers/repositories"
 	customerservices "github.com/Rahmannugar/consumel-server/internal/customers/services"
-	infraauthentication "github.com/Rahmannugar/consumel-server/internal/infra/authentication"
 	"github.com/Rahmannugar/consumel-server/internal/infra/cache"
 	"github.com/Rahmannugar/consumel-server/internal/infra/database"
 	"github.com/Rahmannugar/consumel-server/internal/infra/emaildelivery"
 	"github.com/Rahmannugar/consumel-server/internal/infra/events"
-	"github.com/Rahmannugar/consumel-server/internal/infra/ratelimit"
 	"github.com/Rahmannugar/consumel-server/internal/infra/telemetry"
 	meterrepositories "github.com/Rahmannugar/consumel-server/internal/meters/repositories"
 	meterservices "github.com/Rahmannugar/consumel-server/internal/meters/services"
@@ -35,17 +24,10 @@ import (
 	onboardingservices "github.com/Rahmannugar/consumel-server/internal/onboarding/services"
 	projectrepositories "github.com/Rahmannugar/consumel-server/internal/projects/repositories"
 	projectservices "github.com/Rahmannugar/consumel-server/internal/projects/services"
-	userrepositories "github.com/Rahmannugar/consumel-server/internal/users/repositories"
-	userservices "github.com/Rahmannugar/consumel-server/internal/users/services"
 )
 
 const (
-	databaseTimeout       = 10 * time.Second
-	authMigrationTimeout  = 30 * time.Second
-	googleTimeout         = 10 * time.Second
-	sessionLifetime       = 7 * 24 * time.Hour
-	sessionCacheTTL       = time.Hour
-	maximumActiveSessions = 3
+	databaseTimeout = 10 * time.Second
 	// apiPoolDefault caps the API's client-side database pool.
 	apiPoolDefault int32 = 20
 )
@@ -109,20 +91,6 @@ func run() (runError error) {
 	}
 	defer databasePool.Close()
 
-	authlierPostgres, err := authlierpostgres.New(databasePool, authlierpostgres.Config{})
-	if err != nil {
-		return fmt.Errorf("configure Authlier PostgreSQL storage: %w", err)
-	}
-	authMigrationContext, cancelAuthMigration := context.WithTimeout(
-		context.Background(),
-		authMigrationTimeout,
-	)
-	err = authlierPostgres.Migrate(authMigrationContext)
-	cancelAuthMigration()
-	if err != nil {
-		return fmt.Errorf("migrate Authlier PostgreSQL storage: %w", err)
-	}
-
 	redisClient, err := cache.Open(cfg.Redis.URL)
 	if err != nil {
 		return fmt.Errorf("connect Redis: %w", err)
@@ -133,132 +101,26 @@ func run() (runError error) {
 		}
 	}()
 
-	redisSessionCache, err := authlierredis.NewSessionCache(redisClient, "consumel:auth")
-	if err != nil {
-		return fmt.Errorf("configure Authlier session cache: %w", err)
-	}
-	sessionCache, err := infraauthentication.NewJitteredSessionCache(redisSessionCache)
-	if err != nil {
-		return fmt.Errorf("configure jittered session cache: %w", err)
-	}
-	emailVerificationStore, err := infraauthentication.NewRedisEmailVerificationStore(
-		databasePool,
-		redisClient,
-		cfg.Auth.OTPHMACSecret,
-		"consumel:auth:email-verification",
-	)
-	if err != nil {
-		return fmt.Errorf("configure Redis email verification storage: %w", err)
-	}
-	authlierDatabase, err := infraauthentication.NewAuthlierDatabase(
-		authlierPostgres,
-		databasePool,
-		sessionCache,
-		emailVerificationStore,
-		maximumActiveSessions,
-		logger,
-	)
-	if err != nil {
-		return fmt.Errorf("configure Consumel Authlier storage policy: %w", err)
-	}
-	distributedLimiter, err := ratelimit.NewRedisLimiter(
-		redisClient,
-		cfg.Auth.OTPHMACSecret,
-		"consumel:rate-limit",
-	)
-	if err != nil {
-		return fmt.Errorf("configure distributed authentication rate limiter: %w", err)
-	}
-	passwordAttemptGuard := infraauthentication.NewPasswordAttemptGuard(distributedLimiter)
-	otpAttemptGuard := infraauthentication.NewOTPAttemptGuard(distributedLimiter)
-	passwordResetAttemptGuard := infraauthentication.NewPasswordResetAttemptGuard(distributedLimiter)
-
 	emailQueue, err := emaildelivery.NewQueue(databasePool, cfg.Auth.OTPHMACSecret)
 	if err != nil {
 		return fmt.Errorf("configure email delivery queue: %w", err)
 	}
-	var googleProvider googleoauth.Provider
-	if cfg.Auth.GoogleEnabled() {
-		googleProvider, err = googleoauth.NewGoogleProvider(googleoauth.GoogleProviderConfig{
-			ClientID:     cfg.Auth.GoogleClientID,
-			ClientSecret: cfg.Auth.GoogleClientSecret,
-			HTTPClient:   telemetry.NewHTTPClient(googleTimeout),
-		})
-		if err != nil {
-			return fmt.Errorf("configure Google identity provider: %w", err)
-		}
-		googleProvider = infraauthentication.NewObservedGoogleProvider(googleProvider, logger)
-	}
-
-	auth, err := authlier.New(authlier.Config{
-		AppName:         "Consumel",
-		BaseURL:         cfg.Auth.BaseURL,
-		BasePath:        "/auth",
-		AccountBasePath: "/account",
-		Database:        authlierDatabase,
-		TrustedOrigins:  cfg.Auth.TrustedOrigins,
-		TrustedProxies:  cfg.Auth.TrustedProxies,
-		EmailAndPassword: authlier.EmailAndPasswordConfig{
-			Enabled:                  true,
-			RequireEmailVerification: true,
-			ValidatePassword:         consumelauthentication.ValidatePassword,
-			AttemptGuard:             passwordAttemptGuard,
-		},
-		EmailVerification: authlier.EmailVerificationConfig{
-			Enabled:                     true,
-			Delivery:                    emailverification.DeliveryMethodOTP,
-			OTPSecret:                   cfg.Auth.OTPHMACSecret,
-			Sender:                      emailQueue,
-			SendOnSignUp:                true,
-			SendOnSignIn:                true,
-			AutoSignInAfterVerification: true,
-			AttemptGuard:                otpAttemptGuard,
-		},
-		PasswordReset: authlier.PasswordResetConfig{
-			Enabled:      true,
-			ResetURL:     cfg.Auth.PasswordResetURL(),
-			Sender:       emailQueue,
-			AttemptGuard: passwordResetAttemptGuard,
-		},
-		Session: authlier.SessionConfig{
-			Mode:     authlier.SessionModeCookie,
-			Lifetime: sessionLifetime,
-			Cache:    sessionCache,
-			CacheTTL: sessionCacheTTL,
-			Cookie: authlier.CookieConfig{
-				Name:     cfg.SessionCookieName(),
-				Path:     "/",
-				SameSite: http.SameSiteLaxMode,
-			},
-		},
-		Google: authlier.GoogleConfig{
-			Enabled:            cfg.Auth.GoogleEnabled(),
-			ClientID:           cfg.Auth.GoogleClientID,
-			ClientSecret:       cfg.Auth.GoogleClientSecret,
-			SuccessRedirectURL: cfg.Auth.GoogleSuccessURL(),
-			Provider:           googleProvider,
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("configure Authlier: %w", err)
-	}
-
-	userRepository := userrepositories.NewUserRepository(databasePool)
-	userService := userservices.NewUserService(userRepository)
-	tenantService := authenticationservices.NewAuthenticatedTenantService(
-		infraauthentication.NewAuthlierSessionResolver(auth),
-		userService,
-		authenticationrepositories.NewAccountContextRepository(databasePool),
+	authentication, err := newAuthenticationComponents(
+		cfg,
+		databasePool,
+		redisClient,
+		emailQueue,
+		logger,
 	)
+	if err != nil {
+		return err
+	}
 	onboardingService := onboardingservices.New(
 		onboardingrepositories.New(databasePool, emailQueue),
 		cfg.Auth.ClientBaseURL,
 	)
 	projectService := projectservices.NewProjectManagementService(
 		projectrepositories.NewProjectRepository(databasePool),
-	)
-	apiKeyAuthenticator := authenticationservices.NewAPIKeyAuthenticator(
-		authenticationrepositories.NewAPIKeyContextRepository(databasePool),
 	)
 	customerService := customerservices.NewCustomerService(
 		customerrepositories.NewCustomerRepository(databasePool),
@@ -276,13 +138,14 @@ func run() (runError error) {
 		consumptionrepositories.NewOperationRepository(databasePool),
 		events.NewOperationSource(redisClient),
 	)
+	analyticsService := consumptionservices.NewAnalyticsService(
+		consumptionrepositories.NewAnalyticsRepository(databasePool),
+	)
 	router, err := newRouter(
 		cfg,
 		telemetryRuntime,
 		databasePool,
-		auth.Handler(),
-		tenantService,
-		apiKeyAuthenticator,
+		authentication,
 		onboardingService,
 		projectService,
 		customerService,
@@ -290,7 +153,7 @@ func run() (runError error) {
 		balanceService,
 		consumeService,
 		operationService,
-		distributedLimiter,
+		analyticsService,
 		logger,
 	)
 	if err != nil {

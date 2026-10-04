@@ -316,6 +316,60 @@
                 ],
                 "type": "object"
             },
+            "openapi.AnalyticsFailed": {
+                "properties": {
+                    "error": {
+                        "$ref": "#/components/schemas/openapi.AnalyticsFailedError"
+                    }
+                },
+                "required": [
+                    "error"
+                ],
+                "type": "object"
+            },
+            "openapi.AnalyticsFailedError": {
+                "properties": {
+                    "code": {
+                        "example": "analytics_failed",
+                        "type": "string"
+                    },
+                    "message": {
+                        "example": "Consumel could not load analytics. Try again shortly.",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "code"
+                ],
+                "type": "object"
+            },
+            "openapi.AnalyticsInvalid": {
+                "properties": {
+                    "error": {
+                        "$ref": "#/components/schemas/openapi.AnalyticsInvalidError"
+                    }
+                },
+                "required": [
+                    "error"
+                ],
+                "type": "object"
+            },
+            "openapi.AnalyticsInvalidError": {
+                "properties": {
+                    "code": {
+                        "example": "invalid_filter",
+                        "type": "string"
+                    },
+                    "message": {
+                        "example": "Choose valid customer, meter, interval, and date filters. Hourly ranges may span 31 days; daily ranges may span one year.",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "code"
+                ],
+                "type": "object"
+            },
             "openapi.AuthorizationURL": {
                 "properties": {
                     "url": {
@@ -2760,6 +2814,136 @@
                 ],
                 "type": "object"
             },
+            "openapi.UsageAnalytics": {
+                "properties": {
+                    "buckets": {
+                        "items": {
+                            "$ref": "#/components/schemas/openapi.UsageAnalyticsBucket"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    },
+                    "from": {
+                        "example": "2026-09-01T00:00:00Z",
+                        "format": "date-time",
+                        "type": "string"
+                    },
+                    "interval": {
+                        "enum": [
+                            "hour",
+                            "day"
+                        ],
+                        "example": "day",
+                        "type": "string"
+                    },
+                    "summary": {
+                        "$ref": "#/components/schemas/openapi.UsageAnalyticsSummary"
+                    },
+                    "to": {
+                        "example": "2026-10-01T00:00:00Z",
+                        "format": "date-time",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "buckets",
+                    "from",
+                    "interval",
+                    "summary",
+                    "to"
+                ],
+                "type": "object"
+            },
+            "openapi.UsageAnalyticsBucket": {
+                "properties": {
+                    "acceptedOperations": {
+                        "example": 42,
+                        "format": "int64",
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "acceptedQuantity": {
+                        "example": 6200,
+                        "format": "int64",
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "billableOperations": {
+                        "example": 35,
+                        "format": "int64",
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "deniedOperations": {
+                        "example": 2,
+                        "format": "int64",
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "deniedQuantity": {
+                        "example": 250,
+                        "format": "int64",
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "start": {
+                        "example": "2026-09-28T00:00:00Z",
+                        "format": "date-time",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "acceptedOperations",
+                    "acceptedQuantity",
+                    "billableOperations",
+                    "deniedOperations",
+                    "deniedQuantity",
+                    "start"
+                ],
+                "type": "object"
+            },
+            "openapi.UsageAnalyticsSummary": {
+                "properties": {
+                    "acceptedOperations": {
+                        "example": 950,
+                        "format": "int64",
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "acceptedQuantity": {
+                        "example": 128400,
+                        "format": "int64",
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "billableOperations": {
+                        "example": 720,
+                        "format": "int64",
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "deniedOperations": {
+                        "example": 12,
+                        "format": "int64",
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "deniedQuantity": {
+                        "example": 1800,
+                        "format": "int64",
+                        "minimum": 0,
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "acceptedOperations",
+                    "acceptedQuantity",
+                    "billableOperations",
+                    "deniedOperations",
+                    "deniedQuantity"
+                ],
+                "type": "object"
+            },
             "openapi.UsageEvent": {
                 "properties": {
                     "balanceDebited": {
@@ -4446,6 +4630,114 @@
                 ]
             }
         },
+        "/v1/analytics": {
+            "get": {
+                "parameters": [
+                    {
+                        "description": "Inclusive RFC 3339 start time.",
+                        "in": "query",
+                        "name": "from",
+                        "required": true,
+                        "schema": {
+                            "format": "date-time",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Exclusive RFC 3339 end time.",
+                        "in": "query",
+                        "name": "to",
+                        "required": true,
+                        "schema": {
+                            "format": "date-time",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "UTC aggregation interval. Hourly ranges may span 31 days; daily ranges may span one year.",
+                        "in": "query",
+                        "name": "interval",
+                        "required": true,
+                        "schema": {
+                            "enum": [
+                                "hour",
+                                "day"
+                            ],
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Aggregate one exact customer identifier.",
+                        "in": "query",
+                        "name": "customerId",
+                        "schema": {
+                            "maxLength": 255,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Aggregate one exact meter key. Must match `^[a-z][a-z0-9_-]*$`.",
+                        "in": "query",
+                        "name": "meterKey",
+                        "schema": {
+                            "maxLength": 120,
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.UsageAnalytics"
+                                }
+                            }
+                        },
+                        "description": "Completed successfully. Missing UTC buckets are returned with zero values."
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.AnalyticsInvalid"
+                                }
+                            }
+                        },
+                        "description": "The analytics filters are invalid."
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.InvalidAPIKey"
+                                }
+                            }
+                        },
+                        "description": "The project API key is missing, malformed, revoked, replaced, or inactive."
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.AnalyticsFailed"
+                                }
+                            }
+                        },
+                        "description": "Analytics could not be loaded."
+                    }
+                },
+                "security": [
+                    {
+                        "projectAPIKey": []
+                    }
+                ],
+                "summary": "Return bounded usage analytics for the API key's project environment.",
+                "tags": [
+                    "Analytics"
+                ]
+            }
+        },
         "/v1/balances": {
             "post": {
                 "parameters": [
@@ -6038,6 +6330,160 @@
                 "summary": "Activate the selected project environment explicitly.",
                 "tags": [
                     "Projects"
+                ]
+            }
+        },
+        "/v1/projects/{projectId}/environments/{environment}/analytics": {
+            "get": {
+                "parameters": [
+                    {
+                        "description": "The immutable ID of the project selected in the dashboard.",
+                        "in": "path",
+                        "name": "projectId",
+                        "required": true,
+                        "schema": {
+                            "format": "uuid",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "The selected isolated project environment.",
+                        "in": "path",
+                        "name": "environment",
+                        "required": true,
+                        "schema": {
+                            "enum": [
+                                "sandbox",
+                                "live"
+                            ],
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Inclusive RFC 3339 start time.",
+                        "in": "query",
+                        "name": "from",
+                        "required": true,
+                        "schema": {
+                            "format": "date-time",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Exclusive RFC 3339 end time.",
+                        "in": "query",
+                        "name": "to",
+                        "required": true,
+                        "schema": {
+                            "format": "date-time",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "UTC aggregation interval. Hourly ranges may span 31 days; daily ranges may span one year.",
+                        "in": "query",
+                        "name": "interval",
+                        "required": true,
+                        "schema": {
+                            "enum": [
+                                "hour",
+                                "day"
+                            ],
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Aggregate one exact customer identifier.",
+                        "in": "query",
+                        "name": "customerId",
+                        "schema": {
+                            "maxLength": 255,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Aggregate one exact meter key. Must match `^[a-z][a-z0-9_-]*$`.",
+                        "in": "query",
+                        "name": "meterKey",
+                        "schema": {
+                            "maxLength": 120,
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.UsageAnalytics"
+                                }
+                            }
+                        },
+                        "description": "Completed successfully. Missing UTC buckets are returned with zero values."
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.AnalyticsInvalid"
+                                }
+                            }
+                        },
+                        "description": "The analytics filters are invalid."
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.NotAuthenticated"
+                                }
+                            }
+                        },
+                        "description": "Authentication is required."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.OperationEnvironmentNotFound"
+                                }
+                            }
+                        },
+                        "description": "The selected project environment is unavailable."
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.OperationEnvironmentConflict"
+                                }
+                            }
+                        },
+                        "description": "The selected project environment is not active."
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.AnalyticsFailed"
+                                }
+                            }
+                        },
+                        "description": "Analytics could not be loaded."
+                    }
+                },
+                "security": [
+                    {
+                        "productionCookieSession": []
+                    },
+                    {
+                        "localCookieSession": []
+                    }
+                ],
+                "summary": "Return bounded usage analytics from the signed-in project workspace.",
+                "tags": [
+                    "Dashboard Analytics"
                 ]
             }
         },

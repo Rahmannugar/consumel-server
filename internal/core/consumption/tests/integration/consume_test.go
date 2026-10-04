@@ -26,6 +26,7 @@ func TestConsumeAppliesMeterBehaviorAndDurableIdempotency(t *testing.T) {
 	balanceService := consumptionservices.NewBalanceService(consumptionrepositories.NewBalanceRepository(pool))
 	consumeService := consumptionservices.NewConsumeService(consumptionrepositories.NewConsumeRepository(pool))
 	operationService := consumptionservices.NewOperationService(consumptionrepositories.NewOperationRepository(pool), nil)
+	analyticsService := consumptionservices.NewAnalyticsService(consumptionrepositories.NewAnalyticsRepository(pool))
 	addBalance(t, balanceService, fixture.sandboxID, fixture.customerID, fixture.meterKey, 10)
 
 	key := newV7(t)
@@ -126,6 +127,22 @@ func TestConsumeAppliesMeterBehaviorAndDurableIdempotency(t *testing.T) {
 	}
 	if accepted != 3 || denied != 1 || outbox != 5 || createdCustomer != 1 || replayedOperations != 2 {
 		t.Fatalf("accepted %d, denied %d, outbox %d, created customer %d, replayed operations %d", accepted, denied, outbox, createdCustomer, replayedOperations)
+	}
+	analyticsNow := time.Now().UTC()
+	analytics, err := analyticsService.Get(
+		t.Context(), fixture.sandboxID,
+		consumptionmodels.AnalyticsFilter{
+			Interval: consumptionmodels.AnalyticsIntervalHour, CustomerID: fixture.customerID,
+		},
+		analyticsNow.Add(-time.Hour).Format(time.RFC3339),
+		analyticsNow.Add(time.Minute).Format(time.RFC3339),
+	)
+	if err != nil {
+		t.Fatalf("get customer analytics: %v", err)
+	}
+	if analytics.Summary.AcceptedOperations != 2 || analytics.Summary.DeniedOperations != 1 ||
+		analytics.Summary.AcceptedQuantity != 9 || analytics.Summary.DeniedQuantity != 7 {
+		t.Fatalf("customer analytics summary = %#v", analytics.Summary)
 	}
 }
 

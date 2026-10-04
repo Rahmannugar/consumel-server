@@ -38,6 +38,17 @@ func operationTelemetry() gin.HandlerFunc {
 	}
 }
 
+func analyticsTelemetry(operation string) gin.HandlerFunc {
+	return func(context *gin.Context) {
+		telemetry.SetRequestOperation(context.Request.Context(), operation, telemetry.CompletionDetails{
+			Success:  telemetry.Completion{Event: "analytics.loaded", Message: "Analytics loaded"},
+			Rejected: telemetry.Completion{Event: "analytics.get.rejected", Message: "Analytics request rejected"},
+			Failed:   telemetry.Completion{Event: "analytics.get.failed", Message: "Analytics request failed"},
+		})
+		context.Next()
+	}
+}
+
 func balancePathParameters() gin.HandlerFunc {
 	return func(context *gin.Context) {
 		context.Request.SetPathValue("customerID", context.Param("customerID"))

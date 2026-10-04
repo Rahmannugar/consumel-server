@@ -252,6 +252,41 @@ func GetV1ProjectsProjectIdEnvironmentsEnvironmentEvents() {}
 // @Router /v1/projects/{projectId}/environments/{environment}/events/stream [get]
 func GetV1ProjectsProjectIdEnvironmentsEnvironmentEventsStream() {}
 
+// @Summary Return bounded usage analytics for the API key's project environment.
+// @Tags Analytics
+// @Param from query string true "Inclusive RFC 3339 start time." format(date-time)
+// @Param to query string true "Exclusive RFC 3339 end time." format(date-time)
+// @Param interval query string true "UTC aggregation interval. Hourly ranges may span 31 days; daily ranges may span one year." enums(hour, day)
+// @Param customerId query string false "Aggregate one exact customer identifier." maxLength(255)
+// @Param meterKey query string false "Aggregate one exact meter key. Must match `^[a-z][a-z0-9_-]*$`." maxLength(120)
+// @Success 200 {object} UsageAnalytics "Completed successfully. Missing UTC buckets are returned with zero values."
+// @Failure 400 {object} AnalyticsInvalid "The analytics filters are invalid."
+// @Failure 401 {object} InvalidAPIKey "The project API key is missing, malformed, revoked, replaced, or inactive."
+// @Failure 500 {object} AnalyticsFailed "Analytics could not be loaded."
+// @Security projectAPIKey
+// @Router /v1/analytics [get]
+func GetV1Analytics() {}
+
+// @Summary Return bounded usage analytics from the signed-in project workspace.
+// @Tags Dashboard Analytics
+// @Param projectId path string true "The immutable ID of the project selected in the dashboard." format(uuid)
+// @Param environment path string true "The selected isolated project environment." enums(sandbox, live)
+// @Param from query string true "Inclusive RFC 3339 start time." format(date-time)
+// @Param to query string true "Exclusive RFC 3339 end time." format(date-time)
+// @Param interval query string true "UTC aggregation interval. Hourly ranges may span 31 days; daily ranges may span one year." enums(hour, day)
+// @Param customerId query string false "Aggregate one exact customer identifier." maxLength(255)
+// @Param meterKey query string false "Aggregate one exact meter key. Must match `^[a-z][a-z0-9_-]*$`." maxLength(120)
+// @Success 200 {object} UsageAnalytics "Completed successfully. Missing UTC buckets are returned with zero values."
+// @Failure 400 {object} AnalyticsInvalid "The analytics filters are invalid."
+// @Failure 401 {object} NotAuthenticated "Authentication is required."
+// @Failure 404 {object} OperationEnvironmentNotFound "The selected project environment is unavailable."
+// @Failure 409 {object} OperationEnvironmentConflict "The selected project environment is not active."
+// @Failure 500 {object} AnalyticsFailed "Analytics could not be loaded."
+// @Security productionCookieSession
+// @Security localCookieSession
+// @Router /v1/projects/{projectId}/environments/{environment}/analytics [get]
+func GetV1ProjectsProjectIdEnvironmentsEnvironmentAnalytics() {}
+
 type Balance struct {
 	CreatedAt     time.Time  `json:"createdAt" validate:"required" example:"2026-09-28T12:00:00Z" format:"date-time"`
 	CustomerID    string     `json:"customerId" validate:"required,max=255" example:"user_123"`
@@ -326,6 +361,49 @@ type UsageOperation struct {
 type UsageOperations struct {
 	NextCursor *string          `json:"nextCursor" validate:"required"`
 	Operations []UsageOperation `json:"operations" validate:"required"`
+}
+
+type UsageAnalytics struct {
+	Buckets  []UsageAnalyticsBucket `json:"buckets" validate:"required"`
+	From     time.Time              `json:"from" validate:"required" example:"2026-09-01T00:00:00Z" format:"date-time"`
+	Interval string                 `json:"interval" validate:"required" example:"day" enums:"hour,day"`
+	Summary  UsageAnalyticsSummary  `json:"summary" validate:"required"`
+	To       time.Time              `json:"to" validate:"required" example:"2026-10-01T00:00:00Z" format:"date-time"`
+}
+
+type UsageAnalyticsSummary struct {
+	AcceptedOperations int64 `json:"acceptedOperations" validate:"required,min=0" example:"950" format:"int64"`
+	AcceptedQuantity   int64 `json:"acceptedQuantity" validate:"required,min=0" example:"128400" format:"int64"`
+	BillableOperations int64 `json:"billableOperations" validate:"required,min=0" example:"720" format:"int64"`
+	DeniedOperations   int64 `json:"deniedOperations" validate:"required,min=0" example:"12" format:"int64"`
+	DeniedQuantity     int64 `json:"deniedQuantity" validate:"required,min=0" example:"1800" format:"int64"`
+}
+
+type UsageAnalyticsBucket struct {
+	AcceptedOperations int64     `json:"acceptedOperations" validate:"required,min=0" example:"42" format:"int64"`
+	AcceptedQuantity   int64     `json:"acceptedQuantity" validate:"required,min=0" example:"6200" format:"int64"`
+	BillableOperations int64     `json:"billableOperations" validate:"required,min=0" example:"35" format:"int64"`
+	DeniedOperations   int64     `json:"deniedOperations" validate:"required,min=0" example:"2" format:"int64"`
+	DeniedQuantity     int64     `json:"deniedQuantity" validate:"required,min=0" example:"250" format:"int64"`
+	Start              time.Time `json:"start" validate:"required" example:"2026-09-28T00:00:00Z" format:"date-time"`
+}
+
+type AnalyticsInvalid struct {
+	Error AnalyticsInvalidError `json:"error" validate:"required"`
+}
+
+type AnalyticsInvalidError struct {
+	Code    string `json:"code" validate:"required" example:"invalid_filter"`
+	Message string `json:"message,omitempty" example:"Choose valid customer, meter, interval, and date filters. Hourly ranges may span 31 days; daily ranges may span one year."`
+}
+
+type AnalyticsFailed struct {
+	Error AnalyticsFailedError `json:"error" validate:"required"`
+}
+
+type AnalyticsFailedError struct {
+	Code    string `json:"code" validate:"required" example:"analytics_failed"`
+	Message string `json:"message,omitempty" example:"Consumel could not load analytics. Try again shortly."`
 }
 
 // @description Possible codes: balance_limit_exceeded, idempotency_key_conflict.

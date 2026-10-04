@@ -21,6 +21,9 @@ Sets one customer and meter balance to an exact quantity in the project environm
 POST /v1/consume
 Atomically accepts usage for an active meter, persists the usage event and outbox record, and applies the meter type's balance behavior in the project environment authenticated by the API key.
 
+GET /v1/analytics
+Returns bounded hourly or daily usage analytics for the project environment authenticated by the API key, optionally scoped to one customer or meter.
+
 ## Dashboard application API
 
 GET /v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances
@@ -46,3 +49,6 @@ Returns cursor-paginated accepted and denied usage operations for dashboard insp
 
 GET /v1/projects/{projectId}/environments/{environment}/events/stream
 Streams newly persisted usage operations to the signed-in project workspace with reconnect cursors.
+
+GET /v1/projects/{projectId}/environments/{environment}/analytics
+Returns bounded hourly or daily usage analytics from the signed-in project workspace, optionally scoped to one customer or meter.

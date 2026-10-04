@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log/slog"
-	"net/http"
 
 	authenticationhandlers "github.com/Rahmannugar/consumel-server/internal/authentication/handlers"
 	"github.com/Rahmannugar/consumel-server/internal/config"
@@ -11,7 +10,6 @@ import (
 	customerhandlers "github.com/Rahmannugar/consumel-server/internal/customers/handlers"
 	"github.com/Rahmannugar/consumel-server/internal/health"
 	"github.com/Rahmannugar/consumel-server/internal/infra/cors"
-	"github.com/Rahmannugar/consumel-server/internal/infra/ratelimit"
 	"github.com/Rahmannugar/consumel-server/internal/infra/telemetry"
 	meterhandlers "github.com/Rahmannugar/consumel-server/internal/meters/handlers"
 	onboardinghandlers "github.com/Rahmannugar/consumel-server/internal/onboarding/handlers"
@@ -24,9 +22,7 @@ func newRouter(
 	cfg config.Config,
 	runtime *telemetry.Runtime,
 	database health.Database,
-	authlierHandler http.Handler,
-	tenantResolver authenticationhandlers.TenantResolver,
-	apiKeyAuthenticator authenticationhandlers.APIKeyAuthenticator,
+	authentication authenticationComponents,
 	onboardingService onboardinghandlers.OnboardingService,
 	projectService projecthandlers.ProjectService,
 	customerService customerhandlers.CustomerService,
@@ -34,7 +30,7 @@ func newRouter(
 	balanceService consumptionhandlers.BalanceService,
 	consumeService consumptionhandlers.ConsumeService,
 	operationService consumptionhandlers.OperationService,
-	limiter *ratelimit.RedisLimiter,
+	analyticsService consumptionhandlers.AnalyticsService,
 	logger *slog.Logger,
 ) (*gin.Engine, error) {
 	if cfg.Environment != config.EnvironmentDevelopment {
@@ -58,44 +54,62 @@ func newRouter(
 	}
 	authenticationhandlers.RegisterRoutes(
 		router,
-		authlierHandler,
-		tenantResolver,
-		limiter,
+		authentication.handler,
+		authentication.tenantResolver,
+		authentication.limiter,
 		logger,
 	)
-	onboardinghandlers.RegisterRoutes(router, tenantResolver, onboardingService, logger)
-	projecthandlers.RegisterRoutes(router, tenantResolver, projectService, logger)
+	onboardinghandlers.RegisterRoutes(router, authentication.tenantResolver, onboardingService, logger)
+	projecthandlers.RegisterRoutes(router, authentication.tenantResolver, projectService, logger)
 	customerhandlers.RegisterRoutes(
 		router,
-		apiKeyAuthenticator,
-		tenantResolver,
+		authentication.apiKeyAuthenticator,
+		authentication.tenantResolver,
 		projectService,
 		customerService,
 		logger,
 	)
 	meterhandlers.RegisterRoutes(
 		router,
-		apiKeyAuthenticator,
-		tenantResolver,
+		authentication.apiKeyAuthenticator,
+		authentication.tenantResolver,
 		projectService,
 		meterService,
 		logger,
 	)
 	consumptionhandlers.RegisterBalanceRoutes(
 		router,
-		apiKeyAuthenticator,
-		tenantResolver,
+		authentication.apiKeyAuthenticator,
+		authentication.tenantResolver,
 		projectService,
 		balanceService,
 		logger,
 	)
-	consumptionhandlers.RegisterConsumeRoutes(router, apiKeyAuthenticator, consumeService, logger)
+	consumptionhandlers.RegisterConsumeRoutes(
+		router,
+		authentication.apiKeyAuthenticator,
+		consumeService,
+		logger,
+	)
 	operationStreamObserver, err := runtime.NewSSEObserver("operations.stream")
 	if err != nil {
 		return nil, fmt.Errorf("configure operation stream telemetry: %w", err)
 	}
 	consumptionhandlers.RegisterOperationRoutes(
-		router, tenantResolver, projectService, operationService, operationStreamObserver, logger,
+		router,
+		authentication.tenantResolver,
+		projectService,
+		operationService,
+		operationStreamObserver,
+		logger,
+	)
+	consumptionhandlers.RegisterAnalyticsRoutes(
+		router,
+		authentication.apiKeyAuthenticator,
+		authentication.tenantResolver,
+		projectService,
+		analyticsService,
+		logger,
 	)
 	return router, nil
 }

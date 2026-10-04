@@ -12,6 +12,83 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const aggregateConsumptionOperations = `-- name: AggregateConsumptionOperations :many
+SELECT
+    date_trunc($1::text, created_at)::timestamptz AS bucket_start,
+    COUNT(*) FILTER (WHERE status = 'accepted')::bigint AS accepted_operations,
+    COUNT(*) FILTER (WHERE status = 'denied')::bigint AS denied_operations,
+    COALESCE(SUM(requested_quantity) FILTER (WHERE status = 'accepted'), 0)::bigint AS accepted_quantity,
+    COALESCE(SUM(requested_quantity) FILTER (WHERE status = 'denied'), 0)::bigint AS denied_quantity,
+    COUNT(*) FILTER (WHERE billable)::bigint AS billable_operations
+FROM consumption_operations
+WHERE project_environment_id = $2
+  AND status <> 'pending'
+  AND created_at >= $3
+  AND created_at < $4
+  AND (
+      $5::text = ''
+      OR request_customer_id = $5::text
+  )
+  AND (
+      $6::text = ''
+      OR request_meter_key = $6::text
+  )
+GROUP BY bucket_start
+ORDER BY bucket_start
+`
+
+type AggregateConsumptionOperationsParams struct {
+	BucketInterval       string
+	ProjectEnvironmentID uuid.UUID
+	FromTime             pgtype.Timestamptz
+	ToTime               pgtype.Timestamptz
+	CustomerFilter       string
+	MeterFilter          string
+}
+
+type AggregateConsumptionOperationsRow struct {
+	BucketStart        pgtype.Timestamptz
+	AcceptedOperations int64
+	DeniedOperations   int64
+	AcceptedQuantity   int64
+	DeniedQuantity     int64
+	BillableOperations int64
+}
+
+func (q *Queries) AggregateConsumptionOperations(ctx context.Context, arg AggregateConsumptionOperationsParams) ([]AggregateConsumptionOperationsRow, error) {
+	rows, err := q.db.Query(ctx, aggregateConsumptionOperations,
+		arg.BucketInterval,
+		arg.ProjectEnvironmentID,
+		arg.FromTime,
+		arg.ToTime,
+		arg.CustomerFilter,
+		arg.MeterFilter,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AggregateConsumptionOperationsRow
+	for rows.Next() {
+		var i AggregateConsumptionOperationsRow
+		if err := rows.Scan(
+			&i.BucketStart,
+			&i.AcceptedOperations,
+			&i.DeniedOperations,
+			&i.AcceptedQuantity,
+			&i.DeniedQuantity,
+			&i.BillableOperations,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const consumptionOperationByID = `-- name: ConsumptionOperationByID :one
 SELECT id, project_environment_id, idempotency_key, request_customer_id, request_meter_key, requested_quantity, customer_id, meter_id, meter_type, status, denial_reason, balance_id, balance_debited, resulting_balance, billable, created_at, replay_count, last_replayed_at, source_api_key_id
 FROM consumption_operations
