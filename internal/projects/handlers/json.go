@@ -5,6 +5,42 @@ import (
 	projectmodels "github.com/Rahmannugar/consumel-server/internal/projects/models"
 )
 
+func portfolioJSON(portfolio projectmodels.Portfolio) openapi.ProjectPortfolio {
+	buckets := make([]openapi.ProjectPortfolioBucket, 0, len(portfolio.Buckets))
+	for _, bucket := range portfolio.Buckets {
+		buckets = append(buckets, openapi.ProjectPortfolioBucket{
+			Start:             bucket.Start,
+			AllowedOperations: bucket.AllowedOperations,
+			BlockedOperations: bucket.BlockedOperations,
+		})
+	}
+	projects := make([]openapi.ProjectPortfolioProject, 0, len(portfolio.Projects))
+	for _, project := range portfolio.Projects {
+		projects = append(projects, openapi.ProjectPortfolioProject{
+			ID:                project.ID,
+			Name:              project.Name,
+			Slug:              project.Slug,
+			EnvironmentID:     project.EnvironmentID,
+			ActivatedAt:       project.ActivatedAt,
+			AllowedOperations: project.AllowedOperations,
+			BlockedOperations: project.BlockedOperations,
+			LastActivityAt:    project.LastActivityAt,
+		})
+	}
+	return openapi.ProjectPortfolio{
+		Environment: string(portfolio.Environment),
+		From:        portfolio.From,
+		To:          portfolio.To,
+		Interval:    string(portfolio.Interval),
+		Summary: openapi.ProjectPortfolioSummary{
+			AllowedOperations: portfolio.Summary.AllowedOperations,
+			BlockedOperations: portfolio.Summary.BlockedOperations,
+		},
+		Buckets:  buckets,
+		Projects: projects,
+	}
+}
+
 func listResponse(projects []projectmodels.Project) openapi.Projects {
 	result := make([]openapi.Project, 0, len(projects))
 	for _, project := range projects {

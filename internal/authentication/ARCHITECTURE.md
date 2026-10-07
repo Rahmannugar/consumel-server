@@ -6,6 +6,9 @@ workflows.
 
 PostgreSQL is authoritative for accounts and sessions. Redis holds verification
 challenges, distributed abuse controls, and short-lived session cache entries.
+Browser sessions have a seven-day inactivity window. Eligible activity extends
+that durable expiry no more than once per day, and the original sign-in imposes
+a 30-day absolute lifetime that never moves.
 
 After resolving the opaque session, an established account loads its Consumel
 user and active organization access through one PostgreSQL query keyed by the

@@ -25,6 +25,7 @@ func newRouter(
 	authentication authenticationComponents,
 	onboardingService onboardinghandlers.OnboardingService,
 	projectService projecthandlers.ProjectService,
+	portfolioService projecthandlers.PortfolioService,
 	customerService customerhandlers.CustomerService,
 	meterService meterhandlers.MeterService,
 	balanceService consumptionhandlers.BalanceService,
@@ -60,7 +61,7 @@ func newRouter(
 		logger,
 	)
 	onboardinghandlers.RegisterRoutes(router, authentication.tenantResolver, onboardingService, logger)
-	projecthandlers.RegisterRoutes(router, authentication.tenantResolver, projectService, logger)
+	projecthandlers.RegisterRoutes(router, authentication.tenantResolver, projectService, portfolioService, logger)
 	customerhandlers.RegisterRoutes(
 		router,
 		authentication.apiKeyAuthenticator,

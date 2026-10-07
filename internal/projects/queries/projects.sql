@@ -53,6 +53,72 @@ ORDER BY
     projects.id,
     CASE project_environments.environment WHEN 'sandbox' THEN 0 ELSE 1 END;
 
+-- name: ListProjectPortfolio :many
+SELECT
+    projects.id,
+    projects.name,
+    projects.slug,
+    project_environments.id AS environment_id,
+    project_environments.activated_at,
+    COUNT(consumption_operations.id) FILTER (
+        WHERE consumption_operations.status = 'accepted'
+    )::bigint AS allowed_operations,
+    COUNT(consumption_operations.id) FILTER (
+        WHERE consumption_operations.status = 'denied'
+    )::bigint AS blocked_operations,
+    MAX(consumption_operations.created_at)::timestamptz AS last_activity_at
+FROM organization_memberships
+JOIN organizations
+    ON organizations.id = organization_memberships.organization_id
+JOIN projects
+    ON projects.organization_id = organizations.id
+JOIN project_environments
+    ON project_environments.project_id = projects.id
+   AND project_environments.environment = sqlc.arg(environment)
+LEFT JOIN consumption_operations
+    ON consumption_operations.project_environment_id = project_environments.id
+   AND consumption_operations.status <> 'pending'
+   AND consumption_operations.created_at >= sqlc.arg(from_time)
+   AND consumption_operations.created_at < sqlc.arg(to_time)
+WHERE organization_memberships.user_id = sqlc.arg(user_id)
+  AND organization_memberships.status = 'active'
+  AND organization_memberships.removed_at IS NULL
+  AND organizations.deleted_at IS NULL
+  AND organizations.suspended_at IS NULL
+GROUP BY
+    projects.id,
+    projects.name,
+    projects.slug,
+    project_environments.id,
+    project_environments.activated_at
+ORDER BY projects.created_at, projects.id;
+
+-- name: AggregateProjectPortfolio :many
+SELECT
+    date_trunc(sqlc.arg(bucket_interval)::text, consumption_operations.created_at)::timestamptz AS bucket_start,
+    COUNT(*) FILTER (WHERE consumption_operations.status = 'accepted')::bigint AS allowed_operations,
+    COUNT(*) FILTER (WHERE consumption_operations.status = 'denied')::bigint AS blocked_operations
+FROM organization_memberships
+JOIN organizations
+    ON organizations.id = organization_memberships.organization_id
+JOIN projects
+    ON projects.organization_id = organizations.id
+JOIN project_environments
+    ON project_environments.project_id = projects.id
+   AND project_environments.environment = sqlc.arg(environment)
+JOIN consumption_operations
+    ON consumption_operations.project_environment_id = project_environments.id
+WHERE organization_memberships.user_id = sqlc.arg(user_id)
+  AND organization_memberships.status = 'active'
+  AND organization_memberships.removed_at IS NULL
+  AND organizations.deleted_at IS NULL
+  AND organizations.suspended_at IS NULL
+  AND consumption_operations.status <> 'pending'
+  AND consumption_operations.created_at >= sqlc.arg(from_time)
+  AND consumption_operations.created_at < sqlc.arg(to_time)
+GROUP BY bucket_start
+ORDER BY bucket_start;
+
 -- name: AccessibleProjectEnvironment :one
 SELECT
     project_environments.id,

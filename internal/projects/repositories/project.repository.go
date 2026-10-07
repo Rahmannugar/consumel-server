@@ -62,6 +62,60 @@ func (repository *ProjectRepository) ListAccessibleProjects(
 	return projects, nil
 }
 
+func (repository *ProjectRepository) ProjectPortfolio(
+	ctx context.Context,
+	userID uuid.UUID,
+	filter models.PortfolioFilter,
+) ([]models.PortfolioProject, error) {
+	rows, err := repository.queries.ListProjectPortfolio(ctx, projectdb.ListProjectPortfolioParams{
+		Environment: string(filter.Environment),
+		FromTime:    pgtype.Timestamptz{Time: filter.From, Valid: true},
+		ToTime:      pgtype.Timestamptz{Time: filter.To, Valid: true},
+		UserID:      userID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list project portfolio: %w", err)
+	}
+	projects := make([]models.PortfolioProject, 0, len(rows))
+	for _, row := range rows {
+		projects = append(projects, models.PortfolioProject{
+			ID: row.ID, Name: row.Name, Slug: row.Slug,
+			EnvironmentID:     row.EnvironmentID,
+			ActivatedAt:       nullableTime(row.ActivatedAt),
+			AllowedOperations: row.AllowedOperations,
+			BlockedOperations: row.BlockedOperations,
+			LastActivityAt:    nullableTime(row.LastActivityAt),
+		})
+	}
+	return projects, nil
+}
+
+func (repository *ProjectRepository) AggregatePortfolio(
+	ctx context.Context,
+	userID uuid.UUID,
+	filter models.PortfolioFilter,
+) ([]models.PortfolioBucket, error) {
+	rows, err := repository.queries.AggregateProjectPortfolio(ctx, projectdb.AggregateProjectPortfolioParams{
+		BucketInterval: string(filter.Interval),
+		Environment:    string(filter.Environment),
+		UserID:         userID,
+		FromTime:       pgtype.Timestamptz{Time: filter.From, Valid: true},
+		ToTime:         pgtype.Timestamptz{Time: filter.To, Valid: true},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("aggregate project portfolio: %w", err)
+	}
+	buckets := make([]models.PortfolioBucket, 0, len(rows))
+	for _, row := range rows {
+		buckets = append(buckets, models.PortfolioBucket{
+			Start:             row.BucketStart.Time,
+			AllowedOperations: row.AllowedOperations,
+			BlockedOperations: row.BlockedOperations,
+		})
+	}
+	return buckets, nil
+}
+
 func (repository *ProjectRepository) CreateProjectWithEnvironments(
 	ctx context.Context,
 	project models.Project,

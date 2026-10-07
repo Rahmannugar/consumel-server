@@ -132,6 +132,73 @@ func (q *Queries) ActiveProjectAPIKey(ctx context.Context, projectEnvironmentID 
 	return i, err
 }
 
+const aggregateProjectPortfolio = `-- name: AggregateProjectPortfolio :many
+SELECT
+    date_trunc($1::text, consumption_operations.created_at)::timestamptz AS bucket_start,
+    COUNT(*) FILTER (WHERE consumption_operations.status = 'accepted')::bigint AS allowed_operations,
+    COUNT(*) FILTER (WHERE consumption_operations.status = 'denied')::bigint AS blocked_operations
+FROM organization_memberships
+JOIN organizations
+    ON organizations.id = organization_memberships.organization_id
+JOIN projects
+    ON projects.organization_id = organizations.id
+JOIN project_environments
+    ON project_environments.project_id = projects.id
+   AND project_environments.environment = $2
+JOIN consumption_operations
+    ON consumption_operations.project_environment_id = project_environments.id
+WHERE organization_memberships.user_id = $3
+  AND organization_memberships.status = 'active'
+  AND organization_memberships.removed_at IS NULL
+  AND organizations.deleted_at IS NULL
+  AND organizations.suspended_at IS NULL
+  AND consumption_operations.status <> 'pending'
+  AND consumption_operations.created_at >= $4
+  AND consumption_operations.created_at < $5
+GROUP BY bucket_start
+ORDER BY bucket_start
+`
+
+type AggregateProjectPortfolioParams struct {
+	BucketInterval string
+	Environment    string
+	UserID         uuid.UUID
+	FromTime       pgtype.Timestamptz
+	ToTime         pgtype.Timestamptz
+}
+
+type AggregateProjectPortfolioRow struct {
+	BucketStart       pgtype.Timestamptz
+	AllowedOperations int64
+	BlockedOperations int64
+}
+
+func (q *Queries) AggregateProjectPortfolio(ctx context.Context, arg AggregateProjectPortfolioParams) ([]AggregateProjectPortfolioRow, error) {
+	rows, err := q.db.Query(ctx, aggregateProjectPortfolio,
+		arg.BucketInterval,
+		arg.Environment,
+		arg.UserID,
+		arg.FromTime,
+		arg.ToTime,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AggregateProjectPortfolioRow
+	for rows.Next() {
+		var i AggregateProjectPortfolioRow
+		if err := rows.Scan(&i.BucketStart, &i.AllowedOperations, &i.BlockedOperations); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const createProject = `-- name: CreateProject :one
 INSERT INTO projects (id, organization_id, name, slug)
 VALUES ($1, $2, $3, $4)
@@ -365,6 +432,99 @@ func (q *Queries) ListProjectEnvironments(ctx context.Context, projectID uuid.UU
 			&i.Environment,
 			&i.ActivatedAt,
 			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listProjectPortfolio = `-- name: ListProjectPortfolio :many
+SELECT
+    projects.id,
+    projects.name,
+    projects.slug,
+    project_environments.id AS environment_id,
+    project_environments.activated_at,
+    COUNT(consumption_operations.id) FILTER (
+        WHERE consumption_operations.status = 'accepted'
+    )::bigint AS allowed_operations,
+    COUNT(consumption_operations.id) FILTER (
+        WHERE consumption_operations.status = 'denied'
+    )::bigint AS blocked_operations,
+    MAX(consumption_operations.created_at)::timestamptz AS last_activity_at
+FROM organization_memberships
+JOIN organizations
+    ON organizations.id = organization_memberships.organization_id
+JOIN projects
+    ON projects.organization_id = organizations.id
+JOIN project_environments
+    ON project_environments.project_id = projects.id
+   AND project_environments.environment = $1
+LEFT JOIN consumption_operations
+    ON consumption_operations.project_environment_id = project_environments.id
+   AND consumption_operations.status <> 'pending'
+   AND consumption_operations.created_at >= $2
+   AND consumption_operations.created_at < $3
+WHERE organization_memberships.user_id = $4
+  AND organization_memberships.status = 'active'
+  AND organization_memberships.removed_at IS NULL
+  AND organizations.deleted_at IS NULL
+  AND organizations.suspended_at IS NULL
+GROUP BY
+    projects.id,
+    projects.name,
+    projects.slug,
+    project_environments.id,
+    project_environments.activated_at
+ORDER BY projects.created_at, projects.id
+`
+
+type ListProjectPortfolioParams struct {
+	Environment string
+	FromTime    pgtype.Timestamptz
+	ToTime      pgtype.Timestamptz
+	UserID      uuid.UUID
+}
+
+type ListProjectPortfolioRow struct {
+	ID                uuid.UUID
+	Name              string
+	Slug              string
+	EnvironmentID     uuid.UUID
+	ActivatedAt       pgtype.Timestamptz
+	AllowedOperations int64
+	BlockedOperations int64
+	LastActivityAt    pgtype.Timestamptz
+}
+
+func (q *Queries) ListProjectPortfolio(ctx context.Context, arg ListProjectPortfolioParams) ([]ListProjectPortfolioRow, error) {
+	rows, err := q.db.Query(ctx, listProjectPortfolio,
+		arg.Environment,
+		arg.FromTime,
+		arg.ToTime,
+		arg.UserID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListProjectPortfolioRow
+	for rows.Next() {
+		var i ListProjectPortfolioRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.EnvironmentID,
+			&i.ActivatedAt,
+			&i.AllowedOperations,
+			&i.BlockedOperations,
+			&i.LastActivityAt,
 		); err != nil {
 			return nil, err
 		}

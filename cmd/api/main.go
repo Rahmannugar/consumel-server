@@ -119,9 +119,9 @@ func run() (runError error) {
 		onboardingrepositories.New(databasePool, emailQueue),
 		cfg.Auth.ClientBaseURL,
 	)
-	projectService := projectservices.NewProjectManagementService(
-		projectrepositories.NewProjectRepository(databasePool),
-	)
+	projectRepository := projectrepositories.NewProjectRepository(databasePool)
+	projectService := projectservices.NewProjectManagementService(projectRepository)
+	portfolioService := projectservices.NewPortfolioService(projectRepository)
 	customerService := customerservices.NewCustomerService(
 		customerrepositories.NewCustomerRepository(databasePool),
 	)
@@ -148,6 +148,7 @@ func run() (runError error) {
 		authentication,
 		onboardingService,
 		projectService,
+		portfolioService,
 		customerService,
 		meterService,
 		balanceService,

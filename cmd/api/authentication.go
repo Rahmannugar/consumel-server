@@ -10,6 +10,7 @@ import (
 	"github.com/Rahmannugar/authlier"
 	"github.com/Rahmannugar/authlier/emailverification"
 	"github.com/Rahmannugar/authlier/googleoauth"
+	"github.com/Rahmannugar/authlier/sessiontoken"
 	authlierpostgres "github.com/Rahmannugar/authlier/storage/postgres"
 	authlierredis "github.com/Rahmannugar/authlier/storage/redis"
 	consumelauthentication "github.com/Rahmannugar/consumel-server/internal/authentication"
@@ -27,11 +28,13 @@ import (
 )
 
 const (
-	authMigrationTimeout  = 30 * time.Second
-	googleTimeout         = 10 * time.Second
-	sessionLifetime       = 7 * 24 * time.Hour
-	sessionCacheTTL       = time.Hour
-	maximumActiveSessions = 3
+	authMigrationTimeout    = 30 * time.Second
+	googleTimeout           = 10 * time.Second
+	sessionIdleLifetime     = 7 * 24 * time.Hour
+	sessionExtensionAfter   = 24 * time.Hour
+	sessionAbsoluteLifetime = 30 * 24 * time.Hour
+	sessionCacheTTL         = time.Hour
+	maximumActiveSessions   = 3
 )
 
 type authenticationComponents struct {
@@ -136,9 +139,13 @@ func newAuthenticationComponents(
 		},
 		Session: authlier.SessionConfig{
 			Mode:     authlier.SessionModeCookie,
-			Lifetime: sessionLifetime,
+			Lifetime: sessionIdleLifetime,
 			Cache:    sessionCache,
 			CacheTTL: sessionCacheTTL,
+			Extension: &sessiontoken.ExtensionConfig{
+				ExtendAfter:      sessionExtensionAfter,
+				AbsoluteLifetime: sessionAbsoluteLifetime,
+			},
 			Cookie: authlier.CookieConfig{
 				Name:     cfg.SessionCookieName(),
 				Path:     "/",

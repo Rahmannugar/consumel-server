@@ -39,10 +39,12 @@ func RegisterRoutes(
 	router gin.IRouter,
 	resolver authenticationhandlers.TenantResolver,
 	service ProjectService,
+	portfolio PortfolioService,
 	logger *slog.Logger,
 ) {
 	handler := &Handler{resolver: resolver, service: service, logger: logger}
 	router.GET("/v1/projects", projectListTelemetry(), gin.WrapF(handler.List))
+	registerPortfolioRoute(router, resolver, portfolio, logger)
 	router.POST("/v1/projects", projectCreateTelemetry(), gin.WrapF(handler.Create))
 	apiKeyPath := "/v1/projects/:projectID/environments/:environment/api-key"
 	router.GET(apiKeyPath, apiKeyTelemetry("projects.api_key.get", "projects.api_key.loaded", "Project API key loaded"), pathParameters(), gin.WrapF(handler.GetAPIKey))

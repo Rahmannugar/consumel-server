@@ -15,6 +15,21 @@ import (
 // @Router /v1/projects [get]
 func GetV1Projects() {}
 
+// @Summary Return an organization-wide project portfolio for one environment.
+// @Tags Projects
+// @Param environment query string true "The isolated environment summarized across projects." enums(sandbox, live)
+// @Param from query string true "Inclusive RFC 3339 start time." format(date-time)
+// @Param to query string true "Exclusive RFC 3339 end time." format(date-time)
+// @Param interval query string true "UTC aggregation interval. Hourly ranges may span 31 days; daily ranges may span one year." enums(hour, day)
+// @Success 200 {object} ProjectPortfolio "Completed successfully. Missing UTC buckets are returned with zero values."
+// @Failure 400 {object} ProjectPortfolioInvalid "The portfolio filters are invalid."
+// @Failure 401 {object} NotAuthenticated "Authentication is required."
+// @Failure 500 {object} ProjectPortfolioFailed "The project portfolio could not be loaded."
+// @Security productionCookieSession
+// @Security localCookieSession
+// @Router /v1/projects/portfolio [get]
+func GetV1ProjectsPortfolio() {}
+
 // @Summary Create a project with isolated Sandbox and Live environments.
 // @Tags Projects
 // @Param body body models.CreateProjectRequest true "Project name."
@@ -136,6 +151,56 @@ type ProjectEnvironment struct {
 
 type Projects struct {
 	Projects []Project `json:"projects" validate:"required"`
+}
+
+type ProjectPortfolio struct {
+	Buckets     []ProjectPortfolioBucket  `json:"buckets" validate:"required"`
+	Environment string                    `json:"environment" validate:"required" example:"sandbox" enums:"sandbox,live"`
+	From        time.Time                 `json:"from" validate:"required" example:"2026-09-01T00:00:00Z" format:"date-time"`
+	Interval    string                    `json:"interval" validate:"required" example:"day" enums:"hour,day"`
+	Projects    []ProjectPortfolioProject `json:"projects" validate:"required"`
+	Summary     ProjectPortfolioSummary   `json:"summary" validate:"required"`
+	To          time.Time                 `json:"to" validate:"required" example:"2026-10-01T00:00:00Z" format:"date-time"`
+}
+
+type ProjectPortfolioBucket struct {
+	AllowedOperations int64     `json:"allowedOperations" validate:"required,min=0" example:"42" format:"int64"`
+	BlockedOperations int64     `json:"blockedOperations" validate:"required,min=0" example:"2" format:"int64"`
+	Start             time.Time `json:"start" validate:"required" example:"2026-09-28T00:00:00Z" format:"date-time"`
+}
+
+type ProjectPortfolioSummary struct {
+	AllowedOperations int64 `json:"allowedOperations" validate:"required,min=0" example:"950" format:"int64"`
+	BlockedOperations int64 `json:"blockedOperations" validate:"required,min=0" example:"12" format:"int64"`
+}
+
+type ProjectPortfolioProject struct {
+	ActivatedAt       *time.Time `json:"activatedAt" validate:"required" example:"2026-09-25T12:08:00Z" format:"date-time"`
+	AllowedOperations int64      `json:"allowedOperations" validate:"required,min=0" example:"420" format:"int64"`
+	BlockedOperations int64      `json:"blockedOperations" validate:"required,min=0" example:"5" format:"int64"`
+	EnvironmentID     uuid.UUID  `json:"environmentId" validate:"required" example:"0199a417-1ae1-7b67-ad5b-809be2f9ca0a" format:"uuid"`
+	ID                uuid.UUID  `json:"id" validate:"required" example:"0199a417-05da-7aa2-b024-2011f24972da" format:"uuid"`
+	LastActivityAt    *time.Time `json:"lastActivityAt" validate:"required" example:"2026-09-29T18:42:00Z" format:"date-time"`
+	Name              string     `json:"name" validate:"required" example:"Acme API"`
+	Slug              string     `json:"slug" validate:"required" example:"acme-api"`
+}
+
+type ProjectPortfolioInvalid struct {
+	Error ProjectPortfolioInvalidError `json:"error" validate:"required"`
+}
+
+type ProjectPortfolioInvalidError struct {
+	Code    string `json:"code" validate:"required" example:"invalid_filter"`
+	Message string `json:"message,omitempty" example:"Choose a valid environment, interval, and date range. Hourly ranges may span 31 days; daily ranges may span one year."`
+}
+
+type ProjectPortfolioFailed struct {
+	Error ProjectPortfolioFailedError `json:"error" validate:"required"`
+}
+
+type ProjectPortfolioFailedError struct {
+	Code    string `json:"code" validate:"required" example:"project_portfolio_failed"`
+	Message string `json:"message,omitempty" example:"Consumel could not load the project portfolio. Try again shortly."`
 }
 
 // @description Possible codes: api_key_already_exists, environment_inactive.

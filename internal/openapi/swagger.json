@@ -2497,6 +2497,220 @@
                 ],
                 "type": "object"
             },
+            "openapi.ProjectPortfolio": {
+                "properties": {
+                    "buckets": {
+                        "items": {
+                            "$ref": "#/components/schemas/openapi.ProjectPortfolioBucket"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    },
+                    "environment": {
+                        "enum": [
+                            "sandbox",
+                            "live"
+                        ],
+                        "example": "sandbox",
+                        "type": "string"
+                    },
+                    "from": {
+                        "example": "2026-09-01T00:00:00Z",
+                        "format": "date-time",
+                        "type": "string"
+                    },
+                    "interval": {
+                        "enum": [
+                            "hour",
+                            "day"
+                        ],
+                        "example": "day",
+                        "type": "string"
+                    },
+                    "projects": {
+                        "items": {
+                            "$ref": "#/components/schemas/openapi.ProjectPortfolioProject"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    },
+                    "summary": {
+                        "$ref": "#/components/schemas/openapi.ProjectPortfolioSummary"
+                    },
+                    "to": {
+                        "example": "2026-10-01T00:00:00Z",
+                        "format": "date-time",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "buckets",
+                    "environment",
+                    "from",
+                    "interval",
+                    "projects",
+                    "summary",
+                    "to"
+                ],
+                "type": "object"
+            },
+            "openapi.ProjectPortfolioBucket": {
+                "properties": {
+                    "allowedOperations": {
+                        "example": 42,
+                        "format": "int64",
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "blockedOperations": {
+                        "example": 2,
+                        "format": "int64",
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "start": {
+                        "example": "2026-09-28T00:00:00Z",
+                        "format": "date-time",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "allowedOperations",
+                    "blockedOperations",
+                    "start"
+                ],
+                "type": "object"
+            },
+            "openapi.ProjectPortfolioFailed": {
+                "properties": {
+                    "error": {
+                        "$ref": "#/components/schemas/openapi.ProjectPortfolioFailedError"
+                    }
+                },
+                "required": [
+                    "error"
+                ],
+                "type": "object"
+            },
+            "openapi.ProjectPortfolioFailedError": {
+                "properties": {
+                    "code": {
+                        "example": "project_portfolio_failed",
+                        "type": "string"
+                    },
+                    "message": {
+                        "example": "Consumel could not load the project portfolio. Try again shortly.",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "code"
+                ],
+                "type": "object"
+            },
+            "openapi.ProjectPortfolioInvalid": {
+                "properties": {
+                    "error": {
+                        "$ref": "#/components/schemas/openapi.ProjectPortfolioInvalidError"
+                    }
+                },
+                "required": [
+                    "error"
+                ],
+                "type": "object"
+            },
+            "openapi.ProjectPortfolioInvalidError": {
+                "properties": {
+                    "code": {
+                        "example": "invalid_filter",
+                        "type": "string"
+                    },
+                    "message": {
+                        "example": "Choose a valid environment, interval, and date range. Hourly ranges may span 31 days; daily ranges may span one year.",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "code"
+                ],
+                "type": "object"
+            },
+            "openapi.ProjectPortfolioProject": {
+                "properties": {
+                    "activatedAt": {
+                        "example": "2026-09-25T12:08:00Z",
+                        "format": "date-time",
+                        "type": "string"
+                    },
+                    "allowedOperations": {
+                        "example": 420,
+                        "format": "int64",
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "blockedOperations": {
+                        "example": 5,
+                        "format": "int64",
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "environmentId": {
+                        "example": "0199a417-1ae1-7b67-ad5b-809be2f9ca0a",
+                        "format": "uuid",
+                        "type": "string"
+                    },
+                    "id": {
+                        "example": "0199a417-05da-7aa2-b024-2011f24972da",
+                        "format": "uuid",
+                        "type": "string"
+                    },
+                    "lastActivityAt": {
+                        "example": "2026-09-29T18:42:00Z",
+                        "format": "date-time",
+                        "type": "string"
+                    },
+                    "name": {
+                        "example": "Acme API",
+                        "type": "string"
+                    },
+                    "slug": {
+                        "example": "acme-api",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "activatedAt",
+                    "allowedOperations",
+                    "blockedOperations",
+                    "environmentId",
+                    "id",
+                    "lastActivityAt",
+                    "name",
+                    "slug"
+                ],
+                "type": "object"
+            },
+            "openapi.ProjectPortfolioSummary": {
+                "properties": {
+                    "allowedOperations": {
+                        "example": 950,
+                        "format": "int64",
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "blockedOperations": {
+                        "example": 12,
+                        "format": "int64",
+                        "minimum": 0,
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "allowedOperations",
+                    "blockedOperations"
+                ],
+                "type": "object"
+            },
             "openapi.Projects": {
                 "properties": {
                     "projects": {
@@ -6235,6 +6449,112 @@
                     }
                 ],
                 "summary": "Create a project with isolated Sandbox and Live environments.",
+                "tags": [
+                    "Projects"
+                ]
+            }
+        },
+        "/v1/projects/portfolio": {
+            "get": {
+                "parameters": [
+                    {
+                        "description": "The isolated environment summarized across projects.",
+                        "in": "query",
+                        "name": "environment",
+                        "required": true,
+                        "schema": {
+                            "enum": [
+                                "sandbox",
+                                "live"
+                            ],
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Inclusive RFC 3339 start time.",
+                        "in": "query",
+                        "name": "from",
+                        "required": true,
+                        "schema": {
+                            "format": "date-time",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Exclusive RFC 3339 end time.",
+                        "in": "query",
+                        "name": "to",
+                        "required": true,
+                        "schema": {
+                            "format": "date-time",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "UTC aggregation interval. Hourly ranges may span 31 days; daily ranges may span one year.",
+                        "in": "query",
+                        "name": "interval",
+                        "required": true,
+                        "schema": {
+                            "enum": [
+                                "hour",
+                                "day"
+                            ],
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.ProjectPortfolio"
+                                }
+                            }
+                        },
+                        "description": "Completed successfully. Missing UTC buckets are returned with zero values."
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.ProjectPortfolioInvalid"
+                                }
+                            }
+                        },
+                        "description": "The portfolio filters are invalid."
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.NotAuthenticated"
+                                }
+                            }
+                        },
+                        "description": "Authentication is required."
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.ProjectPortfolioFailed"
+                                }
+                            }
+                        },
+                        "description": "The project portfolio could not be loaded."
+                    }
+                },
+                "security": [
+                    {
+                        "productionCookieSession": []
+                    },
+                    {
+                        "localCookieSession": []
+                    }
+                ],
+                "summary": "Return an organization-wide project portfolio for one environment.",
                 "tags": [
                     "Projects"
                 ]

@@ -1,6 +1,9 @@
 GET /v1/projects
 Returns the signed-in user's active projects with their Sandbox and Live environments.
 
+GET /v1/projects/portfolio
+Returns environment-scoped request outcomes and per-project summaries across the signed-in organization.
+
 POST /v1/projects
 Creates a project with isolated Sandbox and Live environments in the signed-in user's organization.
 

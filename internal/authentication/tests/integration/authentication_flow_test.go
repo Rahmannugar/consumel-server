@@ -15,6 +15,7 @@ import (
 
 	"github.com/Rahmannugar/authlier"
 	"github.com/Rahmannugar/authlier/emailverification"
+	"github.com/Rahmannugar/authlier/sessiontoken"
 	authlierpostgres "github.com/Rahmannugar/authlier/storage/postgres"
 	authlierredis "github.com/Rahmannugar/authlier/storage/redis"
 	consumelauthentication "github.com/Rahmannugar/consumel-server/internal/authentication"
@@ -302,7 +303,11 @@ func newAuthenticationTestApp(t *testing.T) authenticationTestApp {
 			Lifetime: 7 * 24 * time.Hour,
 			Cache:    sessionCache,
 			CacheTTL: time.Hour,
-			Cookie:   authlier.CookieConfig{Name: "consumel_session", Path: "/"},
+			Extension: &sessiontoken.ExtensionConfig{
+				ExtendAfter:      24 * time.Hour,
+				AbsoluteLifetime: 30 * 24 * time.Hour,
+			},
+			Cookie: authlier.CookieConfig{Name: "consumel_session", Path: "/"},
 		},
 	})
 	if err != nil {

@@ -28,6 +28,14 @@ func projectCreateTelemetry() gin.HandlerFunc {
 	})
 }
 
+func portfolioTelemetry() gin.HandlerFunc {
+	return RequestTelemetry("projects.portfolio", telemetry.CompletionDetails{
+		Success:  telemetry.Completion{Event: "projects.portfolio.loaded", Message: "Project portfolio loaded"},
+		Rejected: telemetry.Completion{Event: "projects.portfolio.rejected", Message: "Project portfolio request rejected"},
+		Failed:   telemetry.Completion{Event: "projects.portfolio.failed", Message: "Could not load project portfolio"},
+	})
+}
+
 func apiKeyTelemetry(operation, event, message string) gin.HandlerFunc {
 	return RequestTelemetry(operation, telemetry.CompletionDetails{
 		Success:  telemetry.Completion{Event: event, Message: message},

@@ -104,7 +104,11 @@ OTP challenges contain no plaintext code and are consumed once. A failure
 after challenge consumption requires the user to request a new code rather
 than making the old code reusable.
 
-Browser sessions use opaque HttpOnly cookies and last seven days. Local HTTP
+Browser sessions use opaque HttpOnly cookies with a seven-day inactivity
+window. Eligible authenticated activity extends the durable expiry at most
+once per 24 hours, but the session always ends within 30 days of the original
+sign-in. The browser retains the credential until that absolute boundary;
+PostgreSQL remains authoritative for idle expiry and revocation. Local HTTP
 uses `consumel_session`; production HTTPS uses the host-only
 `__Host-consumel_session` cookie with `Path=/` and no Domain attribute. Redis
 caches resolved sessions for no more than one hour with up to ten percent
