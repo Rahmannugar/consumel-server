@@ -50,6 +50,20 @@ func TestSignupOTPCreatesConsumelUserAndSession(t *testing.T) {
 	if !cookie.HttpOnly || cookie.Name != "consumel_session" {
 		t.Fatalf("verification cookie = %#v, want HttpOnly Consumel session", cookie)
 	}
+	var createdAt time.Time
+	var expiresAt time.Time
+	if err := app.pool.QueryRow(t.Context(), `SELECT created_at, expires_at
+		FROM authlier_sessions
+		ORDER BY created_at DESC
+		LIMIT 1`).Scan(&createdAt, &expiresAt); err != nil {
+		t.Fatalf("load created session: %v", err)
+	}
+	if want := createdAt.Add(30 * 24 * time.Hour).Truncate(time.Second); !cookie.Expires.Equal(want) {
+		t.Fatalf("cookie expiry = %v, want absolute expiry %v", cookie.Expires, want)
+	}
+	if want := createdAt.Add(7 * 24 * time.Hour); !expiresAt.Equal(want) {
+		t.Fatalf("durable expiry = %v, want idle expiry %v", expiresAt, want)
+	}
 
 	reusedVerification := performJSONRequest(
 		t,
@@ -105,6 +119,48 @@ func TestSignupOTPCreatesConsumelUserAndSession(t *testing.T) {
 	}
 	if storedInPostgres != 0 {
 		t.Fatalf("PostgreSQL verification challenge count = %d, want 0", storedInPostgres)
+	}
+}
+
+func TestAuthenticatedActivityExtendsTheSessionIdleExpiry(t *testing.T) {
+	app := newAuthenticationTestApp(t)
+	cookie, _ := app.signUpAndVerify(t, "sliding-session@example.com")
+
+	now := time.Now().UTC()
+	createdAt := now.Add(-48 * time.Hour)
+	if _, err := app.pool.Exec(t.Context(), `UPDATE authlier_sessions
+		SET created_at = $1, expires_at = $2, extended_at = NULL`,
+		createdAt,
+		createdAt.Add(7*24*time.Hour),
+	); err != nil {
+		t.Fatalf("age durable session: %v", err)
+	}
+	if err := app.redisClient.FlushDB(t.Context()).Err(); err != nil {
+		t.Fatalf("clear session cache: %v", err)
+	}
+
+	startedAt := time.Now().UTC()
+	response := performJSONRequest(t, app.router, http.MethodGet, "/auth/session", nil, cookie)
+	completedAt := time.Now().UTC()
+	if response.Code != http.StatusOK {
+		t.Fatalf("session status = %d, body = %s", response.Code, response.Body.String())
+	}
+
+	var extendedAt time.Time
+	var expiresAt time.Time
+	if err := app.pool.QueryRow(t.Context(), `SELECT extended_at, expires_at
+		FROM authlier_sessions
+		LIMIT 1`).Scan(&extendedAt, &expiresAt); err != nil {
+		t.Fatalf("load extended session: %v", err)
+	}
+	if extendedAt.Before(startedAt) || extendedAt.After(completedAt) {
+		t.Fatalf("extended at %v outside request window [%v, %v]", extendedAt, startedAt, completedAt)
+	}
+	if want := extendedAt.Add(7 * 24 * time.Hour); !expiresAt.Equal(want) {
+		t.Fatalf("extended expiry = %v, want %v", expiresAt, want)
+	}
+	if absoluteExpiry := createdAt.Add(30 * 24 * time.Hour); expiresAt.After(absoluteExpiry) {
+		t.Fatalf("extended expiry %v exceeds absolute expiry %v", expiresAt, absoluteExpiry)
 	}
 }
 
@@ -218,6 +274,7 @@ type authenticationTestApp struct {
 	emailQueue     *emaildelivery.Queue
 	users          *userrepositories.UserRepository
 	pool           *pgxpool.Pool
+	redisClient    *redis.Client
 	redisContainer testcontainers.Container
 }
 
@@ -335,6 +392,7 @@ func newAuthenticationTestApp(t *testing.T) authenticationTestApp {
 		emailQueue:     emailQueue,
 		users:          userRepository,
 		pool:           pool,
+		redisClient:    redisClient,
 		redisContainer: redisContainer,
 	}
 }
