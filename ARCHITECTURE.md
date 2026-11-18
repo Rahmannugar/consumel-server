@@ -2,7 +2,7 @@
 
 Consumel Server runs as a Go HTTP API backed by PostgreSQL and Redis. Gin routes
 requests, Koanf loads startup configuration, pgx manages the database pool, and
-Authlier v0.5.0 supplies reusable authentication through its standard
+Authlier v0.5.1 supplies reusable authentication through its standard
 `net/http` handler.
 
 ## Runtime flow
@@ -57,9 +57,19 @@ that PostgreSQL is reachable before reporting the API instance as ready.
 PostgreSQL is the durable source of truth. Tern owns ordered schema migrations,
 and sqlc generates pgx-backed query code from domain-owned SQL.
 
+Prepared statements stay cached, but every application pool runs with
+`plan_cache_mode=force_custom_plan` so each execution is planned with its own
+parameters. PostgreSQL normally switches to a generic plan after a few
+executions, and a generic plan cannot see a parameterized time window. It
+estimates an unknown range at 0.5% selectivity, which replaced the
+organization-wide portfolio aggregate's single scan with a nested loop over the
+whole operation table and raised its median latency from about 55 ms to more
+than two seconds. Custom planning costs one plan per execution and keeps that
+aggregate on the scan shape its data supports.
+
 Application pools are client-side caps sized to each process's concurrency:
-the API uses 20 connections and the worker 30 to match its 10 email and 20
-outbox execution slots, each adjustable through
+the API uses 20 connections and the worker 32 to match its 10 email, 20
+outbox, and two recurring-allowance execution slots, each adjustable through
 CONSUMEL_DATABASE_API_POOL_MAX and CONSUMEL_DATABASE_WORKER_POOL_MAX. Deployment bounds real PostgreSQL connections per
 application user through PgBouncer, so API instance count never multiplies
 server-side connections.

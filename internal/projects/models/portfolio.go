@@ -29,6 +29,17 @@ type PortfolioBucket struct {
 	BlockedOperations int64
 }
 
+// PortfolioActivity is one project's outcomes within one calendar bucket. The
+// portfolio service derives both the organization buckets and the per-project
+// totals from these rows so the operation table is scanned once.
+type PortfolioActivity struct {
+	ProjectID         uuid.UUID
+	Start             time.Time
+	AllowedOperations int64
+	BlockedOperations int64
+	LastActivityAt    time.Time
+}
+
 type PortfolioProject struct {
 	ID                uuid.UUID
 	Name              string

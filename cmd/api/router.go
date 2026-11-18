@@ -29,6 +29,7 @@ func newRouter(
 	customerService customerhandlers.CustomerService,
 	meterService meterhandlers.MeterService,
 	balanceService consumptionhandlers.BalanceService,
+	allowanceService consumptionhandlers.AllowanceService,
 	consumeService consumptionhandlers.ConsumeService,
 	operationService consumptionhandlers.OperationService,
 	analyticsService consumptionhandlers.AnalyticsService,
@@ -86,6 +87,7 @@ func newRouter(
 		balanceService,
 		logger,
 	)
+	consumptionhandlers.RegisterAllowanceRoutes(router, authentication.apiKeyAuthenticator, authentication.tenantResolver, projectService, allowanceService, logger)
 	consumptionhandlers.RegisterConsumeRoutes(
 		router,
 		authentication.apiKeyAuthenticator,

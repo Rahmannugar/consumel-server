@@ -20,14 +20,14 @@ SELECT
         FROM entitlement_grants expiring
         WHERE expiring.balance_id = $1
           AND expiring.remaining_quantity > 0
-          AND expiring.expires_at > now()
+          AND expiring.expires_at > consumption_entitlement_time()
         ORDER BY expiring.expires_at
         LIMIT 1
     ) AS next_expires_at
 FROM entitlement_grants
 WHERE balance_id = $1
   AND remaining_quantity > 0
-  AND (expires_at IS NULL OR expires_at > now())
+  AND (expires_at IS NULL OR expires_at > consumption_entitlement_time())
 `
 
 type ActiveEntitlementSummaryRow struct {
@@ -69,14 +69,14 @@ LEFT JOIN LATERAL (
             FROM entitlement_grants expiring
             WHERE expiring.balance_id = b.id
               AND expiring.remaining_quantity > 0
-              AND expiring.expires_at > now()
+              AND expiring.expires_at > consumption_entitlement_time()
             ORDER BY expiring.expires_at
             LIMIT 1
         ) AS next_expires_at
     FROM entitlement_grants g
     WHERE g.balance_id = b.id
       AND g.remaining_quantity > 0
-      AND (g.expires_at IS NULL OR g.expires_at > now())
+      AND (g.expires_at IS NULL OR g.expires_at > consumption_entitlement_time())
 ) entitlement ON true
 WHERE b.project_environment_id = $1
   AND c.customer_id = $2
@@ -503,6 +503,17 @@ WITH target_balance AS (
     UNION ALL
 
     SELECT
+        g.id, p.period_start AS occurred_at, 'allowance'::text AS kind,
+        p.quantity AS quantity_change, NULL::bigint AS resulting_quantity,
+        p.period_end AS expires_at, 'policy_job'::text AS source_type,
+        p.allowance_id AS source_id
+    FROM allowance_periods p
+    JOIN entitlement_grants g ON g.id=p.grant_id
+    WHERE g.balance_id=(SELECT id FROM target_balance)
+
+    UNION ALL
+
+    SELECT
         g.id,
         g.expires_at AS occurred_at,
         'expiration'::text AS kind,
@@ -513,7 +524,7 @@ WITH target_balance AS (
         NULL::uuid AS source_id
     FROM entitlement_grants g
     WHERE g.balance_id = (SELECT id FROM target_balance)
-      AND g.expires_at <= now()
+      AND g.expires_at <= consumption_entitlement_time()
       AND g.remaining_quantity > 0
 )
 SELECT id, occurred_at, kind, quantity_change, resulting_quantity, expires_at, source_type, source_id
@@ -612,14 +623,14 @@ LEFT JOIN LATERAL (
             FROM entitlement_grants expiring
             WHERE expiring.balance_id = b.id
               AND expiring.remaining_quantity > 0
-              AND expiring.expires_at > now()
+              AND expiring.expires_at > consumption_entitlement_time()
             ORDER BY expiring.expires_at
             LIMIT 1
         ) AS next_expires_at
     FROM entitlement_grants g
     WHERE g.balance_id = b.id
       AND g.remaining_quantity > 0
-      AND (g.expires_at IS NULL OR g.expires_at > now())
+      AND (g.expires_at IS NULL OR g.expires_at > consumption_entitlement_time())
 ) entitlement ON true
 WHERE b.project_environment_id = $1
   AND c.customer_id = $2
@@ -750,6 +761,8 @@ INSERT INTO balance_operation_grant_allocations (
     quantity
 )
 VALUES ($1, $2, $3)
+ON CONFLICT (balance_operation_id, entitlement_grant_id) DO UPDATE
+SET quantity=balance_operation_grant_allocations.quantity+EXCLUDED.quantity
 `
 
 type RecordBalanceGrantAllocationParams struct {
@@ -840,7 +853,7 @@ SET
         FROM entitlement_grants
         WHERE balance_id = balances.id
           AND remaining_quantity > 0
-          AND (expires_at IS NULL OR expires_at > now())
+          AND (expires_at IS NULL OR expires_at > consumption_entitlement_time())
     ),
     updated_at = now()
 WHERE balances.id = $1
@@ -867,7 +880,7 @@ SELECT id, balance_id, source_type, granted_quantity, remaining_quantity, expire
 FROM entitlement_grants
 WHERE balance_id = $1
   AND remaining_quantity > 0
-  AND (expires_at IS NULL OR expires_at > now())
+  AND (expires_at IS NULL OR expires_at > consumption_entitlement_time())
 ORDER BY expires_at ASC NULLS LAST, created_at, id
 FOR UPDATE
 `

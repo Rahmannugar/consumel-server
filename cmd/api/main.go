@@ -131,6 +131,7 @@ func run() (runError error) {
 	balanceService := consumptionservices.NewBalanceService(
 		consumptionrepositories.NewBalanceRepository(databasePool),
 	)
+	allowanceService := consumptionservices.NewAllowanceService(consumptionrepositories.NewAllowanceRepository(databasePool))
 	consumeService := consumptionservices.NewConsumeService(
 		consumptionrepositories.NewConsumeRepository(databasePool),
 	)
@@ -152,6 +153,7 @@ func run() (runError error) {
 		customerService,
 		meterService,
 		balanceService,
+		allowanceService,
 		consumeService,
 		operationService,
 		analyticsService,

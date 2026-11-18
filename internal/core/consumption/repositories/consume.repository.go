@@ -82,7 +82,7 @@ func (repository *ConsumeRepository) Consume(
 	}
 
 	result, err := repository.applyConsumption(
-		ctx, queries, claimed, request, balanceID, meter.EnvironmentName == "live",
+		ctx, tx, queries, claimed, request, balanceID, meter.EnvironmentName == "live",
 	)
 	if errors.Is(err, consumptionmodels.ErrInsufficientBalance) {
 		if outboxErr := insertConsumptionOutbox(
@@ -163,6 +163,7 @@ func insertConsumptionOutbox(
 
 func (repository *ConsumeRepository) applyConsumption(
 	ctx context.Context,
+	tx pgx.Tx,
 	queries *consumptiondb.Queries,
 	operation consumptiondb.ConsumptionOperation,
 	request consumptionmodels.ConsumeRequest,
@@ -182,6 +183,9 @@ func (repository *ConsumeRepository) applyConsumption(
 		}
 		if err != nil {
 			return consumptionmodels.UsageEvent{}, fmt.Errorf("lock prepaid balance: %w", err)
+		}
+		if err := reconcileAllowance(ctx, tx, queries, stored.ID); err != nil {
+			return consumptionmodels.UsageEvent{}, err
 		}
 		grants, err := queries.SpendableEntitlementGrants(ctx, stored.ID)
 		if err != nil {
@@ -211,6 +215,9 @@ func (repository *ConsumeRepository) applyConsumption(
 		stored, err := lockedBalance(ctx, queries, operation)
 		if err != nil {
 			return consumptionmodels.UsageEvent{}, fmt.Errorf("lock hybrid balance: %w", err)
+		}
+		if err := reconcileAllowance(ctx, tx, queries, stored.ID); err != nil {
+			return consumptionmodels.UsageEvent{}, err
 		}
 		grants, err := queries.SpendableEntitlementGrants(ctx, stored.ID)
 		if err != nil {

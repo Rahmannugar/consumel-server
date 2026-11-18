@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/Rahmannugar/consumel-server/internal/config"
+	consumptionjobs "github.com/Rahmannugar/consumel-server/internal/core/consumption/jobs"
+	consumptionrepositories "github.com/Rahmannugar/consumel-server/internal/core/consumption/repositories"
 	"github.com/Rahmannugar/consumel-server/internal/infra/cache"
 	"github.com/Rahmannugar/consumel-server/internal/infra/clients"
 	"github.com/Rahmannugar/consumel-server/internal/infra/database"
@@ -33,7 +35,7 @@ const (
 	outboxConcurrency = 20
 	// databasePoolDefault matches the execution slots so no slot waits on a
 	// pooled connection.
-	databasePoolDefault int32 = 30
+	databasePoolDefault int32 = 32
 )
 
 type workerResult struct {
@@ -122,16 +124,22 @@ func run() (runError error) {
 		return fmt.Errorf("configure email delivery consumer: %w", err)
 	}
 
+	allowanceObserver, err := telemetryRuntime.NewJobObserver("allowance.renew")
+	if err != nil {
+		return fmt.Errorf("configure allowance telemetry: %w", err)
+	}
+	allowanceWorker := consumptionjobs.NewAllowanceWorker(consumptionrepositories.NewAllowanceRepository(databasePool), allowanceObserver, logger)
 	signalContext, stopSignals := signal.NotifyContext(
 		context.Background(), syscall.SIGINT, syscall.SIGTERM,
 	)
 	defer stopSignals()
 	workerContext, stopWorkers := context.WithCancel(signalContext)
 	defer stopWorkers()
-	results := make(chan workerResult, 2)
+	results := make(chan workerResult, 3)
 	go func() { results <- workerResult{name: "outbox-relay", err: relay.Run(workerContext)} }()
 	go func() { results <- workerResult{name: "email-deliveries", err: emailConsumer.Run(workerContext)} }()
 
+	go func() { results <- workerResult{name: "recurring-allowances", err: allowanceWorker.Run(workerContext)} }()
 	logger.Info("worker consumption started", "consumer", consumerName)
 	completed := 0
 	select {
@@ -149,7 +157,7 @@ func run() (runError error) {
 
 	shutdownTimer := time.NewTimer(shutdownTimeout)
 	defer shutdownTimer.Stop()
-	for completed < 2 {
+	for completed < 3 {
 		select {
 		case result := <-results:
 			completed++

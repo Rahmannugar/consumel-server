@@ -69,8 +69,6 @@ func (repository *ProjectRepository) ProjectPortfolio(
 ) ([]models.PortfolioProject, error) {
 	rows, err := repository.queries.ListProjectPortfolio(ctx, projectdb.ListProjectPortfolioParams{
 		Environment: string(filter.Environment),
-		FromTime:    pgtype.Timestamptz{Time: filter.From, Valid: true},
-		ToTime:      pgtype.Timestamptz{Time: filter.To, Valid: true},
 		UserID:      userID,
 	})
 	if err != nil {
@@ -80,11 +78,8 @@ func (repository *ProjectRepository) ProjectPortfolio(
 	for _, row := range rows {
 		projects = append(projects, models.PortfolioProject{
 			ID: row.ID, Name: row.Name, Slug: row.Slug,
-			EnvironmentID:     row.EnvironmentID,
-			ActivatedAt:       nullableTime(row.ActivatedAt),
-			AllowedOperations: row.AllowedOperations,
-			BlockedOperations: row.BlockedOperations,
-			LastActivityAt:    nullableTime(row.LastActivityAt),
+			EnvironmentID: row.EnvironmentID,
+			ActivatedAt:   nullableTime(row.ActivatedAt),
 		})
 	}
 	return projects, nil
@@ -94,7 +89,7 @@ func (repository *ProjectRepository) AggregatePortfolio(
 	ctx context.Context,
 	userID uuid.UUID,
 	filter models.PortfolioFilter,
-) ([]models.PortfolioBucket, error) {
+) ([]models.PortfolioActivity, error) {
 	rows, err := repository.queries.AggregateProjectPortfolio(ctx, projectdb.AggregateProjectPortfolioParams{
 		BucketInterval: string(filter.Interval),
 		Environment:    string(filter.Environment),
@@ -105,15 +100,17 @@ func (repository *ProjectRepository) AggregatePortfolio(
 	if err != nil {
 		return nil, fmt.Errorf("aggregate project portfolio: %w", err)
 	}
-	buckets := make([]models.PortfolioBucket, 0, len(rows))
+	activity := make([]models.PortfolioActivity, 0, len(rows))
 	for _, row := range rows {
-		buckets = append(buckets, models.PortfolioBucket{
+		activity = append(activity, models.PortfolioActivity{
+			ProjectID:         row.ProjectID,
 			Start:             row.BucketStart.Time,
 			AllowedOperations: row.AllowedOperations,
 			BlockedOperations: row.BlockedOperations,
+			LastActivityAt:    row.LastActivityAt.Time,
 		})
 	}
-	return buckets, nil
+	return activity, nil
 }
 
 func (repository *ProjectRepository) CreateProjectWithEnvironments(

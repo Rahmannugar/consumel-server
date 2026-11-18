@@ -4,12 +4,13 @@ Consumel is infrastructure for usage-based billing. It helps SaaS companies
 meter usage, manage customer balances and entitlements, apply pricing rules,
 and connect usage data to the payment providers they already use.
 
-This repository contains the Go backend for Consumel. The current server
-provides the HTTP API foundation, Authlier email/password authentication,
-PostgreSQL persistence, Redis-backed authentication coordination, health
-checks, structured observability, graceful shutdown, and the initial user,
-organization, organization-membership, project, and environment persistence
-flows.
+This repository contains the Go HTTP API and workers for Consumel. Implemented
+workflows include Authlier authentication, organization and project onboarding,
+Sandbox/Live API keys, customers, meters, durable grant balances, atomic usage
+consumption, usage analytics, and customer recurring allowances. PostgreSQL owns
+durable state; Redis Streams carries asynchronous events, and workers deliver
+email and renew allowances. Organization billing, pricing, provider connectors,
+and the remaining V1 surfaces follow in their connected implementation slices.
 
 ## Technology
 

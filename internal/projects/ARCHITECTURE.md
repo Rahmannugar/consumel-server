@@ -20,3 +20,23 @@ resolution establishes organization, project, and environment context without
 requiring those identifiers in the public request. `last_used_at` is refreshed
 at a bounded cadence so key metadata remains useful without adding a write to
 every request.
+
+## Project portfolio
+
+`GET /v1/projects/portfolio` reads every project in the caller's active
+organizations for one environment. It returns no project when the caller is not
+an active member of the organization, and Sandbox and Live are never combined in
+one response.
+
+The read uses two queries. The project list reads only project and environment
+rows. The usage aggregate groups finalized operations by project and calendar
+bucket, and the service derives both the organization chart buckets and each
+project's comparison totals from those rows. Deriving both views from one
+operation scan keeps the portfolio within one pass over the usage table instead
+of aggregating it once per view. Projects without operations remain in the list
+with zero totals and no last activity.
+
+Buckets stay continuous in UTC. Missing periods are returned as zero values,
+hourly requests are capped at 31 days, and daily requests are capped at one
+year. The response contract stays stable if raw aggregation is later replaced by
+durable rollups.

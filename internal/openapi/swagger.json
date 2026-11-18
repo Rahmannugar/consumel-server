@@ -35,6 +35,42 @@
                 ],
                 "type": "object"
             },
+            "models.AllowanceRequest": {
+                "properties": {
+                    "enabled": {
+                        "example": true,
+                        "type": "boolean"
+                    },
+                    "quantity": {
+                        "example": 1000,
+                        "format": "int64",
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "rolloverCap": {
+                        "example": 2000,
+                        "format": "int64",
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "startsAt": {
+                        "example": "2026-12-01T00:00:00Z",
+                        "format": "date-time",
+                        "type": "string"
+                    },
+                    "version": {
+                        "example": 0,
+                        "format": "int64",
+                        "minimum": 0,
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "quantity",
+                    "startsAt"
+                ],
+                "type": "object"
+            },
             "models.ConsumeRequest": {
                 "properties": {
                     "customerId": {
@@ -316,6 +352,163 @@
                 ],
                 "type": "object"
             },
+            "openapi.AllowanceConflict": {
+                "description": "Possible codes: allowance_version_conflict, environment_inactive, balance_limit_exceeded.",
+                "properties": {
+                    "error": {
+                        "$ref": "#/components/schemas/openapi.AllowanceConflictError"
+                    }
+                },
+                "required": [
+                    "error"
+                ],
+                "type": "object"
+            },
+            "openapi.AllowanceConflictError": {
+                "properties": {
+                    "code": {
+                        "example": "allowance_version_conflict",
+                        "type": "string"
+                    },
+                    "message": {
+                        "example": "Reload the allowance before editing. Its start date cannot change after creation.",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "code",
+                    "message"
+                ],
+                "type": "object"
+            },
+            "openapi.AllowanceInvalid": {
+                "description": "Possible codes: invalid_allowance, invalid_balance, invalid_request, invalid_cursor.",
+                "properties": {
+                    "error": {
+                        "$ref": "#/components/schemas/openapi.AllowanceInvalidError"
+                    }
+                },
+                "required": [
+                    "error"
+                ],
+                "type": "object"
+            },
+            "openapi.AllowanceInvalidError": {
+                "properties": {
+                    "code": {
+                        "example": "invalid_allowance",
+                        "type": "string"
+                    },
+                    "message": {
+                        "example": "Use a positive quantity, a nonnegative rollover cap, and a start date at midnight UTC.",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "code",
+                    "message"
+                ],
+                "type": "object"
+            },
+            "openapi.AllowanceMissing": {
+                "description": "Possible codes: allowance_not_found, balance_subject_not_found, project_environment_not_found.",
+                "properties": {
+                    "error": {
+                        "$ref": "#/components/schemas/openapi.AllowanceMissingError"
+                    }
+                },
+                "required": [
+                    "error"
+                ],
+                "type": "object"
+            },
+            "openapi.AllowanceMissingError": {
+                "properties": {
+                    "code": {
+                        "example": "allowance_not_found",
+                        "type": "string"
+                    },
+                    "message": {
+                        "example": "No recurring allowance is configured for this customer and meter.",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "code",
+                    "message"
+                ],
+                "type": "object"
+            },
+            "openapi.AllowancePeriod": {
+                "properties": {
+                    "carriedQuantity": {
+                        "example": 250,
+                        "type": "integer"
+                    },
+                    "periodEnd": {
+                        "example": "2027-01-01T00:00:00Z",
+                        "type": "string"
+                    },
+                    "periodStart": {
+                        "example": "2026-12-01T00:00:00Z",
+                        "type": "string"
+                    },
+                    "quantity": {
+                        "example": 1250,
+                        "type": "integer"
+                    },
+                    "revision": {
+                        "example": 1,
+                        "type": "integer"
+                    },
+                    "skippedPeriods": {
+                        "example": 0,
+                        "type": "integer"
+                    },
+                    "sourceId": {
+                        "example": "019a5db9-3e67-7000-8000-000000000002",
+                        "type": "string"
+                    },
+                    "sourceType": {
+                        "enum": [
+                            "dashboard_user",
+                            "api_key"
+                        ],
+                        "example": "dashboard_user",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "carriedQuantity",
+                    "periodEnd",
+                    "periodStart",
+                    "quantity",
+                    "revision",
+                    "skippedPeriods",
+                    "sourceId",
+                    "sourceType"
+                ],
+                "type": "object"
+            },
+            "openapi.AllowancePeriods": {
+                "properties": {
+                    "nextCursor": {
+                        "type": "string"
+                    },
+                    "periods": {
+                        "items": {
+                            "$ref": "#/components/schemas/openapi.AllowancePeriod"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    }
+                },
+                "required": [
+                    "nextCursor",
+                    "periods"
+                ],
+                "type": "object"
+            },
             "openapi.AnalyticsFailed": {
                 "properties": {
                     "error": {
@@ -476,7 +669,8 @@
                             "add",
                             "set",
                             "usage",
-                            "expiration"
+                            "expiration",
+                            "allowance"
                         ],
                         "example": "usage",
                         "type": "string"
@@ -2776,6 +2970,81 @@
                 },
                 "required": [
                     "code"
+                ],
+                "type": "object"
+            },
+            "openapi.RecurringAllowance": {
+                "properties": {
+                    "current": {
+                        "$ref": "#/components/schemas/openapi.RecurringAllowanceRevision"
+                    },
+                    "id": {
+                        "example": "019a5db9-3e67-7000-8000-000000000001",
+                        "format": "uuid",
+                        "type": "string"
+                    },
+                    "nextPeriodAt": {
+                        "example": "2027-01-01T00:00:00Z",
+                        "format": "date-time",
+                        "type": "string"
+                    },
+                    "pending": {
+                        "$ref": "#/components/schemas/openapi.RecurringAllowanceRevision"
+                    },
+                    "startsAt": {
+                        "example": "2026-12-01T00:00:00Z",
+                        "format": "date-time",
+                        "type": "string"
+                    },
+                    "version": {
+                        "example": 1,
+                        "format": "int64",
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "current",
+                    "id",
+                    "nextPeriodAt",
+                    "pending",
+                    "startsAt",
+                    "version"
+                ],
+                "type": "object"
+            },
+            "openapi.RecurringAllowanceRevision": {
+                "properties": {
+                    "effectiveAt": {
+                        "example": "2026-12-01T00:00:00Z",
+                        "format": "date-time",
+                        "type": "string"
+                    },
+                    "enabled": {
+                        "example": true,
+                        "type": "boolean"
+                    },
+                    "quantity": {
+                        "example": 1000,
+                        "format": "int64",
+                        "type": "integer"
+                    },
+                    "rolloverCap": {
+                        "example": 2000,
+                        "format": "int64",
+                        "type": "integer"
+                    },
+                    "version": {
+                        "example": 1,
+                        "format": "int64",
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "effectiveAt",
+                    "enabled",
+                    "quantity",
+                    "rolloverCap",
+                    "version"
                 ],
                 "type": "object"
             },
@@ -5788,6 +6057,327 @@
                 ]
             }
         },
+        "/v1/customers/{customerId}/balances/{meterKey}/allowance": {
+            "get": {
+                "description": "Monthly UTC renewal; month-end dates clamp without drifting. Creation grants the full current period without proration, with no credit for time before creation. Zero rollover cap resets only policy-issued quantity; a positive cap limits carry in addition to the new period quantity. Edits, including disabling, take effect next renewal; startsAt is immutable. A version of zero creates; existing policies require the latest version.",
+                "parameters": [
+                    {
+                        "description": "The integrating application customer identifier.",
+                        "in": "path",
+                        "name": "customerId",
+                        "required": true,
+                        "schema": {
+                            "maxLength": 255,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "The active meter key.",
+                        "in": "path",
+                        "name": "meterKey",
+                        "required": true,
+                        "schema": {
+                            "maxLength": 120,
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.RecurringAllowance"
+                                }
+                            }
+                        },
+                        "description": "Current and scheduled allowance configuration."
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.AllowanceInvalid"
+                                }
+                            }
+                        },
+                        "description": "Invalid allowance or subject keys."
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.InvalidAPIKey"
+                                }
+                            }
+                        },
+                        "description": "Authentication is required."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.AllowanceMissing"
+                                }
+                            }
+                        },
+                        "description": "The allowance or accessible active resource was not found."
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.AllowanceConflict"
+                                }
+                            }
+                        },
+                        "description": "A stale revision, changed anchor, inactive environment, or quantity overflow prevents this operation."
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.BalanceFailed"
+                                }
+                            }
+                        },
+                        "description": "The allowance could not be loaded or saved."
+                    }
+                },
+                "security": [
+                    {
+                        "projectAPIKey": []
+                    }
+                ],
+                "summary": "Read a customer recurring allowance and its pending revision.",
+                "tags": [
+                    "Allowances"
+                ]
+            },
+            "put": {
+                "description": "Monthly UTC renewal; month-end dates clamp without drifting. Creation grants the full current period without proration, with no credit for time before creation. Zero rollover cap resets only policy-issued quantity; a positive cap limits carry in addition to the new period quantity. Edits, including disabling, take effect next renewal; startsAt is immutable. A version of zero creates; existing policies require the latest version.",
+                "parameters": [
+                    {
+                        "description": "The integrating application customer identifier.",
+                        "in": "path",
+                        "name": "customerId",
+                        "required": true,
+                        "schema": {
+                            "maxLength": 255,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "The active meter key.",
+                        "in": "path",
+                        "name": "meterKey",
+                        "required": true,
+                        "schema": {
+                            "maxLength": 120,
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/models.AllowanceRequest",
+                                "summary": "request",
+                                "description": "Monthly allowance configuration."
+                            }
+                        }
+                    },
+                    "description": "Monthly allowance configuration.",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.RecurringAllowance"
+                                }
+                            }
+                        },
+                        "description": "Current and scheduled allowance configuration."
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.AllowanceInvalid"
+                                }
+                            }
+                        },
+                        "description": "Invalid allowance or subject keys."
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.InvalidAPIKey"
+                                }
+                            }
+                        },
+                        "description": "Authentication is required."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.AllowanceMissing"
+                                }
+                            }
+                        },
+                        "description": "The allowance or accessible active resource was not found."
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.AllowanceConflict"
+                                }
+                            }
+                        },
+                        "description": "A stale revision, changed anchor, inactive environment, or quantity overflow prevents this operation."
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.BalanceFailed"
+                                }
+                            }
+                        },
+                        "description": "The allowance could not be loaded or saved."
+                    }
+                },
+                "security": [
+                    {
+                        "projectAPIKey": []
+                    }
+                ],
+                "summary": "Create a monthly customer allowance or schedule its next-period revision.",
+                "tags": [
+                    "Allowances"
+                ]
+            }
+        },
+        "/v1/customers/{customerId}/balances/{meterKey}/allowance/periods": {
+            "get": {
+                "parameters": [
+                    {
+                        "description": "The integrating application customer identifier.",
+                        "in": "path",
+                        "name": "customerId",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "The active meter key.",
+                        "in": "path",
+                        "name": "meterKey",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "The next cursor from the previous response.",
+                        "in": "query",
+                        "name": "cursor",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Number of periods to return.",
+                        "in": "query",
+                        "name": "limit",
+                        "schema": {
+                            "default": 25,
+                            "maximum": 100,
+                            "minimum": 1,
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.AllowancePeriods"
+                                }
+                            }
+                        },
+                        "description": "Issued periods in newest-first order."
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.AllowanceInvalid"
+                                }
+                            }
+                        },
+                        "description": "Invalid subject, cursor, or limit."
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.InvalidAPIKey"
+                                }
+                            }
+                        },
+                        "description": "Authentication is required."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.AllowanceMissing"
+                                }
+                            }
+                        },
+                        "description": "The allowance or resource is unavailable."
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.AllowanceConflict"
+                                }
+                            }
+                        },
+                        "description": "The environment is inactive or due allowance overflows quantity capacity."
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.BalanceFailed"
+                                }
+                            }
+                        },
+                        "description": "The period history could not be loaded."
+                    }
+                },
+                "security": [
+                    {
+                        "projectAPIKey": []
+                    }
+                ],
+                "summary": "List issued allowance periods and their rollover and recovery quantities.",
+                "tags": [
+                    "Allowances"
+                ]
+            }
+        },
         "/v1/customers/{customerId}/balances/{meterKey}/grants": {
             "get": {
                 "parameters": [
@@ -8173,6 +8763,402 @@
                 "summary": "Return one customer and meter balance from the signed-in project workspace.",
                 "tags": [
                     "Dashboard Balances"
+                ]
+            }
+        },
+        "/v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances/{meterKey}/allowance": {
+            "get": {
+                "description": "Monthly UTC renewal; month-end dates clamp without drifting. Creation grants the full current period without proration, with no credit for time before creation. Zero rollover cap resets only policy-issued quantity; a positive cap limits carry in addition to the new period quantity. Edits, including disabling, take effect next renewal; startsAt is immutable. A version of zero creates; existing policies require the latest version.",
+                "parameters": [
+                    {
+                        "description": "The immutable project ID.",
+                        "in": "path",
+                        "name": "projectId",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Sandbox or Live.",
+                        "in": "path",
+                        "name": "environment",
+                        "required": true,
+                        "schema": {
+                            "enum": [
+                                "sandbox",
+                                "live"
+                            ],
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "The integrating application customer identifier.",
+                        "in": "path",
+                        "name": "customerId",
+                        "required": true,
+                        "schema": {
+                            "maxLength": 255,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "The active meter key.",
+                        "in": "path",
+                        "name": "meterKey",
+                        "required": true,
+                        "schema": {
+                            "maxLength": 120,
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.RecurringAllowance"
+                                }
+                            }
+                        },
+                        "description": "Current and scheduled allowance configuration."
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.AllowanceInvalid"
+                                }
+                            }
+                        },
+                        "description": "Invalid allowance or subject keys."
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.NotAuthenticated"
+                                }
+                            }
+                        },
+                        "description": "Authentication is required."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.AllowanceMissing"
+                                }
+                            }
+                        },
+                        "description": "The allowance or accessible active resource was not found."
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.AllowanceConflict"
+                                }
+                            }
+                        },
+                        "description": "A stale revision, changed anchor, inactive environment, or quantity overflow prevents this operation."
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.BalanceFailed"
+                                }
+                            }
+                        },
+                        "description": "The allowance could not be loaded or saved."
+                    }
+                },
+                "security": [
+                    {
+                        "localCookieSession": []
+                    },
+                    {
+                        "productionCookieSession": []
+                    }
+                ],
+                "summary": "Read a customer recurring allowance and its pending revision.",
+                "tags": [
+                    "Allowances"
+                ]
+            },
+            "put": {
+                "description": "Monthly UTC renewal; month-end dates clamp without drifting. Creation grants the full current period without proration, with no credit for time before creation. Zero rollover cap resets only policy-issued quantity; a positive cap limits carry in addition to the new period quantity. Edits, including disabling, take effect next renewal; startsAt is immutable. A version of zero creates; existing policies require the latest version.",
+                "parameters": [
+                    {
+                        "description": "The immutable project ID.",
+                        "in": "path",
+                        "name": "projectId",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Sandbox or Live.",
+                        "in": "path",
+                        "name": "environment",
+                        "required": true,
+                        "schema": {
+                            "enum": [
+                                "sandbox",
+                                "live"
+                            ],
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "The integrating application customer identifier.",
+                        "in": "path",
+                        "name": "customerId",
+                        "required": true,
+                        "schema": {
+                            "maxLength": 255,
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "The active meter key.",
+                        "in": "path",
+                        "name": "meterKey",
+                        "required": true,
+                        "schema": {
+                            "maxLength": 120,
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/models.AllowanceRequest",
+                                "summary": "request",
+                                "description": "Monthly allowance configuration."
+                            }
+                        }
+                    },
+                    "description": "Monthly allowance configuration.",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.RecurringAllowance"
+                                }
+                            }
+                        },
+                        "description": "Current and scheduled allowance configuration."
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.AllowanceInvalid"
+                                }
+                            }
+                        },
+                        "description": "Invalid allowance or subject keys."
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.NotAuthenticated"
+                                }
+                            }
+                        },
+                        "description": "Authentication is required."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.AllowanceMissing"
+                                }
+                            }
+                        },
+                        "description": "The allowance or accessible active resource was not found."
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.AllowanceConflict"
+                                }
+                            }
+                        },
+                        "description": "A stale revision, changed anchor, inactive environment, or quantity overflow prevents this operation."
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.BalanceFailed"
+                                }
+                            }
+                        },
+                        "description": "The allowance could not be loaded or saved."
+                    }
+                },
+                "security": [
+                    {
+                        "localCookieSession": []
+                    },
+                    {
+                        "productionCookieSession": []
+                    }
+                ],
+                "summary": "Create a monthly customer allowance or schedule its next-period revision.",
+                "tags": [
+                    "Allowances"
+                ]
+            }
+        },
+        "/v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances/{meterKey}/allowance/periods": {
+            "get": {
+                "parameters": [
+                    {
+                        "description": "The immutable project ID.",
+                        "in": "path",
+                        "name": "projectId",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Sandbox or Live.",
+                        "in": "path",
+                        "name": "environment",
+                        "required": true,
+                        "schema": {
+                            "enum": [
+                                "sandbox",
+                                "live"
+                            ],
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "The integrating application customer identifier.",
+                        "in": "path",
+                        "name": "customerId",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "The active meter key.",
+                        "in": "path",
+                        "name": "meterKey",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "The next cursor from the previous response.",
+                        "in": "query",
+                        "name": "cursor",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Number of periods to return.",
+                        "in": "query",
+                        "name": "limit",
+                        "schema": {
+                            "default": 25,
+                            "maximum": 100,
+                            "minimum": 1,
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.AllowancePeriods"
+                                }
+                            }
+                        },
+                        "description": "Issued periods in newest-first order."
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.AllowanceInvalid"
+                                }
+                            }
+                        },
+                        "description": "Invalid subject, cursor, or limit."
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.NotAuthenticated"
+                                }
+                            }
+                        },
+                        "description": "Authentication is required."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.AllowanceMissing"
+                                }
+                            }
+                        },
+                        "description": "The allowance or resource is unavailable."
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.AllowanceConflict"
+                                }
+                            }
+                        },
+                        "description": "The environment is inactive or due allowance overflows quantity capacity."
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/openapi.BalanceFailed"
+                                }
+                            }
+                        },
+                        "description": "The period history could not be loaded."
+                    }
+                },
+                "security": [
+                    {
+                        "localCookieSession": []
+                    },
+                    {
+                        "productionCookieSession": []
+                    }
+                ],
+                "summary": "List issued allowance periods and their rollover and recovery quantities.",
+                "tags": [
+                    "Allowances"
                 ]
             }
         },

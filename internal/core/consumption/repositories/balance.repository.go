@@ -85,6 +85,9 @@ func (repository *BalanceRepository) Add(
 	if _, err := queries.BalanceForUpdate(ctx, stored.ID); err != nil {
 		return consumptionmodels.Balance{}, false, fmt.Errorf("lock balance: %w", err)
 	}
+	if err := reconcileAllowance(ctx, tx, queries, stored.ID); err != nil {
+		return consumptionmodels.Balance{}, false, err
+	}
 	before, err := queries.ActiveEntitlementSummary(ctx, stored.ID)
 	if err != nil {
 		return consumptionmodels.Balance{}, false, fmt.Errorf("summarize balance: %w", err)
@@ -137,6 +140,9 @@ func (repository *BalanceRepository) Set(
 	if _, err := queries.BalanceForUpdate(ctx, stored.ID); err != nil {
 		return consumptionmodels.Balance{}, fmt.Errorf("lock exact balance: %w", err)
 	}
+	if _, err := queries.CaptureEntitlementTime(ctx); err != nil {
+		return consumptionmodels.Balance{}, err
+	}
 	if _, err := queries.RecordBalanceSet(ctx, consumptiondb.RecordBalanceSetParams{
 		ID: operationID, ProjectEnvironmentID: projectEnvironmentID,
 		RequestCustomerID: customerID, RequestMeterKey: meterKey, RequestedQuantity: quantity,
@@ -150,6 +156,21 @@ func (repository *BalanceRepository) Set(
 		return consumptionmodels.Balance{}, fmt.Errorf("load entitlement grants: %w", err)
 	}
 	current := sumGrantQuantity(grants)
+	// Release excess existing quantity before issuing a due period so exact
+	// reductions remain a recovery path even when the pending grant would overflow.
+	if current > quantity {
+		if err := reduceGrants(ctx, queries, grants, current-quantity, operationID, uuid.Nil); err != nil {
+			return consumptionmodels.Balance{}, err
+		}
+	}
+	if err := reconcileAllowance(ctx, tx, queries, stored.ID); err != nil {
+		return consumptionmodels.Balance{}, err
+	}
+	grants, err = queries.SpendableEntitlementGrants(ctx, stored.ID)
+	if err != nil {
+		return consumptionmodels.Balance{}, err
+	}
+	current = sumGrantQuantity(grants)
 	switch {
 	case quantity > current:
 		if _, err := queries.InsertEntitlementGrant(ctx, consumptiondb.InsertEntitlementGrantParams{
@@ -186,6 +207,9 @@ func (repository *BalanceRepository) Get(
 	projectEnvironmentID uuid.UUID,
 	customerID, meterKey string,
 ) (consumptionmodels.Balance, error) {
+	if err := repository.reconcileSubjectAllowance(ctx, projectEnvironmentID, customerID, meterKey); err != nil {
+		return consumptionmodels.Balance{}, err
+	}
 	queries := consumptiondb.New(repository.pool)
 	if _, err := balanceSubject(ctx, queries, projectEnvironmentID, customerID, meterKey); err != nil {
 		return consumptionmodels.Balance{}, err
@@ -212,6 +236,9 @@ func (repository *BalanceRepository) List(
 	projectEnvironmentID uuid.UUID,
 	customerID string,
 ) ([]consumptionmodels.Balance, error) {
+	if err := repository.reconcileCustomerAllowances(ctx, projectEnvironmentID, customerID); err != nil {
+		return nil, err
+	}
 	queries := consumptiondb.New(repository.pool)
 	if _, err := queries.ConsumptionCustomerByPublicID(ctx, consumptiondb.ConsumptionCustomerByPublicIDParams{
 		ProjectEnvironmentID: projectEnvironmentID, CustomerID: customerID,

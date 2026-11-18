@@ -18,6 +18,9 @@ func (repository *BalanceRepository) ListGrants(
 	cursor *consumptionmodels.OperationListCursor,
 	limit int,
 ) ([]consumptionmodels.EntitlementGrant, *consumptionmodels.OperationListCursor, error) {
+	if err := repository.reconcileSubjectAllowance(ctx, projectEnvironmentID, customerID, meterKey); err != nil {
+		return nil, nil, err
+	}
 	queries := consumptiondb.New(repository.pool)
 	params := consumptiondb.ListEntitlementGrantsParams{
 		ProjectEnvironmentID: projectEnvironmentID,
@@ -56,6 +59,9 @@ func (repository *BalanceRepository) ListActivity(
 	cursor *consumptionmodels.OperationListCursor,
 	limit int,
 ) ([]consumptionmodels.BalanceActivity, *consumptionmodels.OperationListCursor, error) {
+	if err := repository.reconcileSubjectAllowance(ctx, projectEnvironmentID, customerID, meterKey); err != nil {
+		return nil, nil, err
+	}
 	queries := consumptiondb.New(repository.pool)
 	params := consumptiondb.ListBalanceActivityParams{
 		ProjectEnvironmentID: projectEnvironmentID,

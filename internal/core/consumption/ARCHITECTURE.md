@@ -55,11 +55,41 @@ never adds aggregation work to the atomic write transaction. A durable rollup
 pipeline remains a later scale decision that must preserve this authoritative
 contract and support replay and backfill before replacing raw aggregation.
 
-This domain currently implements the atomic quantity operation and the balance
-behavior associated with prepaid, postpaid, and hybrid meters. It does not
-claim to complete Consumel's broader metering product. Recurring
-allowance policies, scheduled resets, rollover, customer overrides, pricing tiers,
-minimum commitments, billing periods, stable pricing snapshots,
-reconciliation, provider activity, and background-job visibility remain owned
-by their applicable metering, pricing, billing, reconciliation, connector, and
-operational slices.
+## Recurring customer allowances
+
+Consumption owns the customer-and-meter allowance schedule because it issues
+quantities into the same grant ledger used by balance adjustments and Consume.
+Each balance has at most one policy, isolated by project environment. Immutable
+revisions retain actor and source and take effect next renewal. The original
+monthly UTC anchor is preserved when a shorter month clamps its day.
+
+Period records, grants, the balance projection, the next due date, and a
+transactional outbox event commit under the balance lock. Consume, exact
+adjustments, and additive provisioning use that same lock and reconcile a due
+period before deciding available entitlement. The entitlement clock is captured
+after the lock so a waiter cannot spend an expired grant after its quantity has
+already been carried into another period. Expiration checks use that captured
+instant throughout the transaction.
+
+A zero cap resets policy-issued quantity. A positive cap carries only this
+policy's unused units, in addition to the new monthly allowance. Manual grants
+retain their separate expiry rules. Recovery computes capped carry across
+untouched missed periods without an outage-sized loop; only the current period
+gets a spendable grant. Initial creation never accrues grants for earlier
+periods. The period key prevents duplicate issuance across workers and request
+paths, and immutable period records retain the revision, carry, and skipped
+period count needed to explain recovery.
+
+The worker uses two independent renewal slots with bounded batches and a
+15-second discovery interval. Failed renewals remain due and are delayed one
+minute with a durable attempt count. A failing period transaction rolls back
+its grant, projection, schedule advancement, and event together. Exact balance
+reductions remain available to recover when a due grant would exceed bigint
+capacity. Archived meter configurations and inactive organizations are excluded
+from background renewal. No external provider is part of issuance.
+
+This customer quantity policy does not implement Consumel organization-plan
+operation allowances or billing periods. Reusable plan/segment policy defaults,
+other schedule intervals and timezones, pricing tiers, minimum commitments,
+stable pricing snapshots, reconciliation, provider activity, and broader
+background-job visibility belong to their applicable later slices.

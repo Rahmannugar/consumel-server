@@ -10,7 +10,16 @@ GET /v1/customers/{customerId}/balances/{meterKey}/grants
 Returns cursor-paginated entitlement grants that compose one customer and meter balance in the project environment authenticated by the API key.
 
 GET /v1/customers/{customerId}/balances/{meterKey}/history
-Returns cursor-paginated adjustments, usage debits, and expirations for one customer and meter balance in the project environment authenticated by the API key.
+Returns cursor-paginated adjustments, allowance issuance, usage debits, and expirations for one customer and meter balance in the project environment authenticated by the API key.
+
+GET /v1/customers/{customerId}/balances/{meterKey}/allowance
+Returns the current recurring allowance and its pending revision for the API key's environment.
+
+PUT /v1/customers/{customerId}/balances/{meterKey}/allowance
+Creates a monthly allowance or schedules a version-checked change for its next renewal.
+
+GET /v1/customers/{customerId}/balances/{meterKey}/allowance/periods
+Returns cursor-paginated issuance periods with carry, recovery, and revision-source information.
 
 POST /v1/balances
 Adds an idempotent, optionally expiring quantity to a customer and meter balance in the project environment authenticated by the API key.
@@ -36,7 +45,16 @@ GET /v1/projects/{projectId}/environments/{environment}/customers/{customerId}/b
 Returns cursor-paginated entitlement grants that compose one customer and meter balance from the signed-in project workspace.
 
 GET /v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances/{meterKey}/history
-Returns cursor-paginated adjustments, usage debits, and expirations for one customer and meter balance from the signed-in project workspace.
+Returns cursor-paginated adjustments, allowance issuance, usage debits, and expirations for one customer and meter balance from the signed-in project workspace.
+
+GET /v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances/{meterKey}/allowance
+Returns the current recurring allowance and its pending revision from the signed-in project workspace.
+
+PUT /v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances/{meterKey}/allowance
+Creates a monthly allowance or schedules a version-checked change for its next renewal.
+
+GET /v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances/{meterKey}/allowance/periods
+Returns cursor-paginated issuance periods with carry, recovery, and revision-source information.
 
 POST /v1/projects/{projectId}/environments/{environment}/balances
 Adds an idempotent, optionally expiring quantity to a customer and meter balance from the signed-in project workspace.

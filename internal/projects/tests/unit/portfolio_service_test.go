@@ -13,7 +13,7 @@ import (
 
 type portfolioRepositoryStub struct {
 	projects []projectmodels.PortfolioProject
-	buckets  []projectmodels.PortfolioBucket
+	activity []projectmodels.PortfolioActivity
 }
 
 func (repository *portfolioRepositoryStub) ProjectPortfolio(
@@ -28,16 +28,22 @@ func (repository *portfolioRepositoryStub) AggregatePortfolio(
 	context.Context,
 	uuid.UUID,
 	projectmodels.PortfolioFilter,
-) ([]projectmodels.PortfolioBucket, error) {
-	return repository.buckets, nil
+) ([]projectmodels.PortfolioActivity, error) {
+	return repository.activity, nil
 }
 
 func TestPortfolioPreservesEmptyCalendarBucketsAndTotalsOutcomes(t *testing.T) {
 	from := time.Date(2026, time.October, 1, 0, 0, 0, 0, time.UTC)
+	firstID := uuid.New()
+	secondID := uuid.New()
 	service := projectservices.NewPortfolioService(&portfolioRepositoryStub{
-		buckets: []projectmodels.PortfolioBucket{
-			{Start: from, AllowedOperations: 7, BlockedOperations: 1},
-			{Start: from.AddDate(0, 0, 2), AllowedOperations: 3, BlockedOperations: 2},
+		projects: []projectmodels.PortfolioProject{
+			{ID: firstID, Name: "First API", Slug: "first-api"},
+			{ID: secondID, Name: "Second API", Slug: "second-api"},
+		},
+		activity: []projectmodels.PortfolioActivity{
+			{ProjectID: firstID, Start: from, AllowedOperations: 7, BlockedOperations: 1, LastActivityAt: from.Add(time.Hour)},
+			{ProjectID: firstID, Start: from.AddDate(0, 0, 2), AllowedOperations: 3, BlockedOperations: 2, LastActivityAt: from.AddDate(0, 0, 2).Add(2 * time.Hour)},
 		},
 	})
 
@@ -61,6 +67,17 @@ func TestPortfolioPreservesEmptyCalendarBucketsAndTotalsOutcomes(t *testing.T) {
 	}
 	if portfolio.Summary.AllowedOperations != 10 || portfolio.Summary.BlockedOperations != 3 {
 		t.Fatalf("summary = %#v, want 10 allowed and 3 blocked", portfolio.Summary)
+	}
+	first := portfolio.Projects[0]
+	if first.AllowedOperations != 10 || first.BlockedOperations != 3 {
+		t.Fatalf("first project totals = %#v, want 10 allowed and 3 blocked", first)
+	}
+	if first.LastActivityAt == nil || !first.LastActivityAt.Equal(from.AddDate(0, 0, 2).Add(2*time.Hour)) {
+		t.Fatalf("first project last activity = %v, want the latest bucket", first.LastActivityAt)
+	}
+	second := portfolio.Projects[1]
+	if second.AllowedOperations != 0 || second.BlockedOperations != 0 || second.LastActivityAt != nil {
+		t.Fatalf("project without activity = %#v, want zero totals and no last activity", second)
 	}
 }
 

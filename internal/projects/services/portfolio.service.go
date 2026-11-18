@@ -15,7 +15,7 @@ const (
 
 type PortfolioRepository interface {
 	ProjectPortfolio(context.Context, uuid.UUID, models.PortfolioFilter) ([]models.PortfolioProject, error)
-	AggregatePortfolio(context.Context, uuid.UUID, models.PortfolioFilter) ([]models.PortfolioBucket, error)
+	AggregatePortfolio(context.Context, uuid.UUID, models.PortfolioFilter) ([]models.PortfolioActivity, error)
 }
 
 type PortfolioService struct {
@@ -50,11 +50,12 @@ func (service *PortfolioService) Get(
 	if err != nil {
 		return models.Portfolio{}, err
 	}
-	stored, err := service.repository.AggregatePortfolio(ctx, userID, filter)
+	activity, err := service.repository.AggregatePortfolio(ctx, userID, filter)
 	if err != nil {
 		return models.Portfolio{}, err
 	}
-	buckets := fillPortfolioBuckets(from, to, filter.Interval, stored)
+	buckets := fillPortfolioBuckets(from, to, filter.Interval, activity)
+	applyPortfolioProjects(projects, activity)
 	summary := models.PortfolioBucket{}
 	for _, bucket := range buckets {
 		summary.AllowedOperations += bucket.AllowedOperations
@@ -91,21 +92,47 @@ func portfolioRange(now time.Time, fromValue, toValue string, interval models.Po
 	return from.UTC(), to.UTC(), nil
 }
 
-func fillPortfolioBuckets(from, to time.Time, interval models.PortfolioInterval, stored []models.PortfolioBucket) []models.PortfolioBucket {
-	byStart := make(map[time.Time]models.PortfolioBucket, len(stored))
-	for _, bucket := range stored {
-		byStart[bucket.Start.UTC()] = bucket
-	}
-	start := truncatePortfolioTime(from, interval)
+func fillPortfolioBuckets(from, to time.Time, interval models.PortfolioInterval, activity []models.PortfolioActivity) []models.PortfolioBucket {
 	buckets := make([]models.PortfolioBucket, 0)
-	for cursor := start; cursor.Before(to); cursor = nextPortfolioBucket(cursor, interval) {
-		bucket, ok := byStart[cursor]
+	byStart := make(map[time.Time]int)
+	for cursor := truncatePortfolioTime(from, interval); cursor.Before(to); cursor = nextPortfolioBucket(cursor, interval) {
+		byStart[cursor] = len(buckets)
+		buckets = append(buckets, models.PortfolioBucket{Start: cursor})
+	}
+	for _, row := range activity {
+		index, ok := byStart[truncatePortfolioTime(row.Start, interval)]
 		if !ok {
-			bucket = models.PortfolioBucket{Start: cursor}
+			continue
 		}
-		buckets = append(buckets, bucket)
+		buckets[index].AllowedOperations += row.AllowedOperations
+		buckets[index].BlockedOperations += row.BlockedOperations
 	}
 	return buckets
+}
+
+// applyPortfolioProjects sums each project's buckets into its comparison totals.
+// Projects without activity keep their zero values and nil last activity.
+func applyPortfolioProjects(projects []models.PortfolioProject, activity []models.PortfolioActivity) {
+	if len(projects) == 0 {
+		return
+	}
+	byProject := make(map[uuid.UUID]int, len(projects))
+	for index := range projects {
+		byProject[projects[index].ID] = index
+	}
+	for _, row := range activity {
+		index, ok := byProject[row.ProjectID]
+		if !ok {
+			continue
+		}
+		project := &projects[index]
+		project.AllowedOperations += row.AllowedOperations
+		project.BlockedOperations += row.BlockedOperations
+		if project.LastActivityAt == nil || row.LastActivityAt.After(*project.LastActivityAt) {
+			lastActivity := row.LastActivityAt
+			project.LastActivityAt = &lastActivity
+		}
+	}
 }
 
 func truncatePortfolioTime(value time.Time, interval models.PortfolioInterval) time.Time {

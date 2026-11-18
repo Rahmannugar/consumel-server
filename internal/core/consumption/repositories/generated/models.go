@@ -9,6 +9,18 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AllowanceRevision struct {
+	AllowanceID uuid.UUID
+	Version     int64
+	EffectiveAt pgtype.Timestamptz
+	Quantity    int64
+	RolloverCap int64
+	Enabled     bool
+	SourceType  string
+	SourceID    uuid.UUID
+	CreatedAt   pgtype.Timestamptz
+}
+
 type Balance struct {
 	ID                   uuid.UUID
 	ProjectEnvironmentID uuid.UUID
@@ -73,4 +85,14 @@ type EntitlementGrant struct {
 	CreatedByBalanceOperationID pgtype.UUID
 	CreatedAt                   pgtype.Timestamptz
 	UpdatedAt                   pgtype.Timestamptz
+}
+
+type RecurringAllowance struct {
+	ID            uuid.UUID
+	BalanceID     uuid.UUID
+	AnchorAt      pgtype.Timestamptz
+	NextPeriodAt  pgtype.Timestamptz
+	Version       int64
+	RetryAt       pgtype.Timestamptz
+	RetryAttempts int32
 }

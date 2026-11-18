@@ -134,9 +134,11 @@ func (q *Queries) ActiveProjectAPIKey(ctx context.Context, projectEnvironmentID 
 
 const aggregateProjectPortfolio = `-- name: AggregateProjectPortfolio :many
 SELECT
+    projects.id AS project_id,
     date_trunc($1::text, consumption_operations.created_at)::timestamptz AS bucket_start,
     COUNT(*) FILTER (WHERE consumption_operations.status = 'accepted')::bigint AS allowed_operations,
-    COUNT(*) FILTER (WHERE consumption_operations.status = 'denied')::bigint AS blocked_operations
+    COUNT(*) FILTER (WHERE consumption_operations.status = 'denied')::bigint AS blocked_operations,
+    MAX(consumption_operations.created_at)::timestamptz AS last_activity_at
 FROM organization_memberships
 JOIN organizations
     ON organizations.id = organization_memberships.organization_id
@@ -155,8 +157,8 @@ WHERE organization_memberships.user_id = $3
   AND consumption_operations.status <> 'pending'
   AND consumption_operations.created_at >= $4
   AND consumption_operations.created_at < $5
-GROUP BY bucket_start
-ORDER BY bucket_start
+GROUP BY projects.id, bucket_start
+ORDER BY projects.id, bucket_start
 `
 
 type AggregateProjectPortfolioParams struct {
@@ -168,9 +170,11 @@ type AggregateProjectPortfolioParams struct {
 }
 
 type AggregateProjectPortfolioRow struct {
+	ProjectID         uuid.UUID
 	BucketStart       pgtype.Timestamptz
 	AllowedOperations int64
 	BlockedOperations int64
+	LastActivityAt    pgtype.Timestamptz
 }
 
 func (q *Queries) AggregateProjectPortfolio(ctx context.Context, arg AggregateProjectPortfolioParams) ([]AggregateProjectPortfolioRow, error) {
@@ -188,7 +192,13 @@ func (q *Queries) AggregateProjectPortfolio(ctx context.Context, arg AggregatePr
 	var items []AggregateProjectPortfolioRow
 	for rows.Next() {
 		var i AggregateProjectPortfolioRow
-		if err := rows.Scan(&i.BucketStart, &i.AllowedOperations, &i.BlockedOperations); err != nil {
+		if err := rows.Scan(
+			&i.ProjectID,
+			&i.BucketStart,
+			&i.AllowedOperations,
+			&i.BlockedOperations,
+			&i.LastActivityAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -449,14 +459,7 @@ SELECT
     projects.name,
     projects.slug,
     project_environments.id AS environment_id,
-    project_environments.activated_at,
-    COUNT(consumption_operations.id) FILTER (
-        WHERE consumption_operations.status = 'accepted'
-    )::bigint AS allowed_operations,
-    COUNT(consumption_operations.id) FILTER (
-        WHERE consumption_operations.status = 'denied'
-    )::bigint AS blocked_operations,
-    MAX(consumption_operations.created_at)::timestamptz AS last_activity_at
+    project_environments.activated_at
 FROM organization_memberships
 JOIN organizations
     ON organizations.id = organization_memberships.organization_id
@@ -465,50 +468,32 @@ JOIN projects
 JOIN project_environments
     ON project_environments.project_id = projects.id
    AND project_environments.environment = $1
-LEFT JOIN consumption_operations
-    ON consumption_operations.project_environment_id = project_environments.id
-   AND consumption_operations.status <> 'pending'
-   AND consumption_operations.created_at >= $2
-   AND consumption_operations.created_at < $3
-WHERE organization_memberships.user_id = $4
+WHERE organization_memberships.user_id = $2
   AND organization_memberships.status = 'active'
   AND organization_memberships.removed_at IS NULL
   AND organizations.deleted_at IS NULL
   AND organizations.suspended_at IS NULL
-GROUP BY
-    projects.id,
-    projects.name,
-    projects.slug,
-    project_environments.id,
-    project_environments.activated_at
 ORDER BY projects.created_at, projects.id
 `
 
 type ListProjectPortfolioParams struct {
 	Environment string
-	FromTime    pgtype.Timestamptz
-	ToTime      pgtype.Timestamptz
 	UserID      uuid.UUID
 }
 
 type ListProjectPortfolioRow struct {
-	ID                uuid.UUID
-	Name              string
-	Slug              string
-	EnvironmentID     uuid.UUID
-	ActivatedAt       pgtype.Timestamptz
-	AllowedOperations int64
-	BlockedOperations int64
-	LastActivityAt    pgtype.Timestamptz
+	ID            uuid.UUID
+	Name          string
+	Slug          string
+	EnvironmentID uuid.UUID
+	ActivatedAt   pgtype.Timestamptz
 }
 
+// The portfolio list intentionally reads only project and environment rows. The
+// usage aggregate below carries per-project buckets, so the expensive operation
+// scan happens once and the service derives project totals from it.
 func (q *Queries) ListProjectPortfolio(ctx context.Context, arg ListProjectPortfolioParams) ([]ListProjectPortfolioRow, error) {
-	rows, err := q.db.Query(ctx, listProjectPortfolio,
-		arg.Environment,
-		arg.FromTime,
-		arg.ToTime,
-		arg.UserID,
-	)
+	rows, err := q.db.Query(ctx, listProjectPortfolio, arg.Environment, arg.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -522,9 +507,6 @@ func (q *Queries) ListProjectPortfolio(ctx context.Context, arg ListProjectPortf
 			&i.Slug,
 			&i.EnvironmentID,
 			&i.ActivatedAt,
-			&i.AllowedOperations,
-			&i.BlockedOperations,
-			&i.LastActivityAt,
 		); err != nil {
 			return nil, err
 		}

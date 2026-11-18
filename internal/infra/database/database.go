@@ -21,6 +21,13 @@ func Open(ctx context.Context, connectionString string, maxConns int32) (*pgxpoo
 	config.MaxConns = maxConns
 	config.MinConns = minimumConnections
 	config.ConnConfig.Tracer = otelpgx.NewTracer(otelpgx.WithDisableSQLStatementInAttributes())
+	// PostgreSQL normally switches a cached prepared statement to a generic
+	// plan after a few executions. Generic plans cannot see the caller's range
+	// values, so a parameterized time window is estimated with a fixed 0.5%
+	// selectivity and PostgreSQL can replace a whole-table aggregate with a
+	// nested loop over the operation table. Consumel keeps prepared statements
+	// but always plans with the current parameters.
+	config.ConnConfig.RuntimeParams["plan_cache_mode"] = "force_custom_plan"
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {

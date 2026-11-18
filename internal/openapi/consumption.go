@@ -300,7 +300,7 @@ type Balance struct {
 type BalanceActivity struct {
 	ExpiresAt         *time.Time `json:"expiresAt" validate:"required" format:"date-time"`
 	ID                uuid.UUID  `json:"id" validate:"required" example:"0199aa81-ce8c-73bf-a880-8e84654b9a71" format:"uuid"`
-	Kind              string     `json:"kind" validate:"required" example:"usage" enums:"add,set,usage,expiration"`
+	Kind              string     `json:"kind" validate:"required" example:"usage" enums:"add,set,usage,expiration,allowance"`
 	OccurredAt        time.Time  `json:"occurredAt" validate:"required" example:"2026-09-29T12:00:00Z" format:"date-time"`
 	QuantityChange    int64      `json:"quantityChange" validate:"required" example:"-500" format:"int64"`
 	ResultingQuantity *int64     `json:"resultingQuantity" validate:"required,min=0" example:"7000" format:"int64"`
