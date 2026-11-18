@@ -69,6 +69,35 @@ func (q *Queries) AllowanceByBalance(ctx context.Context, balanceID uuid.UUID) (
 	return i, err
 }
 
+const allowanceRevisionByVersion = `-- name: AllowanceRevisionByVersion :one
+SELECT allowance_id, version, effective_at, quantity, rollover_cap, enabled, source_type, source_id, created_at, interval_unit, interval_count, schedule_anchor_at FROM allowance_revisions WHERE allowance_id=$1 AND version=$2
+`
+
+type AllowanceRevisionByVersionParams struct {
+	AllowanceID uuid.UUID
+	Version     int64
+}
+
+func (q *Queries) AllowanceRevisionByVersion(ctx context.Context, arg AllowanceRevisionByVersionParams) (AllowanceRevision, error) {
+	row := q.db.QueryRow(ctx, allowanceRevisionByVersion, arg.AllowanceID, arg.Version)
+	var i AllowanceRevision
+	err := row.Scan(
+		&i.AllowanceID,
+		&i.Version,
+		&i.EffectiveAt,
+		&i.Quantity,
+		&i.RolloverCap,
+		&i.Enabled,
+		&i.SourceType,
+		&i.SourceID,
+		&i.CreatedAt,
+		&i.IntervalUnit,
+		&i.IntervalCount,
+		&i.ScheduleAnchorAt,
+	)
+	return i, err
+}
+
 const captureEntitlementTime = `-- name: CaptureEntitlementTime :one
 SELECT set_config('consumel.entitlement_at', COALESCE(NULLIF(current_setting('consumel.entitlement_at', true), ''), clock_timestamp()::text), true)::text
 `
@@ -217,7 +246,7 @@ func (q *Queries) DueSubjectAllowanceBalance(ctx context.Context, arg DueSubject
 }
 
 const effectiveAllowanceRevision = `-- name: EffectiveAllowanceRevision :one
-SELECT allowance_id, version, effective_at, quantity, rollover_cap, enabled, source_type, source_id, created_at FROM allowance_revisions WHERE allowance_id=$1 AND effective_at<=$2
+SELECT allowance_id, version, effective_at, quantity, rollover_cap, enabled, source_type, source_id, created_at, interval_unit, interval_count, schedule_anchor_at FROM allowance_revisions WHERE allowance_id=$1 AND effective_at<=$2
 ORDER BY effective_at DESC,version DESC LIMIT 1
 `
 
@@ -239,6 +268,9 @@ func (q *Queries) EffectiveAllowanceRevision(ctx context.Context, arg EffectiveA
 		&i.SourceType,
 		&i.SourceID,
 		&i.CreatedAt,
+		&i.IntervalUnit,
+		&i.IntervalCount,
+		&i.ScheduleAnchorAt,
 	)
 	return i, err
 }
@@ -313,7 +345,7 @@ type InsertAllowancePeriodParams struct {
 	Revision        int64
 	Quantity        int64
 	CarriedQuantity int64
-	SkippedPeriods  int32
+	SkippedPeriods  int64
 	GrantID         pgtype.UUID
 }
 
@@ -332,19 +364,22 @@ func (q *Queries) InsertAllowancePeriod(ctx context.Context, arg InsertAllowance
 }
 
 const insertAllowanceRevision = `-- name: InsertAllowanceRevision :exec
-INSERT INTO allowance_revisions(allowance_id,version,effective_at,quantity,rollover_cap,enabled,source_type,source_id)
-VALUES($1,$2,$3,$4,$5,$6,$7,$8)
+INSERT INTO allowance_revisions(allowance_id,version,effective_at,quantity,rollover_cap,enabled,source_type,source_id,interval_unit,interval_count,schedule_anchor_at)
+VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
 `
 
 type InsertAllowanceRevisionParams struct {
-	AllowanceID uuid.UUID
-	Version     int64
-	EffectiveAt pgtype.Timestamptz
-	Quantity    int64
-	RolloverCap int64
-	Enabled     bool
-	SourceType  string
-	SourceID    uuid.UUID
+	AllowanceID      uuid.UUID
+	Version          int64
+	EffectiveAt      pgtype.Timestamptz
+	Quantity         int64
+	RolloverCap      int64
+	Enabled          bool
+	SourceType       string
+	SourceID         uuid.UUID
+	IntervalUnit     string
+	IntervalCount    int32
+	ScheduleAnchorAt pgtype.Timestamptz
 }
 
 func (q *Queries) InsertAllowanceRevision(ctx context.Context, arg InsertAllowanceRevisionParams) error {
@@ -357,6 +392,9 @@ func (q *Queries) InsertAllowanceRevision(ctx context.Context, arg InsertAllowan
 		arg.Enabled,
 		arg.SourceType,
 		arg.SourceID,
+		arg.IntervalUnit,
+		arg.IntervalCount,
+		arg.ScheduleAnchorAt,
 	)
 	return err
 }
@@ -374,7 +412,7 @@ type LastAllowancePeriodRow struct {
 	Revision          int64
 	Quantity          int64
 	CarriedQuantity   int64
-	SkippedPeriods    int32
+	SkippedPeriods    int64
 	GrantID           pgtype.UUID
 	CreatedAt         pgtype.Timestamptz
 	RemainingQuantity int64
@@ -420,7 +458,7 @@ type ListAllowancePeriodsRow struct {
 	Revision        int64
 	Quantity        int64
 	CarriedQuantity int64
-	SkippedPeriods  int32
+	SkippedPeriods  int64
 	GrantID         pgtype.UUID
 	CreatedAt       pgtype.Timestamptz
 	SourceType      string
@@ -460,7 +498,7 @@ func (q *Queries) ListAllowancePeriods(ctx context.Context, arg ListAllowancePer
 }
 
 const pendingAllowanceRevision = `-- name: PendingAllowanceRevision :one
-SELECT allowance_id, version, effective_at, quantity, rollover_cap, enabled, source_type, source_id, created_at FROM allowance_revisions WHERE allowance_id=$1 AND effective_at>$2
+SELECT allowance_id, version, effective_at, quantity, rollover_cap, enabled, source_type, source_id, created_at, interval_unit, interval_count, schedule_anchor_at FROM allowance_revisions WHERE allowance_id=$1 AND effective_at>$2
 ORDER BY effective_at,version DESC LIMIT 1
 `
 
@@ -482,6 +520,9 @@ func (q *Queries) PendingAllowanceRevision(ctx context.Context, arg PendingAllow
 		&i.SourceType,
 		&i.SourceID,
 		&i.CreatedAt,
+		&i.IntervalUnit,
+		&i.IntervalCount,
+		&i.ScheduleAnchorAt,
 	)
 	return i, err
 }

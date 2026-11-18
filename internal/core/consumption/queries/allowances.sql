@@ -15,8 +15,8 @@ VALUES($1,$2,$3,$3,1) RETURNING *;
 UPDATE recurring_allowances SET version=version+1 WHERE id=$1 AND version=$2 RETURNING *;
 
 -- name: InsertAllowanceRevision :exec
-INSERT INTO allowance_revisions(allowance_id,version,effective_at,quantity,rollover_cap,enabled,source_type,source_id)
-VALUES($1,$2,$3,$4,$5,$6,$7,$8);
+INSERT INTO allowance_revisions(allowance_id,version,effective_at,quantity,rollover_cap,enabled,source_type,source_id,interval_unit,interval_count,schedule_anchor_at)
+VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11);
 
 -- name: EffectiveAllowanceRevision :one
 SELECT * FROM allowance_revisions WHERE allowance_id=$1 AND effective_at<=$2
@@ -84,3 +84,6 @@ JOIN recurring_allowances a ON a.balance_id=b.id
 JOIN meters m ON m.id=b.meter_id
 JOIN project_environment_meters pem ON pem.project_environment_id=b.project_environment_id AND pem.meter_id=b.meter_id AND pem.archived_at IS NULL
 WHERE b.project_environment_id=$1 AND c.customer_id=$2 AND m.meter_key=$3 AND a.next_period_at<=now();
+
+-- name: AllowanceRevisionByVersion :one
+SELECT * FROM allowance_revisions WHERE allowance_id=$1 AND version=$2;

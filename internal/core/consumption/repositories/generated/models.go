@@ -10,15 +10,18 @@ import (
 )
 
 type AllowanceRevision struct {
-	AllowanceID uuid.UUID
-	Version     int64
-	EffectiveAt pgtype.Timestamptz
-	Quantity    int64
-	RolloverCap int64
-	Enabled     bool
-	SourceType  string
-	SourceID    uuid.UUID
-	CreatedAt   pgtype.Timestamptz
+	AllowanceID      uuid.UUID
+	Version          int64
+	EffectiveAt      pgtype.Timestamptz
+	Quantity         int64
+	RolloverCap      int64
+	Enabled          bool
+	SourceType       string
+	SourceID         uuid.UUID
+	CreatedAt        pgtype.Timestamptz
+	IntervalUnit     string
+	IntervalCount    int32
+	ScheduleAnchorAt pgtype.Timestamptz
 }
 
 type Balance struct {

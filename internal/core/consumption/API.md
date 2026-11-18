@@ -1,72 +1,72 @@
 ## Public integration API
 
-GET /v1/customers/{customerId}/balances
+### `GET /v1/customers/{customerId}/balances`
 Returns the active meter balances for one customer in the project environment authenticated by the API key.
 
-GET /v1/customers/{customerId}/balances/{meterKey}
+### `GET /v1/customers/{customerId}/balances/{meterKey}`
 Returns one active customer and meter balance from the project environment authenticated by the API key.
 
-GET /v1/customers/{customerId}/balances/{meterKey}/grants
+### `GET /v1/customers/{customerId}/balances/{meterKey}/grants`
 Returns cursor-paginated entitlement grants that compose one customer and meter balance in the project environment authenticated by the API key.
 
-GET /v1/customers/{customerId}/balances/{meterKey}/history
+### `GET /v1/customers/{customerId}/balances/{meterKey}/history`
 Returns cursor-paginated adjustments, allowance issuance, usage debits, and expirations for one customer and meter balance in the project environment authenticated by the API key.
 
-GET /v1/customers/{customerId}/balances/{meterKey}/allowance
+### `GET /v1/customers/{customerId}/balances/{meterKey}/allowance`
 Returns the current recurring allowance and its pending revision for the API key's environment.
 
-PUT /v1/customers/{customerId}/balances/{meterKey}/allowance
-Creates a monthly allowance or schedules a version-checked change for its next renewal.
+### `PUT /v1/customers/{customerId}/balances/{meterKey}/allowance`
+Creates a recurring allowance with a custom UTC interval or schedules a version-checked change for its next renewal.
 
-GET /v1/customers/{customerId}/balances/{meterKey}/allowance/periods
+### `GET /v1/customers/{customerId}/balances/{meterKey}/allowance/periods`
 Returns cursor-paginated issuance periods with carry, recovery, and revision-source information.
 
-POST /v1/balances
+### `POST /v1/balances`
 Adds an idempotent, optionally expiring quantity to a customer and meter balance in the project environment authenticated by the API key.
 
-PUT /v1/balances/{customerId}/{meterKey}
+### `PUT /v1/balances/{customerId}/{meterKey}`
 Sets one customer and meter balance to an exact quantity in the project environment authenticated by the API key.
 
-POST /v1/consume
+### `POST /v1/consume`
 Atomically accepts usage for an active meter, persists the usage event and outbox record, and applies the meter type's balance behavior in the project environment authenticated by the API key.
 
-GET /v1/analytics
+### `GET /v1/analytics`
 Returns bounded hourly or daily usage analytics for the project environment authenticated by the API key, optionally scoped to one customer or meter.
 
 ## Dashboard application API
 
-GET /v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances
+### `GET /v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances`
 Returns the active meter balances for one customer from the signed-in project workspace.
 
-GET /v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances/{meterKey}
+### `GET /v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances/{meterKey}`
 Returns one active customer and meter balance from the signed-in project workspace.
 
-GET /v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances/{meterKey}/grants
+### `GET /v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances/{meterKey}/grants`
 Returns cursor-paginated entitlement grants that compose one customer and meter balance from the signed-in project workspace.
 
-GET /v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances/{meterKey}/history
+### `GET /v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances/{meterKey}/history`
 Returns cursor-paginated adjustments, allowance issuance, usage debits, and expirations for one customer and meter balance from the signed-in project workspace.
 
-GET /v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances/{meterKey}/allowance
+### `GET /v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances/{meterKey}/allowance`
 Returns the current recurring allowance and its pending revision from the signed-in project workspace.
 
-PUT /v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances/{meterKey}/allowance
-Creates a monthly allowance or schedules a version-checked change for its next renewal.
+### `PUT /v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances/{meterKey}/allowance`
+Creates a recurring allowance with a custom UTC interval or schedules a version-checked change for its next renewal.
 
-GET /v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances/{meterKey}/allowance/periods
+### `GET /v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances/{meterKey}/allowance/periods`
 Returns cursor-paginated issuance periods with carry, recovery, and revision-source information.
 
-POST /v1/projects/{projectId}/environments/{environment}/balances
+### `POST /v1/projects/{projectId}/environments/{environment}/balances`
 Adds an idempotent, optionally expiring quantity to a customer and meter balance from the signed-in project workspace.
 
-PUT /v1/projects/{projectId}/environments/{environment}/balances/{customerId}/{meterKey}
+### `PUT /v1/projects/{projectId}/environments/{environment}/balances/{customerId}/{meterKey}`
 Sets one customer and meter balance to an exact quantity from the signed-in project workspace.
 
-GET /v1/projects/{projectId}/environments/{environment}/events
+### `GET /v1/projects/{projectId}/environments/{environment}/events`
 Returns cursor-paginated accepted and denied usage operations for dashboard inspection, optionally scoped to one customer or meter.
 
-GET /v1/projects/{projectId}/environments/{environment}/events/stream
+### `GET /v1/projects/{projectId}/environments/{environment}/events/stream`
 Streams newly persisted usage operations to the signed-in project workspace with reconnect cursors.
 
-GET /v1/projects/{projectId}/environments/{environment}/analytics
+### `GET /v1/projects/{projectId}/environments/{environment}/analytics`
 Returns bounded hourly or daily usage analytics from the signed-in project workspace, optionally scoped to one customer or meter.

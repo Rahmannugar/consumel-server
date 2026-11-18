@@ -221,3 +221,80 @@ func moveAllowanceIntoPast(t *testing.T, pool *pgxpool.Pool, id uuid.UUID, ancho
 		t.Fatal(err)
 	}
 }
+
+func TestCustomScheduleChangeRecoversConcurrentRenewal(t *testing.T) {
+	pool := testdb.OpenMigratedDatabase(t)
+	f := createBalanceFixture(t, pool)
+	repository := consumptionrepositories.NewAllowanceRepository(pool)
+	service := consumptionservices.NewAllowanceService(repository)
+	balances := consumptionservices.NewBalanceService(consumptionrepositories.NewBalanceRepository(pool))
+	anchor := time.Now().UTC().Truncate(time.Minute).Add(-10 * time.Hour)
+	request := consumptionmodels.AllowanceRequest{StartsAt: anchor, Quantity: 100, RolloverCap: 150, Enabled: true, IntervalUnit: "hour", IntervalCount: 2}
+	source := consumptionmodels.BalanceMutationSource{Type: consumptionmodels.BalanceSourceDashboardUser, ActorID: allowanceOwner(t, pool)}
+	policy, err := service.Save(t.Context(), f.sandboxID, f.customerID, f.meterKey, source, request)
+	if err != nil || policy.Current.IntervalUnit != "hour" || policy.Current.IntervalCount != 2 {
+		t.Fatalf("create=%#v,%v", policy, err)
+	}
+	balance, err := balances.Get(t.Context(), f.sandboxID, f.customerID, f.meterKey)
+	if err != nil || balance.Quantity != 100 {
+		t.Fatalf("initial accrued past periods: %#v,%v", balance, err)
+	}
+	// Simulate an outage across a scheduled interval change. The persisted pending
+	// revision starts at the old next boundary, while old grant identity stays intact.
+	request.Version = policy.Version
+	request.IntervalUnit = "minute"
+	request.IntervalCount = 30
+	changed, err := service.Save(t.Context(), f.sandboxID, f.customerID, f.meterKey, source, request)
+	if err != nil || changed.Pending == nil || changed.Current.IntervalUnit != "hour" || changed.Pending.IntervalUnit != "minute" || !changed.Pending.ScheduleAnchorAt.Equal(policy.NextPeriodAt) {
+		t.Fatalf("pending=%#v,%v", changed, err)
+	}
+	due := time.Now().UTC().Truncate(time.Minute).Add(-3 * time.Hour)
+	var balanceID uuid.UUID
+	if err = pool.QueryRow(t.Context(), "SELECT balance_id FROM recurring_allowances WHERE id=$1", policy.ID).Scan(&balanceID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = pool.Exec(t.Context(), "UPDATE allowance_revisions SET effective_at=$2,schedule_anchor_at=$2 WHERE allowance_id=$1 AND version=2", policy.ID, due); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = pool.Exec(t.Context(), "UPDATE entitlement_grants SET expires_at=$2 WHERE balance_id=$1", balanceID, due); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = pool.Exec(t.Context(), "UPDATE allowance_periods SET period_start=$2,period_end=$3 WHERE allowance_id=$1", policy.ID, due.Add(-2*time.Hour), due); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = pool.Exec(t.Context(), "UPDATE recurring_allowances SET next_period_at=$2 WHERE id=$1", policy.ID, due); err != nil {
+		t.Fatal(err)
+	}
+	results := make(chan error, 8)
+	var group sync.WaitGroup
+	for range 8 {
+		group.Add(1)
+		go func() { defer group.Done(); results <- repository.Renew(t.Context(), balanceID) }()
+	}
+	group.Wait()
+	close(results)
+	for err = range results {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	balance, err = balances.Get(t.Context(), f.sandboxID, f.customerID, f.meterKey)
+	if err != nil || balance.Quantity != 250 {
+		t.Fatalf("recovered=%#v,%v", balance, err)
+	}
+	periods, err := service.Periods(t.Context(), f.sandboxID, f.customerID, f.meterKey, nil, 25)
+	if err != nil || len(periods.Periods) != 2 || periods.Periods[0].SkippedPeriods != 6 || periods.Periods[0].PeriodEnd.Sub(periods.Periods[0].PeriodStart) != 30*time.Minute {
+		t.Fatalf("recovery periods=%#v,%v", periods, err)
+	}
+	// Updating quantity without changing the interval preserves the same anchor.
+	current, err := service.Get(t.Context(), f.sandboxID, f.customerID, f.meterKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Version = current.Version
+	request.Quantity = 90
+	same, err := service.Save(t.Context(), f.sandboxID, f.customerID, f.meterKey, source, request)
+	if err != nil || !same.Pending.ScheduleAnchorAt.Equal(due) {
+		t.Fatalf("anchor drift=%#v,%v", same, err)
+	}
+}

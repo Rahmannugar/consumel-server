@@ -7,16 +7,19 @@ import (
 )
 
 type RecurringAllowanceRevision struct {
-	Version     int64     `json:"version" validate:"required" example:"1" format:"int64"`
-	EffectiveAt time.Time `json:"effectiveAt" validate:"required" example:"2026-12-01T00:00:00Z" format:"date-time"`
-	Quantity    int64     `json:"quantity" validate:"required" example:"1000" format:"int64"`
-	RolloverCap int64     `json:"rolloverCap" validate:"required" example:"2000" format:"int64"`
-	Enabled     bool      `json:"enabled" validate:"required" example:"true"`
+	IntervalUnit     string    `json:"intervalUnit" validate:"required" enums:"minute,hour,day,week,month,year" example:"hour"`
+	IntervalCount    int32     `json:"intervalCount" validate:"required,min=1,max=1000000" example:"6"`
+	ScheduleAnchorAt time.Time `json:"scheduleAnchorAt" validate:"required" format:"date-time" example:"2026-12-01T09:00:00Z"`
+	Version          int64     `json:"version" validate:"required" example:"1" format:"int64"`
+	EffectiveAt      time.Time `json:"effectiveAt" validate:"required" example:"2026-12-01T09:00:00Z" format:"date-time"`
+	Quantity         int64     `json:"quantity" validate:"required" example:"1000" format:"int64"`
+	RolloverCap      int64     `json:"rolloverCap" validate:"required" example:"2000" format:"int64"`
+	Enabled          bool      `json:"enabled" validate:"required" example:"true"`
 }
 type RecurringAllowance struct {
 	ID           uuid.UUID                   `json:"id" validate:"required" example:"019a5db9-3e67-7000-8000-000000000001" format:"uuid"`
-	StartsAt     time.Time                   `json:"startsAt" validate:"required" example:"2026-12-01T00:00:00Z" format:"date-time"`
-	NextPeriodAt time.Time                   `json:"nextPeriodAt" validate:"required" example:"2027-01-01T00:00:00Z" format:"date-time"`
+	StartsAt     time.Time                   `json:"startsAt" validate:"required" example:"2026-12-01T09:00:00Z" format:"date-time"`
+	NextPeriodAt time.Time                   `json:"nextPeriodAt" validate:"required" example:"2026-12-01T15:00:00Z" format:"date-time"`
 	Version      int64                       `json:"version" validate:"required" example:"1" format:"int64"`
 	Current      *RecurringAllowanceRevision `json:"current" validate:"required"`
 	Pending      *RecurringAllowanceRevision `json:"pending" validate:"required"`
@@ -28,7 +31,7 @@ type AllowanceInvalid struct {
 }
 type AllowanceInvalidError struct {
 	Code    string `json:"code" validate:"required" example:"invalid_allowance"`
-	Message string `json:"message" validate:"required" example:"Use a positive quantity, a nonnegative rollover cap, and a start date at midnight UTC."`
+	Message string `json:"message" validate:"required" example:"Use a positive quantity, a nonnegative rollover cap, a supported interval, and a UTC start time at minute precision."`
 }
 
 // @description Possible codes: allowance_not_found, balance_subject_not_found, project_environment_not_found.
@@ -50,7 +53,7 @@ type AllowanceConflictError struct {
 }
 
 // @Summary Read a customer recurring allowance and its pending revision.
-// @Description Monthly UTC renewal; month-end dates clamp without drifting. Creation grants the full current period without proration, with no credit for time before creation. Zero rollover cap resets only policy-issued quantity; a positive cap limits carry in addition to the new period quantity. Edits, including disabling, take effect next renewal; startsAt is immutable. A version of zero creates; existing policies require the latest version.
+// @Description Custom UTC intervals use a count and minute, hour, day, week, month, or year unit. The minimum is one minute; startsAt must have minute precision. Months and years follow the calendar and clamp shorter months without drifting; other units use elapsed time. Omitted interval fields preserve the legacy one-month default. Schedule changes begin at the next renewal; unchanged intervals preserve their anchor. Creation grants the full current period without proration, with no credit for time before creation. Zero rollover cap resets only policy-issued quantity; a positive cap limits carry in addition to the new period quantity. Edits, including disabling, take effect next renewal; startsAt is immutable. A version of zero creates; existing policies require the latest version.
 // @Tags Allowances
 // @Param customerId path string true "The integrating application customer identifier." maxLength(255)
 // @Param meterKey path string true "The active meter key." maxLength(120)
@@ -64,12 +67,12 @@ type AllowanceConflictError struct {
 // @Router /v1/customers/{customerId}/balances/{meterKey}/allowance [get]
 func GetPublicRecurringAllowance() {}
 
-// @Summary Create a monthly customer allowance or schedule its next-period revision.
-// @Description Monthly UTC renewal; month-end dates clamp without drifting. Creation grants the full current period without proration, with no credit for time before creation. Zero rollover cap resets only policy-issued quantity; a positive cap limits carry in addition to the new period quantity. Edits, including disabling, take effect next renewal; startsAt is immutable. A version of zero creates; existing policies require the latest version.
+// @Summary Create a recurring customer allowance or schedule its next-period revision.
+// @Description Custom UTC intervals use a count and minute, hour, day, week, month, or year unit. The minimum is one minute; startsAt must have minute precision. Months and years follow the calendar and clamp shorter months without drifting; other units use elapsed time. Omitted interval fields preserve the legacy one-month default. Schedule changes begin at the next renewal; unchanged intervals preserve their anchor. Creation grants the full current period without proration, with no credit for time before creation. Zero rollover cap resets only policy-issued quantity; a positive cap limits carry in addition to the new period quantity. Edits, including disabling, take effect next renewal; startsAt is immutable. A version of zero creates; existing policies require the latest version.
 // @Tags Allowances
 // @Param customerId path string true "The integrating application customer identifier." maxLength(255)
 // @Param meterKey path string true "The active meter key." maxLength(120)
-// @Param request body models.AllowanceRequest true "Monthly allowance configuration."
+// @Param request body models.AllowanceRequest true "Recurring allowance configuration."
 // @Success 200 {object} RecurringAllowance "Current and scheduled allowance configuration."
 // @Failure 400 {object} AllowanceInvalid "Invalid allowance or subject keys."
 // @Failure 401 {object} InvalidAPIKey "Authentication is required."
@@ -81,7 +84,7 @@ func GetPublicRecurringAllowance() {}
 func PutPublicRecurringAllowance() {}
 
 // @Summary Read a customer recurring allowance and its pending revision.
-// @Description Monthly UTC renewal; month-end dates clamp without drifting. Creation grants the full current period without proration, with no credit for time before creation. Zero rollover cap resets only policy-issued quantity; a positive cap limits carry in addition to the new period quantity. Edits, including disabling, take effect next renewal; startsAt is immutable. A version of zero creates; existing policies require the latest version.
+// @Description Custom UTC intervals use a count and minute, hour, day, week, month, or year unit. The minimum is one minute; startsAt must have minute precision. Months and years follow the calendar and clamp shorter months without drifting; other units use elapsed time. Omitted interval fields preserve the legacy one-month default. Schedule changes begin at the next renewal; unchanged intervals preserve their anchor. Creation grants the full current period without proration, with no credit for time before creation. Zero rollover cap resets only policy-issued quantity; a positive cap limits carry in addition to the new period quantity. Edits, including disabling, take effect next renewal; startsAt is immutable. A version of zero creates; existing policies require the latest version.
 // @Tags Allowances
 // @Param projectId path string true "The immutable project ID."
 // @Param environment path string true "Sandbox or Live." Enums(sandbox,live)
@@ -98,14 +101,14 @@ func PutPublicRecurringAllowance() {}
 // @Router /v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances/{meterKey}/allowance [get]
 func GetDashboardRecurringAllowance() {}
 
-// @Summary Create a monthly customer allowance or schedule its next-period revision.
-// @Description Monthly UTC renewal; month-end dates clamp without drifting. Creation grants the full current period without proration, with no credit for time before creation. Zero rollover cap resets only policy-issued quantity; a positive cap limits carry in addition to the new period quantity. Edits, including disabling, take effect next renewal; startsAt is immutable. A version of zero creates; existing policies require the latest version.
+// @Summary Create a recurring customer allowance or schedule its next-period revision.
+// @Description Custom UTC intervals use a count and minute, hour, day, week, month, or year unit. The minimum is one minute; startsAt must have minute precision. Months and years follow the calendar and clamp shorter months without drifting; other units use elapsed time. Omitted interval fields preserve the legacy one-month default. Schedule changes begin at the next renewal; unchanged intervals preserve their anchor. Creation grants the full current period without proration, with no credit for time before creation. Zero rollover cap resets only policy-issued quantity; a positive cap limits carry in addition to the new period quantity. Edits, including disabling, take effect next renewal; startsAt is immutable. A version of zero creates; existing policies require the latest version.
 // @Tags Allowances
 // @Param projectId path string true "The immutable project ID."
 // @Param environment path string true "Sandbox or Live." Enums(sandbox,live)
 // @Param customerId path string true "The integrating application customer identifier." maxLength(255)
 // @Param meterKey path string true "The active meter key." maxLength(120)
-// @Param request body models.AllowanceRequest true "Monthly allowance configuration."
+// @Param request body models.AllowanceRequest true "Recurring allowance configuration."
 // @Success 200 {object} RecurringAllowance "Current and scheduled allowance configuration."
 // @Failure 400 {object} AllowanceInvalid "Invalid allowance or subject keys."
 // @Failure 401 {object} NotAuthenticated "Authentication is required."
@@ -118,12 +121,12 @@ func GetDashboardRecurringAllowance() {}
 func PutDashboardRecurringAllowance() {}
 
 type AllowancePeriod struct {
-	PeriodStart     time.Time `json:"periodStart" validate:"required" example:"2026-12-01T00:00:00Z"`
-	PeriodEnd       time.Time `json:"periodEnd" validate:"required" example:"2027-01-01T00:00:00Z"`
+	PeriodStart     time.Time `json:"periodStart" validate:"required" example:"2026-12-01T09:00:00Z"`
+	PeriodEnd       time.Time `json:"periodEnd" validate:"required" example:"2026-12-01T15:00:00Z"`
 	Revision        int64     `json:"revision" validate:"required" example:"1"`
 	Quantity        int64     `json:"quantity" validate:"required" example:"1250"`
 	CarriedQuantity int64     `json:"carriedQuantity" validate:"required" example:"250"`
-	SkippedPeriods  int32     `json:"skippedPeriods" validate:"required" example:"0"`
+	SkippedPeriods  int64     `json:"skippedPeriods" validate:"required" example:"0"`
 	SourceType      string    `json:"sourceType" validate:"required" example:"dashboard_user" enums:"dashboard_user,api_key"`
 	SourceID        uuid.UUID `json:"sourceId" validate:"required" example:"019a5db9-3e67-7000-8000-000000000002"`
 }

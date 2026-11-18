@@ -53,6 +53,7 @@ func (r *AllowanceRepository) Save(ctx context.Context, env uuid.UUID, customer,
 	}
 	policy, err := q.AllowanceByBalance(ctx, balance.ID)
 	var effective time.Time
+	scheduleAnchor := input.StartsAt
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		if input.Version != 0 {
@@ -70,13 +71,37 @@ func (r *AllowanceRepository) Save(ctx context.Context, env uuid.UUID, customer,
 		if policy.Version != input.Version || !policy.AnchorAt.Time.Equal(input.StartsAt) {
 			return consumptionmodels.Allowance{}, consumptionmodels.ErrAllowanceConflict
 		}
+		// Preserve an unchanged calendar anchor, including a pending edit.
+		// A different interval starts at the next renewal, never mid-period.
+		latest, loadErr := q.AllowanceRevisionByVersion(ctx, consumptiondb.AllowanceRevisionByVersionParams{AllowanceID: policy.ID, Version: policy.Version})
+		if loadErr != nil {
+			return consumptionmodels.Allowance{}, loadErr
+		}
+		now, clockErr := q.DatabaseTime(ctx)
+		if clockErr != nil {
+			return consumptionmodels.Allowance{}, clockErr
+		}
+		current, currentErr := q.EffectiveAllowanceRevision(ctx, consumptiondb.EffectiveAllowanceRevisionParams{AllowanceID: policy.ID, EffectiveAt: now})
+		switch {
+		case currentErr == nil && current.IntervalUnit == input.IntervalUnit && current.IntervalCount == input.IntervalCount:
+			scheduleAnchor = current.ScheduleAnchorAt.Time
+		case currentErr != nil && !errors.Is(currentErr, pgx.ErrNoRows):
+			return consumptionmodels.Allowance{}, currentErr
+		case latest.IntervalUnit == input.IntervalUnit && latest.IntervalCount == input.IntervalCount:
+			scheduleAnchor = latest.ScheduleAnchorAt.Time
+		default:
+			scheduleAnchor = policy.NextPeriodAt.Time
+		}
+		if _, _, _, scheduleErr := (consumptionmodels.AllowanceSchedule{Unit: input.IntervalUnit, Count: input.IntervalCount, Anchor: scheduleAnchor}).Period(policy.NextPeriodAt.Time); scheduleErr != nil {
+			return consumptionmodels.Allowance{}, scheduleErr
+		}
 		policy, err = q.IncrementAllowanceVersion(ctx, consumptiondb.IncrementAllowanceVersionParams{ID: policy.ID, Version: input.Version})
 		effective = policy.NextPeriodAt.Time
 	}
 	if err != nil {
 		return consumptionmodels.Allowance{}, err
 	}
-	if err = q.InsertAllowanceRevision(ctx, consumptiondb.InsertAllowanceRevisionParams{AllowanceID: policy.ID, Version: policy.Version, EffectiveAt: timestamp(&effective), Quantity: input.Quantity, RolloverCap: input.RolloverCap, Enabled: input.Enabled, SourceType: source.Type, SourceID: source.ActorID}); err != nil {
+	if err = q.InsertAllowanceRevision(ctx, consumptiondb.InsertAllowanceRevisionParams{AllowanceID: policy.ID, Version: policy.Version, EffectiveAt: timestamp(&effective), Quantity: input.Quantity, RolloverCap: input.RolloverCap, Enabled: input.Enabled, SourceType: source.Type, SourceID: source.ActorID, IntervalUnit: input.IntervalUnit, IntervalCount: input.IntervalCount, ScheduleAnchorAt: timestamp(&scheduleAnchor)}); err != nil {
 		return consumptionmodels.Allowance{}, err
 	}
 	if err = reconcileAllowance(ctx, tx, q, balance.ID); err != nil {
@@ -148,7 +173,7 @@ func allowanceView(ctx context.Context, q *consumptiondb.Queries, balanceID uuid
 	return result, nil
 }
 func allowanceRevision(r consumptiondb.AllowanceRevision) *consumptionmodels.AllowanceRevision {
-	return &consumptionmodels.AllowanceRevision{Version: r.Version, EffectiveAt: r.EffectiveAt.Time, Quantity: r.Quantity, RolloverCap: r.RolloverCap, Enabled: r.Enabled}
+	return &consumptionmodels.AllowanceRevision{Version: r.Version, EffectiveAt: r.EffectiveAt.Time, Quantity: r.Quantity, RolloverCap: r.RolloverCap, Enabled: r.Enabled, IntervalUnit: r.IntervalUnit, IntervalCount: r.IntervalCount, ScheduleAnchorAt: r.ScheduleAnchorAt.Time}
 }
 
 // The caller holds the balance row. Period identity, grant creation, projection,
@@ -172,8 +197,16 @@ func reconcileAllowance(ctx context.Context, tx pgx.Tx, q *consumptiondb.Queries
 	if p.NextPeriodAt.Time.After(at.Time) {
 		return nil
 	}
-	start, end, index := consumptionmodels.AllowancePeriod(p.AnchorAt.Time, at.Time)
-	revision, err := q.EffectiveAllowanceRevision(ctx, consumptiondb.EffectiveAllowanceRevisionParams{AllowanceID: p.ID, EffectiveAt: timestamp(&start)})
+	revision, err := q.EffectiveAllowanceRevision(ctx, consumptiondb.EffectiveAllowanceRevisionParams{AllowanceID: p.ID, EffectiveAt: at})
+	if err != nil {
+		return err
+	}
+	schedule := consumptionmodels.AllowanceSchedule{Unit: revision.IntervalUnit, Count: revision.IntervalCount, Anchor: revision.ScheduleAnchorAt.Time}
+	start, end, index, err := schedule.Period(at.Time)
+	if err != nil {
+		return err
+	}
+	_, _, dueIndex, err := schedule.Period(p.NextPeriodAt.Time)
 	if err != nil {
 		return err
 	}
@@ -181,8 +214,10 @@ func reconcileAllowance(ctx context.Context, tx pgx.Tx, q *consumptiondb.Queries
 	var carry int64
 	skipped := index
 	if err == nil {
-		_, _, lastIndex := consumptionmodels.AllowancePeriod(p.AnchorAt.Time, last.PeriodStart.Time)
-		skipped = index - lastIndex - 1
+		skipped = index - dueIndex
+		if skipped < 0 {
+			return consumptionmodels.ErrAllowanceInvalid
+		}
 		if revision.Enabled {
 			carry = consumptionmodels.AdvanceCarry(last.RemainingQuantity, revision.Quantity, revision.RolloverCap, skipped)
 		}
@@ -211,7 +246,7 @@ func reconcileAllowance(ctx context.Context, tx pgx.Tx, q *consumptiondb.Queries
 		}
 		grantID = pgtype.UUID{Bytes: id, Valid: true}
 	}
-	if err = q.InsertAllowancePeriod(ctx, consumptiondb.InsertAllowancePeriodParams{AllowanceID: p.ID, PeriodStart: timestamp(&start), PeriodEnd: timestamp(&end), Revision: revision.Version, Quantity: quantity, CarriedQuantity: carry, SkippedPeriods: int32(skipped), GrantID: grantID}); err != nil {
+	if err = q.InsertAllowancePeriod(ctx, consumptiondb.InsertAllowancePeriodParams{AllowanceID: p.ID, PeriodStart: timestamp(&start), PeriodEnd: timestamp(&end), Revision: revision.Version, Quantity: quantity, CarriedQuantity: carry, SkippedPeriods: skipped, GrantID: grantID}); err != nil {
 		return err
 	}
 	if err = q.AdvanceAllowance(ctx, consumptiondb.AdvanceAllowanceParams{ID: p.ID, NextPeriodAt: timestamp(&end)}); err != nil {
@@ -231,7 +266,7 @@ func reconcileAllowance(ctx context.Context, tx pgx.Tx, q *consumptiondb.Queries
 		PeriodEnd       time.Time `json:"periodEnd"`
 		Quantity        int64     `json:"quantity"`
 		CarriedQuantity int64     `json:"carriedQuantity"`
-		SkippedPeriods  int       `json:"skippedPeriods"`
+		SkippedPeriods  int64     `json:"skippedPeriods"`
 	}{p.ID, balanceID, start, end, quantity, carry, skipped})
 	if err != nil {
 		return err

@@ -41,6 +41,24 @@
                         "example": true,
                         "type": "boolean"
                     },
+                    "intervalCount": {
+                        "example": 6,
+                        "maximum": 1000000,
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "intervalUnit": {
+                        "enum": [
+                            "minute",
+                            "hour",
+                            "day",
+                            "week",
+                            "month",
+                            "year"
+                        ],
+                        "example": "hour",
+                        "type": "string"
+                    },
                     "quantity": {
                         "example": 1000,
                         "format": "int64",
@@ -54,7 +72,7 @@
                         "type": "integer"
                     },
                     "startsAt": {
-                        "example": "2026-12-01T00:00:00Z",
+                        "example": "2026-12-01T09:00:00Z",
                         "format": "date-time",
                         "type": "string"
                     },
@@ -400,7 +418,7 @@
                         "type": "string"
                     },
                     "message": {
-                        "example": "Use a positive quantity, a nonnegative rollover cap, and a start date at midnight UTC.",
+                        "example": "Use a positive quantity, a nonnegative rollover cap, a supported interval, and a UTC start time at minute precision.",
                         "type": "string"
                     }
                 },
@@ -446,11 +464,11 @@
                         "type": "integer"
                     },
                     "periodEnd": {
-                        "example": "2027-01-01T00:00:00Z",
+                        "example": "2026-12-01T15:00:00Z",
                         "type": "string"
                     },
                     "periodStart": {
-                        "example": "2026-12-01T00:00:00Z",
+                        "example": "2026-12-01T09:00:00Z",
                         "type": "string"
                     },
                     "quantity": {
@@ -2984,7 +3002,7 @@
                         "type": "string"
                     },
                     "nextPeriodAt": {
-                        "example": "2027-01-01T00:00:00Z",
+                        "example": "2026-12-01T15:00:00Z",
                         "format": "date-time",
                         "type": "string"
                     },
@@ -2992,7 +3010,7 @@
                         "$ref": "#/components/schemas/openapi.RecurringAllowanceRevision"
                     },
                     "startsAt": {
-                        "example": "2026-12-01T00:00:00Z",
+                        "example": "2026-12-01T09:00:00Z",
                         "format": "date-time",
                         "type": "string"
                     },
@@ -3015,13 +3033,31 @@
             "openapi.RecurringAllowanceRevision": {
                 "properties": {
                     "effectiveAt": {
-                        "example": "2026-12-01T00:00:00Z",
+                        "example": "2026-12-01T09:00:00Z",
                         "format": "date-time",
                         "type": "string"
                     },
                     "enabled": {
                         "example": true,
                         "type": "boolean"
+                    },
+                    "intervalCount": {
+                        "example": 6,
+                        "maximum": 1000000,
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "intervalUnit": {
+                        "enum": [
+                            "minute",
+                            "hour",
+                            "day",
+                            "week",
+                            "month",
+                            "year"
+                        ],
+                        "example": "hour",
+                        "type": "string"
                     },
                     "quantity": {
                         "example": 1000,
@@ -3033,6 +3069,11 @@
                         "format": "int64",
                         "type": "integer"
                     },
+                    "scheduleAnchorAt": {
+                        "example": "2026-12-01T09:00:00Z",
+                        "format": "date-time",
+                        "type": "string"
+                    },
                     "version": {
                         "example": 1,
                         "format": "int64",
@@ -3042,8 +3083,11 @@
                 "required": [
                     "effectiveAt",
                     "enabled",
+                    "intervalCount",
+                    "intervalUnit",
                     "quantity",
                     "rolloverCap",
+                    "scheduleAnchorAt",
                     "version"
                 ],
                 "type": "object"
@@ -6059,7 +6103,7 @@
         },
         "/v1/customers/{customerId}/balances/{meterKey}/allowance": {
             "get": {
-                "description": "Monthly UTC renewal; month-end dates clamp without drifting. Creation grants the full current period without proration, with no credit for time before creation. Zero rollover cap resets only policy-issued quantity; a positive cap limits carry in addition to the new period quantity. Edits, including disabling, take effect next renewal; startsAt is immutable. A version of zero creates; existing policies require the latest version.",
+                "description": "Custom UTC intervals use a count and minute, hour, day, week, month, or year unit. The minimum is one minute; startsAt must have minute precision. Months and years follow the calendar and clamp shorter months without drifting; other units use elapsed time. Omitted interval fields preserve the legacy one-month default. Schedule changes begin at the next renewal; unchanged intervals preserve their anchor. Creation grants the full current period without proration, with no credit for time before creation. Zero rollover cap resets only policy-issued quantity; a positive cap limits carry in addition to the new period quantity. Edits, including disabling, take effect next renewal; startsAt is immutable. A version of zero creates; existing policies require the latest version.",
                 "parameters": [
                     {
                         "description": "The integrating application customer identifier.",
@@ -6155,7 +6199,7 @@
                 ]
             },
             "put": {
-                "description": "Monthly UTC renewal; month-end dates clamp without drifting. Creation grants the full current period without proration, with no credit for time before creation. Zero rollover cap resets only policy-issued quantity; a positive cap limits carry in addition to the new period quantity. Edits, including disabling, take effect next renewal; startsAt is immutable. A version of zero creates; existing policies require the latest version.",
+                "description": "Custom UTC intervals use a count and minute, hour, day, week, month, or year unit. The minimum is one minute; startsAt must have minute precision. Months and years follow the calendar and clamp shorter months without drifting; other units use elapsed time. Omitted interval fields preserve the legacy one-month default. Schedule changes begin at the next renewal; unchanged intervals preserve their anchor. Creation grants the full current period without proration, with no credit for time before creation. Zero rollover cap resets only policy-issued quantity; a positive cap limits carry in addition to the new period quantity. Edits, including disabling, take effect next renewal; startsAt is immutable. A version of zero creates; existing policies require the latest version.",
                 "parameters": [
                     {
                         "description": "The integrating application customer identifier.",
@@ -6184,11 +6228,11 @@
                             "schema": {
                                 "$ref": "#/components/schemas/models.AllowanceRequest",
                                 "summary": "request",
-                                "description": "Monthly allowance configuration."
+                                "description": "Recurring allowance configuration."
                             }
                         }
                     },
-                    "description": "Monthly allowance configuration.",
+                    "description": "Recurring allowance configuration.",
                     "required": true
                 },
                 "responses": {
@@ -6258,7 +6302,7 @@
                         "projectAPIKey": []
                     }
                 ],
-                "summary": "Create a monthly customer allowance or schedule its next-period revision.",
+                "summary": "Create a recurring customer allowance or schedule its next-period revision.",
                 "tags": [
                     "Allowances"
                 ]
@@ -8768,7 +8812,7 @@
         },
         "/v1/projects/{projectId}/environments/{environment}/customers/{customerId}/balances/{meterKey}/allowance": {
             "get": {
-                "description": "Monthly UTC renewal; month-end dates clamp without drifting. Creation grants the full current period without proration, with no credit for time before creation. Zero rollover cap resets only policy-issued quantity; a positive cap limits carry in addition to the new period quantity. Edits, including disabling, take effect next renewal; startsAt is immutable. A version of zero creates; existing policies require the latest version.",
+                "description": "Custom UTC intervals use a count and minute, hour, day, week, month, or year unit. The minimum is one minute; startsAt must have minute precision. Months and years follow the calendar and clamp shorter months without drifting; other units use elapsed time. Omitted interval fields preserve the legacy one-month default. Schedule changes begin at the next renewal; unchanged intervals preserve their anchor. Creation grants the full current period without proration, with no credit for time before creation. Zero rollover cap resets only policy-issued quantity; a positive cap limits carry in addition to the new period quantity. Edits, including disabling, take effect next renewal; startsAt is immutable. A version of zero creates; existing policies require the latest version.",
                 "parameters": [
                     {
                         "description": "The immutable project ID.",
@@ -8889,7 +8933,7 @@
                 ]
             },
             "put": {
-                "description": "Monthly UTC renewal; month-end dates clamp without drifting. Creation grants the full current period without proration, with no credit for time before creation. Zero rollover cap resets only policy-issued quantity; a positive cap limits carry in addition to the new period quantity. Edits, including disabling, take effect next renewal; startsAt is immutable. A version of zero creates; existing policies require the latest version.",
+                "description": "Custom UTC intervals use a count and minute, hour, day, week, month, or year unit. The minimum is one minute; startsAt must have minute precision. Months and years follow the calendar and clamp shorter months without drifting; other units use elapsed time. Omitted interval fields preserve the legacy one-month default. Schedule changes begin at the next renewal; unchanged intervals preserve their anchor. Creation grants the full current period without proration, with no credit for time before creation. Zero rollover cap resets only policy-issued quantity; a positive cap limits carry in addition to the new period quantity. Edits, including disabling, take effect next renewal; startsAt is immutable. A version of zero creates; existing policies require the latest version.",
                 "parameters": [
                     {
                         "description": "The immutable project ID.",
@@ -8940,11 +8984,11 @@
                             "schema": {
                                 "$ref": "#/components/schemas/models.AllowanceRequest",
                                 "summary": "request",
-                                "description": "Monthly allowance configuration."
+                                "description": "Recurring allowance configuration."
                             }
                         }
                     },
-                    "description": "Monthly allowance configuration.",
+                    "description": "Recurring allowance configuration.",
                     "required": true
                 },
                 "responses": {
@@ -9017,7 +9061,7 @@
                         "productionCookieSession": []
                     }
                 ],
-                "summary": "Create a monthly customer allowance or schedule its next-period revision.",
+                "summary": "Create a recurring customer allowance or schedule its next-period revision.",
                 "tags": [
                     "Allowances"
                 ]

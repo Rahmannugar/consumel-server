@@ -62,7 +62,7 @@ func (h *AllowanceHandler) respond(w http.ResponseWriter, r *http.Request, resul
 	case errors.Is(err, consumptionmodels.ErrAllowanceNotFound):
 		_ = httpresponse.WriteError(w, 404, "allowance_not_found", "No recurring allowance is configured for this customer and meter.")
 	case errors.Is(err, consumptionmodels.ErrAllowanceInvalid):
-		_ = httpresponse.WriteError(w, 400, "invalid_allowance", "Use a positive quantity, a nonnegative rollover cap, and a start date at midnight UTC.")
+		_ = httpresponse.WriteError(w, 400, "invalid_allowance", "Use a positive quantity, a nonnegative rollover cap, a supported interval, and a UTC start time at minute precision.")
 	case errors.Is(err, consumptionmodels.ErrAllowanceConflict):
 		_ = httpresponse.WriteError(w, 409, "allowance_version_conflict", "Reload the allowance before editing. Its start date cannot change after creation.")
 	case err != nil:

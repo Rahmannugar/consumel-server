@@ -1,152 +1,69 @@
 # Consumel Server Architecture
 
-Consumel Server runs as a Go HTTP API backed by PostgreSQL and Redis. Gin routes
-requests, Koanf loads startup configuration, pgx manages the database pool, and
-Authlier v0.5.1 supplies reusable authentication through its standard
-`net/http` handler.
+Consumel is a Go modular monolith with separate HTTP API and worker processes.
+Gin owns HTTP routing, Koanf loads configuration, and published Authlier supplies
+reusable authentication through its standard `net/http` handler.
 
-## Runtime flow
+## Domain boundaries
 
-The process loads and validates configuration, connects to PostgreSQL and
-Redis, runs Authlier's versioned PostgreSQL migrations, constructs the Authlier
-handler, and then opens its listener. Gin applies the API's cross-cutting HTTP
-policy and mounts Authlier without making Authlier depend on Gin. Consumel-owned
-handlers resolve the authenticated Authlier subject into tenant application
-state.
+Domains own their services, persistence interfaces, queries, HTTP contracts,
+and consequential tests. Handlers translate HTTP into domain operations;
+PostgreSQL, Redis, and external clients implement domain-owned interfaces.
 
-## Telemetry
+- [Authentication](internal/authentication/ARCHITECTURE.md) resolves Authlier identities into Consumel users and current tenant access.
+- [Organizations](internal/organizations/ARCHITECTURE.md) owns organizations, ownership, memberships, and roles.
+- [Onboarding](internal/onboarding/ARCHITECTURE.md) creates the first organization and project transactionally.
+- [Projects](internal/projects/ARCHITECTURE.md) owns projects, Sandbox/Live environments, integration keys, and portfolio reads.
+- [Customers](internal/customers/ARCHITECTURE.md) owns environment-scoped customer records.
+- [Meters](internal/meters/ARCHITECTURE.md) owns stable meter definitions and environment activation.
+- [Consumption](internal/core/consumption/ARCHITECTURE.md) owns grants, balances, recurring customer allowances, atomic usage decisions, and their history and analytics.
 
-`internal/infra/telemetry` owns OpenTelemetry provider, exporter, propagation,
-logger, and generic HTTP instrumentation. The application sends traces,
-metrics, and logs to an OTLP/HTTP Collector. New Relic remains a Collector
-destination rather than an application dependency.
+Tenant access never grants Consumel internal-administrator access. The internal
+administration identity and authorization boundary is separate.
 
-Every non-health request produces one JSON completion log on stdout and the
-same record in the OpenTelemetry pipeline. The record contains a stable
-operation, a domain-specific event, a plain human-readable message, method,
-route template, response status, duration, request ID, trace ID, outcome, and
-bounded error category when applicable. The operation names the attempted
-action across outcomes; the event names the result that occurred. Middleware
-also owns request spans and bounded traffic, latency, error, and active-request
-metrics. Routine successful health probes are suppressed; readiness failures
-remain correlated and visible.
+## Durable state and asynchronous work
 
-PostgreSQL, Redis, and outbound HTTP instrumentation is attached at shared
-infrastructure construction boundaries. Handlers do not configure telemetry
-exporters or repeat generic tracing and timing logic.
+PostgreSQL is authoritative. Tern owns ordered migrations; domains own sqlc
+queries and pgx repositories. Authlier owns its versioned authentication schema.
+Normal reads exclude lifecycle-inactive resources. Database constraints and
+short, consistently ordered locks protect transactional invariants.
 
-## Lifecycle
+Business writes and their outbox events commit together. The relay publishes
+committed events to Redis Streams; consumers process at least once with durable
+idempotency and explicit retry/recovery behavior. Slow providers stay outside
+synchronous product transactions. Each workload has its own bounded capacity.
 
-The API accepts SIGINT and SIGTERM. It stops accepting new requests, gives
-in-flight requests a bounded period to finish, closes the Redis client and
-PostgreSQL pool, and then exits. Startup, serving, and shutdown failures produce
-a non-zero process exit.
+Prepared statements remain cached, with parameter-specific PostgreSQL planning
+through `plan_cache_mode=force_custom_plan` to preserve selective query plans.
+Application pools bound client connections; deployment uses PgBouncer to bound
+server-side connections independently of API instance count.
 
-The server limits the time allowed to receive request headers and request
-bodies, and it closes idle keep-alive connections after a bounded interval.
-There is no global response-write timeout. Response deadlines belong to the
-endpoint behavior that requires them.
+## Authentication and isolation
 
-## Health
+Authlier authenticates opaque browser sessions. PostgreSQL owns session expiry
+and revocation; Redis caches sessions and coordinates single-use OTPs and abuse
+controls. Session-cache failures fall back to PostgreSQL, while sensitive flows
+requiring shared challenge or rate-limit state fail closed.
 
-Liveness reports that the process can answer HTTP requests. Readiness checks
-that PostgreSQL is reachable before reporting the API instance as ready.
+Dashboard requests resolve the authenticated subject's current organization
+access before entering a domain. Public integration requests resolve an active
+hashed API key into organization, project, and environment context. Sandbox
+and Live remain isolated, and inactive organizations cannot resolve access.
 
-## Persistence
+## Telemetry and process lifecycle
 
-PostgreSQL is the durable source of truth. Tern owns ordered schema migrations,
-and sqlc generates pgx-backed query code from domain-owned SQL.
+`internal/infra/telemetry` owns OpenTelemetry setup, correlation, and generic
+HTTP/job instrumentation. Structured logs remain on stdout; OTLP exports to a
+Collector, keeping New Relic replaceable. Dependencies are instrumented at their
+construction boundaries. Successful health probes are suppressed. SSE records
+setup and delivery failures without tracing entire connection lifetimes.
 
-Prepared statements stay cached, but every application pool runs with
-`plan_cache_mode=force_custom_plan` so each execution is planned with its own
-parameters. PostgreSQL normally switches to a generic plan after a few
-executions, and a generic plan cannot see a parameterized time window. It
-estimates an unknown range at 0.5% selectivity, which replaced the
-organization-wide portfolio aggregate's single scan with a nested loop over the
-whole operation table and raised its median latency from about 55 ms to more
-than two seconds. Custom planning costs one plan per execution and keeps that
-aggregate on the scan shape its data supports.
+Liveness reports process availability; readiness checks PostgreSQL. Startup
+validates configuration and connects dependencies before serving. Shutdown stops
+new work, bounds in-flight completion, and closes dependencies before telemetry.
+Request/header limits and workload-specific deadlines bound resource use.
 
-Application pools are client-side caps sized to each process's concurrency:
-the API uses 20 connections and the worker 32 to match its 10 email, 20
-outbox, and two recurring-allowance execution slots, each adjustable through
-CONSUMEL_DATABASE_API_POOL_MAX and CONSUMEL_DATABASE_WORKER_POOL_MAX. Deployment bounds real PostgreSQL connections per
-application user through PgBouncer, so API instance count never multiplies
-server-side connections.
-
-Consumel uses internal UUIDv7 identifiers for users, organizations, projects,
-and project environments. The users domain owns tenant-user records and stores
-the stable Authlier subject ID as the unique external identity. Email is not an
-identity link. A conflict-safe insert-or-select flow creates the Consumel user
-on first authenticated access, including concurrent first requests. The
-organizations domain owns organizations and organization memberships.
-
-Consumel internal administrators belong to a separate identity and
-authorization boundary. Tenant roles and organization memberships cannot grant
-internal administration access.
-
-An organization stores its owner through `owner_user_id`. Organization creation
-also creates its built-in Admin and Developer roles and the owner's active Admin
-membership in one transaction. Each membership has one organization role, and
-organizations may define custom roles.
-A project is created with isolated Sandbox and Live environments in one
-transaction. Sandbox starts active; Live remains inactive until explicitly
-activated.
-
-Project API keys authenticate public integration requests. Consumel validates
-the strict Bearer-key shape, hashes the presented secret, and resolves the hash
-through one active-only PostgreSQL query. The resulting request context carries
-the organization, project, and project-environment identifiers. Revoked and
-replaced keys, inactive environments, and inactive organizations cannot resolve.
-
-Customer records are scoped by project environment. Their public
-`customer_id`, optional name and email, and bounded plan, country, and location
-metadata remain isolated between Sandbox and Live. Public API-key requests and
-signed-in dashboard requests use the same customer domain service after their
-different authentication boundaries establish the environment.
-
-## Authentication
-
-PostgreSQL is authoritative for Authlier users, password credentials, email
-verification state, and sessions. Redis stores short-lived OTP challenges,
-distributed authentication rate-limit state, and the shared session cache.
-OTP challenges contain no plaintext code and are consumed once. A failure
-after challenge consumption requires the user to request a new code rather
-than making the old code reusable.
-
-Browser sessions use opaque HttpOnly cookies with a seven-day inactivity
-window. Eligible authenticated activity extends the durable expiry at most
-once per 24 hours, but the session always ends within 30 days of the original
-sign-in. The browser retains the credential until that absolute boundary;
-PostgreSQL remains authoritative for idle expiry and revocation. Local HTTP
-uses `consumel_session`; production HTTPS uses the host-only
-`__Host-consumel_session` cookie with `Path=/` and no Domain attribute. Redis
-caches resolved sessions for no more than one hour with up to ten percent
-downward jitter so many entries do not expire together. Identical cache-miss
-lookups are coalesced, and PostgreSQL still resolves established sessions when
-Redis is unavailable. New OTP operations and sensitive authentication attempts
-require Redis because their shared challenge and abuse-control state must remain
-consistent across API instances.
-
-Each Authlier subject may have at most three active sessions. Session creation
-uses a PostgreSQL transaction and a subject-scoped advisory lock; a fourth
-sign-in revokes the oldest session and invalidates its cache entry.
-
-`GET /account` maps the Authlier subject to one Consumel user and all
-active tenant memberships. The query excludes removed or suspended
-memberships, deleted or suspended organizations, and deleted roles. This tenant
-context never resolves or grants internal-administrator access.
-
-Authentication email is rendered through the shared bordered Consumel email
-layout and sent by Resend from `noreply@consumel.com`. The separately configured
-`hello@consumel.com` sender is reserved for conversational and marketing mail.
-
-## Failure behavior
-
-- A Redis session-cache miss or error falls back to PostgreSQL.
-- The broad per-IP HTTP limiter fails open during a Redis outage so existing
-  sessions remain usable. Sensitive Authlier attempt guards fail closed.
-- OTP issuance and verification fail when Redis cannot provide shared,
-  single-use challenge state.
-- PostgreSQL failure makes the API unready and prevents authoritative identity,
-  session, or tenant-context resolution.
+The [API index](API.md) links endpoint domains. OpenAPI owns schemas and
+responses; domain architecture documents own their durable rules. Investigation
+history, benchmark runs, and slice walkthroughs belong in the working history
+and conversation deep dives.
